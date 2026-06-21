@@ -353,8 +353,21 @@
     });
   }
 
+  // Processos devolvidos à fila (status 'retornado' OU motivo "retorno para fila:").
+  // São excluídos da capacidade: não contam para nenhum servidor enquanto retornados.
+  function _capRetornados(etapasRaw) {
+    var ret = {};
+    (etapasRaw || []).forEach(function (e) {
+      var pid = String(e.processoId || '').trim();
+      if (!pid) return;
+      if (normStatus(e.status) === 'retornado' || isRetornoFilaMotivo(e.motivoAtraso)) ret[pid] = true;
+    });
+    return ret;
+  }
+
   function construirCapacidade(cargasRaw, processosRaw, etapasRaw, servidoresRaw) {
     var fases = _capFasesProc(etapasRaw);
+    var retornados = _capRetornados(etapasRaw);
     var procInfo = {};
     (processosRaw || []).forEach(function (p) {
       var pid = String(p.id || p._id || '').trim();
@@ -383,6 +396,7 @@
       var pid = String(c.processoId || '').trim();
       if (!serv || !pid) return;
       if (fases.concl[pid]) return;
+      if (retornados[pid]) return; // retornado à fila: fora da capacidade
       var kind = String(c.fase || '').toLowerCase().indexOf('ext') >= 0 ? 'ext' : 'int';
       if (fases.fase[pid] === 'ext' && kind === 'int') return;
       var p1 = num(c.p1), p2 = num(c.p2), p3 = num(c.p3);
