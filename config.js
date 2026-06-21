@@ -11,6 +11,9 @@ window.APPSEL_CONFIG = {
   // Mantenha false ate o corte: lib/chave no Apps Script + regras publicadas.
   firestoreAtivo: true,
 
+  // Unidade (multiunidade). Single-tenant por ora; futuro: vem do login.
+  unidadeId: "reitoria-sel",
+
   // Firestore (leitura direta — substitui as chamadas de consulta ao Apps Script).
   // A apiKey abaixo NAO e segredo: quem protege os dados sao as regras do Firestore.
   firebase: {

@@ -270,18 +270,24 @@
     };
   }
 
+  // Unidade alvo (multiunidade). Por ora vem do config; futuro: do login.
+  function _unidadeId() {
+    return (root.APPSEL_CONFIG && root.APPSEL_CONFIG.unidadeId) || 'reitoria-sel';
+  }
+
   function carregar(opts) {
     opts = opts || {};
     var cfg = (root.APPSEL_CONFIG && root.APPSEL_CONFIG.firebase) || null;
     if (!cfg || !root.firebase) return Promise.reject(new Error('Firebase nao configurado.'));
     if (!root.firebase.apps || !root.firebase.apps.length) root.firebase.initializeApp(cfg);
     var db = root.firebase.firestore();
+    var base = db.collection('unidades').doc(_unidadeId());
     var municipio = (root.APPSEL_CONFIG && root.APPSEL_CONFIG.municipioCalendario) || 'Rio de Janeiro';
     return Promise.all([
-      db.collection('processos').get(),
-      db.collection('etapas').get(),
-      db.collection('cargas').get(),
-      db.collection('calendario').get()
+      base.collection('processos').get(),
+      base.collection('etapas').get(),
+      base.collection('cargas').get(),
+      base.collection('calendario').get()
     ]).then(function (s) {
       var procs = s[0].docs.map(function (d) { var o = d.data(); o._id = d.id; return o; });
       var etps = s[1].docs.map(function (d) { var o = d.data(); o._id = d.id; return o; });
@@ -427,11 +433,12 @@
     if (!cfg || !root.firebase) return Promise.reject(new Error('Firebase nao configurado.'));
     if (!root.firebase.apps || !root.firebase.apps.length) root.firebase.initializeApp(cfg);
     var db = root.firebase.firestore();
+    var base = db.collection('unidades').doc(_unidadeId());
     return Promise.all([
-      db.collection('cargas').get(),
-      db.collection('processos').get(),
-      db.collection('etapas').get(),
-      db.collection('servidores').get()
+      base.collection('cargas').get(),
+      base.collection('processos').get(),
+      base.collection('etapas').get(),
+      base.collection('servidores').get()
     ]).then(function (s) {
       var map = function (snap) { return snap.docs.map(function (d) { var o = d.data(); o._id = d.id; return o; }); };
       return construirCapacidade(map(s[0]), map(s[1]), map(s[2]), map(s[3]));

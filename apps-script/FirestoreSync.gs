@@ -77,10 +77,16 @@ function _fsToken_() {
   return tok;
 }
 
+// Unidade alvo (multiunidade). Default reitoria-sel; pode vir da Script Property
+// FS_UNIDADE (futuro: derivada da sessão do usuário no corte multiunidade real).
+function _fsUnidade_() {
+  return PropertiesService.getScriptProperties().getProperty('FS_UNIDADE') || 'reitoria-sel';
+}
+
 function _fsBase_() {
   return 'https://firestore.googleapis.com/v1/projects/'
     + PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID')
-    + '/databases/(default)/documents';
+    + '/databases/(default)/documents/unidades/' + _fsUnidade_();
 }
 
 function _fsReq_(method, url, payload) {
@@ -168,8 +174,11 @@ function _fsDelete_(path)         { return _fs_().deleteDocument(path); }
 function _fsGet_(path)            { try { return _fs_().getDocument(path).obj || null; } catch(e) { return null; } }
 
 function _fsQueryEq_(colecao, campo, valor) {
+  var pref = 'unidades/' + _fsUnidade_() + '/';
   return _fs_().query(colecao).Where(campo, '==', valor).Execute().map(function(d){
-    return { path: d.path.split('/documents/')[1], obj: d.obj || {} };
+    var rel = d.path.split('/documents/')[1];          // unidades/<u>/<col>/<id>
+    if (rel.indexOf(pref) === 0) rel = rel.slice(pref.length);  // <col>/<id> (relativo à unidade)
+    return { path: rel, obj: d.obj || {} };
   });
 }
 
