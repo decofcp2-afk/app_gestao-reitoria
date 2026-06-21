@@ -45,6 +45,11 @@ unidades/{unidadeId}                 # ex.: "reitoria-sel", "campus-tijuca", ...
   - `diretor` — acesso **somente leitura** consolidado a todas as unidades.
 - No login, o Apps Script devolve `{ unidadeId, papel }`. O frontend passa a
   prefixar **todas** as leituras/escritas com `unidades/{unidadeId}/`.
+- **Login pela matrícula identifica a unidade automaticamente:** o registro do
+  usuário (mantido pelo Apps Script, indexado pela **matrícula**) carrega
+  `unidadeId` + `papel`. O servidor só digita matrícula + senha — não precisa
+  escolher a unidade; o sistema deduz. Esse registro é criado na Fase F, quando
+  o admin do campus cadastra a equipe.
 
 ## 3. Regras do Firestore
 
@@ -72,6 +77,10 @@ diretor lendo tudo, as leituras se multiplicam. Solução:
 - **App de Gestão** e **Painel** (existentes): trocar os caminhos de leitura
   (`appsel-firestore.js`, `painel-firestore.js`) para `unidades/{unidadeId}/...`.
   `unidadeId` vem do login (App Gestão) ou de `?u=<unidadeId>` na URL (Painel público).
+- **Página inicial do Painel público (índice de unidades):** lê a coleção
+  `unidades` (apenas `nome/sigla/ativo` — ~14 docs minúsculos, leitura pública) e
+  lista os campi ativos como cards; ao clicar, abre `painel/?u=<unidadeId>`.
+  Dispensa o público decorar links de cada campus.
 - **Painel do Diretor** (novo, só leitura): lê os `resumo/atual` de todas as
   unidades; mostra ranking de andamento, atrasos por unidade, capacidade por
   equipe, processos parados e drill-down por unidade.
