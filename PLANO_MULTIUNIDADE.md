@@ -92,9 +92,15 @@ diretor lendo tudo, as leituras se multiplicam. Solução:
   `unidades` (apenas `nome/sigla/ativo` — ~14 docs minúsculos, leitura pública) e
   lista os campi ativos como cards; ao clicar, abre `painel/?u=<unidadeId>`.
   Dispensa o público decorar links de cada campus.
-- **Painel do Diretor** (novo, só leitura): lê os `resumo/atual` de todas as
-  unidades; mostra ranking de andamento, atrasos por unidade, capacidade por
-  equipe, processos parados e drill-down por unidade.
+- **Visão do Diretor = aba "Configurações" DENTRO do Painel (revisado 2026-06-21):**
+  em vez de um app separado, a visão consolidada vira uma **aba/área no próprio
+  Painel** público. Ao entrar nessa aba, o diretor vê **todas as unidades
+  cadastradas** (lê a coleção `unidades`) + a **visão geral de tudo** (KPIs
+  agregados via `resumo/atual` de cada unidade, por collectionGroup): ranking de
+  andamento, atrasos por unidade, capacidade por equipe, processos parados,
+  drill-down por unidade. Acesso: recomendação de **trava leve** (código do
+  diretor) por ser "Configurações"; pode ser aberta, já que os dados de painel
+  são públicos. Sem app novo — uma aba no Painel existente.
 
 ## 6. Apps Script central
 
@@ -119,7 +125,8 @@ acontece no cliente:
   query string, ex.: `.../painel/?u=campus-tijuca`. Usar `?u=` (e não caminho
   `/campus-tijuca`) porque o GitHub Pages é estático e não tem roteamento de
   servidor — query string funciona sem o truque de fallback 404.
-- **Painel do Diretor:** página nova (repo próprio ou subpasta), só leitura.
+- **Visão do Diretor:** NÃO é app novo — é uma **aba "Configurações"/"Visão Geral"
+  dentro do Painel** existente (só leitura).
 
 Privacidade coerente: os painéis já são públicos (decisão aprovada); o que fica
 "público" são os arquivos do app, não os dados — coleções sensíveis seguem
@@ -191,8 +198,9 @@ o modelo de dados nem a hospedagem.
   caminhos prefixados no frontend e no Apps Script; Painel público lê `?u=`.
 - **Fase C — Unidade-piloto.** Cadastrar uma 2ª unidade (servidores, usuários,
   calendário); validar isolamento e e-mails.
-- **Fase D — Resumo + Painel do Diretor.** Gravação do `resumo/atual`; novo app
-  só-leitura consolidado.
+- **Fase D — Resumo + aba "Configurações" do diretor no Painel.** Gravação do
+  `resumo/atual` por unidade (Apps Script); nova aba dentro do Painel que lista
+  todas as unidades + visão geral consolidada (collectionGroup), só leitura.
 - **Fase F — Onboarding self-service (autocadastro aberto).** Tela de login com
   seletor de unidade + "Cadastre a sua unidade aqui"; wizard de criação+seed de
   unidade; tour de primeiro acesso; guarda anti-abuso por e-mail institucional.
