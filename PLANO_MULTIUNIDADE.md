@@ -144,6 +144,21 @@ remoto; quem valida e grava é o Apps Script. Funções novas (guardadas por pap
 Isto **substitui** o cadastro manual das Fases C/E pela Fase F abaixo. Não altera
 o modelo de dados nem a hospedagem.
 
+### Wizard de cadastro + primeiro acesso (Fase F)
+
+1. **Assistente (wizard) em etapas** para o admin do campus configurar a unidade:
+   nome/sigla → cadastro de servidores (nome, e-mail) → marcar quem é **chefe** →
+   concluir. Grava em `unidades/{u}/servidores` e `/emails` e define os papéis
+   (tudo via Apps Script). Mantém a porta de entrada pelo diretor (decisão da §
+   "modelo de adesão"); se desejado no futuro, pode virar "campus inicia + diretor aprova".
+2. **App idêntico, porém vazio:** a unidade nova usa o MESMO código do app atual —
+   nasce com todas as funções (processos, fila, capacidade, e-mails). Só os dados
+   começam vazios, exceto o que é **semeado** (calendário de feriados, matriz de
+   pontuação padrão) a partir de um template.
+3. **Tour de primeiro acesso:** passo a passo automático na primeira entrada,
+   destacando cada área da tela, para facilitar a usuários leigos. Implementação
+   leve (sem dependência paga), compatível com GitHub Pages.
+
 ## Fases de execução
 
 - **Fase A — Modelagem + migração estrutural.** Criar `unidades/{u}`, mover os
