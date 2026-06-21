@@ -10,7 +10,10 @@ escrita e e-mails via Apps Script com conta de serviço.
 2. **Frontend:** mesmo código/deploy; a unidade vem do **login** (sem duplicar repositórios).
 3. **Apps Script:** **um único** projeto central atende todas as unidades.
 4. **Privacidade:** os painéis por unidade **continuam públicos** (leitura aberta, como hoje).
-5. **Diretor Geral:** papel **somente leitura/acompanhamento** — nunca age (não move fila, não escreve).
+5. **Diretor Geral:** papel **somente leitura/acompanhamento** — nunca age (não move fila, não escreve) e **não é porta de entrada** de ninguém.
+6. **Adesão (revisado 2026-06-21):** **autocadastro aberto** — qualquer unidade se
+   cadastra sozinha, **sem aprovação do diretor**. Login com **seletor de unidade**
+   (ver §2); se a unidade não existir, há um atalho "Cadastre a sua unidade aqui".
 
 ---
 
@@ -45,11 +48,19 @@ unidades/{unidadeId}                 # ex.: "reitoria-sel", "campus-tijuca", ...
   - `diretor` — acesso **somente leitura** consolidado a todas as unidades.
 - No login, o Apps Script devolve `{ unidadeId, papel }`. O frontend passa a
   prefixar **todas** as leituras/escritas com `unidades/{unidadeId}/`.
-- **Login pela matrícula identifica a unidade automaticamente:** o registro do
-  usuário (mantido pelo Apps Script, indexado pela **matrícula**) carrega
-  `unidadeId` + `papel`. O servidor só digita matrícula + senha — não precisa
-  escolher a unidade; o sistema deduz. Esse registro é criado na Fase F, quando
-  o admin do campus cadastra a equipe.
+
+### Tela de login (fluxo aprovado)
+
+No topo da tela do App de Gestão:
+1. Título **"Selecione a sua unidade"** + um **menu suspenso** com as unidades
+   cadastradas (lê a coleção `unidades` — `nome/sigla/ativo`, leitura pública).
+2. A pessoa escolhe a unidade e digita **matrícula + senha** (autenticadas pelo
+   Apps Script dentro daquela unidade; a matrícula é a chave do servidor em
+   `unidades/{u}/servidores/{matricula}`).
+3. Se **não encontrar a unidade** na lista, aparece a mensagem
+   **"Cadastre a sua unidade aqui"** → ao clicar, vai direto para a **tela de
+   cadastro de unidade** (o wizard da Fase F), dentro do próprio App de Gestão.
+   **Sem aprovação do diretor.**
 
 ## 3. Regras do Firestore
 
@@ -121,36 +132,41 @@ ganha uma área de **Administração**, visível conforme o papel:
 
 | Papel | Pode |
 |---|---|
-| **Diretor (super-admin)** | Criar/ativar/desativar unidades; nomear o admin de cada campus; ver tudo |
-| **Admin do campus** | Gerir SÓ a sua unidade: equipe/servidores, usuários, calendário, matriz de pontuação |
-| **Chefe / Equipe** | Operam os processos (como hoje) |
+| **Chefe (admin do campus)** | Gerir SÓ a sua unidade: equipe/servidores, e-mails, calendário, matriz de pontuação + operar processos. É quem **cadastrou a unidade**. |
+| **Equipe** | Opera os processos da sua unidade (como hoje) |
+| **Diretor Geral** | **Somente leitura** consolidada de todas as unidades. Não cria, não habilita, não age. |
 
-**Modelo de adesão aprovado (2026-06-21):** o **diretor habilita** a unidade e
-nomeia o admin do campus (porta de entrada controlada); a partir daí **o campus
-se autogere**. Não há autocadastro aberto.
+**Modelo de adesão aprovado (revisado 2026-06-21): autocadastro aberto.**
+Qualquer unidade se cadastra sozinha pela tela de login (§2), **sem aprovação do
+diretor**. Quem cadastra a unidade vira o **chefe/admin** dela.
 
 Fluxo de uma unidade nova:
-1. Diretor cria `unidades/{novoId}` e indica o e-mail do admin do campus.
+1. Pessoa clica em "Cadastre a sua unidade aqui" → wizard cria `unidades/{novoId}`.
 2. Sistema **semeia** a unidade a partir de um *template*: calendário (feriados),
    `config/matrizPontuacao` e config padrão — para não começar do zero.
-3. Diretor delega: o admin do campus monta a própria equipe e toca os processos.
+3. Quem cadastrou (chefe) monta a própria equipe e já começa a tocar os processos.
 
 **Segurança:** toda escrita continua via Apps Script + conta de serviço, com
 **trava por papel + unidade** (o token de sessão carrega `unidadeId` e `papel`;
-um admin do Campus A não consegue tocar no Campus B). A tela é só o controle
+o chefe do Campus A não consegue tocar no Campus B). A tela é só o controle
 remoto; quem valida e grava é o Apps Script. Funções novas (guardadas por papel):
-`fs_criarUnidade`, `fs_definirAdminCampus`, `fs_cadastrarUsuario`, etc.
+`fs_criarUnidade`, `fs_cadastrarUsuario`, etc.
+
+**Anti-abuso (recomendado, sem reintroduzir aprovação humana):** como o cadastro
+é aberto, restringir a criação de unidade a **e-mails institucionais**
+(domínio `*.g12.br` / `cp2.g12.br`) — o `fs_criarUnidade` só aceita se o e-mail do
+solicitante for institucional (validação por código enviado ao e-mail, à la login).
+Evita unidades-lixo sem precisar de ninguém autorizando.
 
 Isto **substitui** o cadastro manual das Fases C/E pela Fase F abaixo. Não altera
 o modelo de dados nem a hospedagem.
 
 ### Wizard de cadastro + primeiro acesso (Fase F)
 
-1. **Assistente (wizard) em etapas** para o admin do campus configurar a unidade:
-   nome/sigla → cadastro de servidores (nome, e-mail) → marcar quem é **chefe** →
-   concluir. Grava em `unidades/{u}/servidores` e `/emails` e define os papéis
-   (tudo via Apps Script). Mantém a porta de entrada pelo diretor (decisão da §
-   "modelo de adesão"); se desejado no futuro, pode virar "campus inicia + diretor aprova".
+1. **Assistente (wizard) em etapas**, aberto pela tela de login (§2), para a própria
+   unidade se configurar: nome/sigla → cadastro de servidores (nome, e-mail) →
+   marcar quem é **chefe** → concluir. Grava em `unidades/{u}/servidores` e
+   `/emails` e define os papéis (tudo via Apps Script). **Sem aprovação do diretor.**
 2. **App idêntico, porém vazio:** a unidade nova usa o MESMO código do app atual —
    nasce com todas as funções (processos, fila, capacidade, e-mails). Só os dados
    começam vazios, exceto o que é **semeado** (calendário de feriados, matriz de
@@ -170,9 +186,9 @@ o modelo de dados nem a hospedagem.
   calendário); validar isolamento e e-mails.
 - **Fase D — Resumo + Painel do Diretor.** Gravação do `resumo/atual`; novo app
   só-leitura consolidado.
-- **Fase F — Onboarding self-service.** Módulo de Administração (ver seção acima):
-  papéis diretor/admin-campus, criação+seed de unidade, delegação. Substitui o
-  cadastro manual.
+- **Fase F — Onboarding self-service (autocadastro aberto).** Tela de login com
+  seletor de unidade + "Cadastre a sua unidade aqui"; wizard de criação+seed de
+  unidade; tour de primeiro acesso; guarda anti-abuso por e-mail institucional.
 - **Fase E — Rollout.** Demais unidades (já via Fase F), treinamento, congelamento.
 
 ## Riscos / pontos de atenção
@@ -180,6 +196,10 @@ o modelo de dados nem a hospedagem.
 - **Cota de e-mail (MailApp):** monitorar; se estourar, distribuir o envio ao
   longo do dia ou avaliar contas por região.
 - **IDs de processo:** garantir unicidade por unidade (prefixo da sigla).
+- **Abuso do cadastro aberto:** sem aprovação humana, mitigar com e-mail
+  institucional obrigatório no `fs_criarUnidade` (domínio `*.g12.br`) + evitar
+  siglas/IDs duplicados. Opcional: o diretor pode desativar (`ativo=false`) uma
+  unidade-lixo pelo seu painel, sem ser porta de entrada.
 - **Migração:** a Reitoria/SEL já está em produção — a Fase A precisa ser feita
   com janela e backup (a planilha congelada continua sendo o backup).
 - **Privacidade:** os painéis por unidade seguem **públicos** (decisão aprovada).
