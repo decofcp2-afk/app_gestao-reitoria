@@ -1,0 +1,56 @@
+rules_version = '2';
+
+// ════════════════════════════════════════════════════════════════════════
+// Regras MULTIUNIDADE — RETROCOMPATÍVEIS (Fase A preparada; NÃO publicar ainda).
+//
+// Mantêm os caminhos de RAIZ funcionando (produção atual da Reitoria) E
+// adicionam a subárvore unidades/{u}/... para o futuro corte (Fase B).
+// Publicar isto NÃO quebra a Reitoria: os caminhos antigos continuam valendo.
+//
+// Modelo (igual ao de hoje): leitura pública nas coleções de painel; escrita
+// sempre via conta de serviço (Admin ignora estas regras); coleções sensíveis
+// (emails, historico, dispositivos) nunca expostas ao cliente.
+// ════════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────── LEGADO (raiz) — produção atual da Reitoria. Mantido. ─────────
+    match /processos/{doc}    { allow read: if true; allow write: if false; }
+    match /etapas/{doc}       { allow read: if true; allow write: if false; }
+    match /calendario/{doc}   { allow read: if true; allow write: if false; }
+    match /servidores/{doc}   { allow read: if true; allow write: if false; }
+    match /cargas/{doc}       { allow read: if true; allow write: if false; }
+    match /config/{doc}       { allow read: if true; allow write: if false; }
+    match /emails/{doc}       { allow read, write: if false; }
+    match /historico/{doc}    { allow read, write: if false; }
+    match /dispositivos/{doc} { allow read, write: if false; }
+
+    // ───────── MULTIUNIDADE — unidades/{u}/... ─────────
+    // Doc da unidade: público (nome/sigla/ativo) p/ o seletor e o índice público.
+    match /unidades/{u} {
+      allow read: if true;
+      allow write: if false;
+
+      // Coleções de painel: leitura pública por unidade.
+      match /processos/{doc}    { allow read: if true; allow write: if false; }
+      match /etapas/{doc}       { allow read: if true; allow write: if false; }
+      match /calendario/{doc}   { allow read: if true; allow write: if false; }
+      match /servidores/{doc}   { allow read: if true; allow write: if false; }
+      match /cargas/{doc}       { allow read: if true; allow write: if false; }
+      match /config/{doc}       { allow read: if true; allow write: if false; }
+      match /resumo/{doc}       { allow read: if true; allow write: if false; }
+
+      // Sensíveis por unidade: nunca expostas ao cliente.
+      match /emails/{doc}       { allow read, write: if false; }
+      match /historico/{doc}    { allow read, write: if false; }
+      match /dispositivos/{doc} { allow read, write: if false; }
+    }
+
+    // collectionGroup 'resumo' (Painel do Diretor) — leitura pública.
+    // (As regras acima já cobrem a leitura; manter o índice de collectionGroup.)
+
+    // ───────── Bloqueio padrão p/ qualquer coleção não listada ─────────
+    match /{document=**}      { allow read, write: if false; }
+  }
+}

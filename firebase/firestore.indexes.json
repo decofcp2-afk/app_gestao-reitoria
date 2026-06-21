@@ -1,0 +1,21 @@
+{
+  "_comentario": [
+    "Fase A (multiunidade) — índices preparados; NÃO aplicar ainda.",
+    "O Painel do Diretor lê os docs 'resumo' de TODAS as unidades via",
+    "collectionGroup('resumo'). Uma leitura simples (sem filtro/ordenação) usa",
+    "índice de campo único, que o Firestore mantém automaticamente. O índice",
+    "abaixo só é necessário se o painel ORDENAR/FILTRAR a collectionGroup (ex.:",
+    "ordenar por atualizadoEm). Aplicar via console (Firestore > Índices) ou",
+    "firebase deploy --only firestore:indexes quando a Fase D chegar."
+  ],
+  "indexes": [
+    {
+      "collectionGroup": "resumo",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "atualizadoEm", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
