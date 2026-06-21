@@ -87,6 +87,24 @@ diretor lendo tudo, as leituras se multiplicam. Solução:
 
 ---
 
+## Hospedagem (GitHub Pages — Fase 5/Firebase Hosting segue cancelada)
+
+Os três apps são 100% estáticos (rodam no navegador, leem o Firestore via SDK por
+CDN e escrevem via `fetch` no Apps Script). Nenhum precisa de servidor próprio —
+o GitHub Pages serve os arquivos, como hoje. Toda a resolução de "qual unidade"
+acontece no cliente:
+
+- **App de Gestão:** 1 único deploy atende todas; o `unidadeId` vem do login.
+- **Painel público:** mesma página para todas as unidades; o campus vem por
+  query string, ex.: `.../painel/?u=campus-tijuca`. Usar `?u=` (e não caminho
+  `/campus-tijuca`) porque o GitHub Pages é estático e não tem roteamento de
+  servidor — query string funciona sem o truque de fallback 404.
+- **Painel do Diretor:** página nova (repo próprio ou subpasta), só leitura.
+
+Privacidade coerente: os painéis já são públicos (decisão aprovada); o que fica
+"público" são os arquivos do app, não os dados — coleções sensíveis seguem
+fechadas pelas regras do Firestore. **Não é preciso Firebase Hosting.**
+
 ## Fases de execução
 
 - **Fase A — Modelagem + migração estrutural.** Criar `unidades/{u}`, mover os
