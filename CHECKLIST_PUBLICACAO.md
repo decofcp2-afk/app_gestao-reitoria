@@ -1,63 +1,80 @@
-# Checklist de Publicacao - AppSEL
+# Checklist de Publicação — App Gestão (AppSEL)
 
-## 1. Apps Script da DECOF
+Aplicação **interna e protegida por login**. A equipe SEL/SEPMA faz toda a gestão dos processos por aqui (escrita na planilha, fila, etapas, capacidade, e-mails e avisos de prazo). O Painel de Contratações apenas exibe, em modo público e somente leitura, os dados consolidados desta mesma base.
 
-- Criar projeto novo no Apps Script da conta DECOF.
-- Copiar `apps-script/Code.gs` para o editor.
-- Em propriedades do script, configurar:
-  - `SEL_SS_ID`: ID real da planilha.
-  - `SEL_CHEFIA_EMAIL`: e-mail institucional da chefia, se necessario.
-  - `SEL_MUNICIPIO_CALENDARIO`: municipio dos feriados locais, por exemplo `Rio de Janeiro`.
+---
+
+## 1. Backend — Apps Script da DECOF
+
+- Criar projeto novo no Apps Script da conta institucional da DECOF.
+- Copiar/atualizar `apps-script/Code.gs` no editor.
+- Em `Configurações do projeto > Propriedades do script`, configurar:
+  - `SEL_SS_ID` — ID real da planilha.
+  - `SEL_CHEFIA_EMAIL` — e-mail institucional da chefia, se necessário.
+  - `SEL_MUNICIPIO_CALENDARIO` — município dos feriados locais (padrão: `Rio de Janeiro`).
 - Salvar.
 - Implantar como Web App:
   - Executar como: `Eu`.
   - Quem pode acessar: `Qualquer pessoa`.
-- Autorizar as permissoes solicitadas pelo Google.
+- Autorizar as permissões solicitadas pelo Google.
 - Copiar a URL final terminada em `/exec`.
-- Conferir em `Acionadores` se nao existe acionador antigo de conta pessoal para `enviarAvisosPrazo`.
+- Em `Acionadores`, confirmar que **não** existe acionador antigo de conta pessoal para `enviarAvisosPrazo`.
 
-## 2. GitHub Pages
+---
+
+## 2. Frontend — GitHub Pages
 
 - Colar a URL `/exec` em `config.js`, no campo `apiUrl`.
-- Criar repositorio separado para o AppSEL.
-- Enviar apenas os arquivos desta pasta.
+- Manter `apiTimeoutMs` em `90000`, salvo se o Apps Script precisar de outro tempo de espera.
+- Enviar os arquivos desta pasta para o repositório do App Gestão (separado do Painel).
 - Configurar GitHub Pages:
   - Source: `Deploy from a branch`.
   - Branch: `main`.
   - Folder: `/(root)`.
-- Deixar `Custom domain` vazio, salvo se houver dominio institucional real com DNS configurado.
+- Deixar `Custom domain` vazio, salvo domínio institucional real com DNS configurado.
 
-## 3. Testes obrigatorios
+---
 
-- Abrir o AppSEL pelo link do GitHub Pages em Chrome.
-- Abrir o AppSEL pelo link do GitHub Pages em Edge.
-- Testar em aba anonima.
-- Fazer login com matricula e senha temporaria.
-- Confirmar troca obrigatoria de senha.
-- Testar recuperacao de senha por e-mail.
-- Abrir Etapas.
-- Concluir uma etapa.
-- Regredir uma etapa.
-- Voltar um processo em andamento para a Fila com justificativa.
+## 3. Testes obrigatórios
+
+- Abrir o AppSEL pelo link do GitHub Pages no Chrome.
+- Abrir o AppSEL pelo link do GitHub Pages no Edge.
+- Testar em aba anônima.
+- Fazer login com matrícula e senha temporária.
+- Confirmar troca obrigatória de senha.
+- Testar recuperação de senha por e-mail.
+- Em **Etapas**: concluir uma etapa e regredir uma etapa.
+- Voltar um processo em andamento para a **Fila** com justificativa.
 - Confirmar que o status real foi preservado e que o processo saiu dos avisos de atraso.
-- Abrir Fila.
-- Iniciar processo pela Fila.
-- Reativar pela Fila um processo marcado como retorno para fila.
-- Abrir Capacidade.
-- Salvar pontuacao.
-- Salvar Outros.
-- Abrir Configuracoes como chefia.
-- Editar equipe.
-- Editar e-mails.
-- Instalar/Reinstalar trigger pela conta DECOF.
-- Confirmar que os acionadores ficaram separados: prazos proximos por volta de 10h30 e etapas vencidas por volta de 14h, de segunda a sexta.
-- Testar e-mail.
-- Enviar avisos agora.
+- Em **Fila**: iniciar um processo e reativar um processo marcado como retorno para fila.
+- Em **Capacidade**: salvar pontuação e salvar "Outros".
+- Em **Configurações** (como chefia): editar equipe e editar e-mails.
+- Instalar/reinstalar o trigger pela conta DECOF.
+- Confirmar que os acionadores ficaram separados: prazos próximos por volta de 10h30 e etapas vencidas por volta de 14h, de segunda a sexta.
+- Testar e-mail e enviar avisos agora.
 
-## 4. Conferencia de seguranca
+---
 
-- Confirmar que o repositorio nao tem ID real da planilha.
-- Confirmar que o repositorio nao tem e-mail pessoal.
-- Confirmar que nao ha planilhas, PDFs ou documentos administrativos no repositorio.
-- Confirmar que o Apps Script usa propriedades do script para dados sensiveis.
-- Confirmar que os avisos automaticos aparecem como acionadores da conta institucional e que a conta pessoal nao envia mais e-mails.
+## 4. Conferência de segurança
+
+- Confirmar que o repositório **não** contém ID real da planilha.
+- Confirmar que o repositório **não** contém e-mail pessoal.
+- Confirmar que **não** há planilhas, PDFs ou documentos administrativos versionados.
+- Confirmar que o Apps Script usa propriedades do script para dados sensíveis.
+- Confirmar que os avisos automáticos aparecem como acionadores da conta institucional e que a conta pessoal não envia mais e-mails.
+- Após a migração para o Firestore: confirmar que **nenhuma chave de conta de serviço** (`*.json`) foi versionada — elas ficam só nas propriedades do script / fora do Git (já cobertas pelo `.gitignore`).
+
+---
+
+## 5. Solução de problemas
+
+- App não carrega dados: conferir se `config.js` tem a URL `/exec` correta e `apiTimeoutMs` adequado.
+- Funciona no Chrome e falha no Edge: testar em aba anônima e confirmar implantação como Web App acessível por `Qualquer pessoa`.
+- Login não conclui: confirmar que as rotas `appsel.challenge` / `appsel.loginProof` respondem (o app usa desafio criptográfico, a senha não trafega aberta).
+- E-mails não saem ou saem da conta errada: conferir em `Acionadores` se os gatilhos estão na conta institucional e se o acionador de conta pessoal foi removido.
+- GitHub Pages não atualiza: aguardar alguns minutos e conferir a aba `Actions`.
+- Mudança no nome do repositório: atualizar links no README e atalhos salvos.
+
+---
+
+> **Nota de migração:** há um plano de mover a base de dados da planilha para o **Firestore** (modelo híbrido, plano gratuito — ver `PLANO_ORGANIZACAO_E_MIGRACAO.md`). Quando isso ocorrer, este checklist será atualizado: o frontend passará a ler/escrever no Firestore e os e-mails do Apps Script lerão o Firestore via REST + conta de serviço, mantendo os triggers atuais. O App Gestão continuará protegido por login.

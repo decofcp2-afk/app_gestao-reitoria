@@ -14,8 +14,10 @@ app_gestao-reitoria/
 |-- apps-script/
 |   `-- Code.gs             backend do App Gestao para copiar no Apps Script
 |-- README.md
-`-- .gitignore
+`-- .gitignore             bloqueia arquivos sensiveis (inclui chaves Firebase)
 ```
+
+> **Migracao planejada:** a base de dados sera movida da planilha para o Firestore (modelo hibrido, plano gratuito). O App Gestao seguira protegido por login e mantera os e-mails no Apps Script. Detalhes no `PLANO_ORGANIZACAO_E_MIGRACAO.md`.
 
 ## Fluxo geral
 
@@ -131,3 +133,12 @@ Pontos facultativos podem ser avaliados no futuro, mas nao fazem parte da regra 
 - `?route=appsel.call&method=...`
 
 O login no GitHub Pages usa desafio criptografico: a senha digitada nao e enviada aberta na URL. As demais chamadas preservam a compatibilidade com as funcoes atuais do App Gestao e exigem token quando a funcao original ja exigia token.
+
+## Solucao de problemas
+
+- Se o app nao carregar dados, confira se `config.js` tem a URL `/exec` correta e o `apiTimeoutMs` adequado.
+- Se funcionar no Chrome e falhar no Edge, teste em aba anonima e confirme se o Apps Script foi implantado como Web App acessivel por `Qualquer pessoa`.
+- Se o login nao concluir, confirme que as rotas `appsel.challenge` e `appsel.loginProof` estao respondendo.
+- Se os e-mails nao sairem ou sairem da conta errada, confira em `Acionadores` se os gatilhos estao na conta institucional e se o acionador de conta pessoal foi removido.
+- Se o GitHub Pages nao atualizar, aguarde alguns minutos e confira a aba `Actions` do repositorio.
+- Se mudar o nome do repositorio, atualize tambem links do README e qualquer atalho salvo no navegador.

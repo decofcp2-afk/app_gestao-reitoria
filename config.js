@@ -1,15 +1,24 @@
 window.APPSEL_CONFIG = {
-  // Cole aqui a URL /exec da implantacao Web App do Apps Script da DECOF.
-  // Exemplo: https://script.google.com/macros/s/SEU_ID_DE_IMPLANTACAO/exec
+  // URL /exec do Apps Script — usada para login, escrita e e-mails (permanece).
   apiUrl: "https://script.google.com/macros/s/AKfycbysFfbpofy4bf0qODi429gKX0dd621Si08_P9_e4nBajeuth1UV8cD4gu8JKtR2_TWcYw/exec",
 
-  // Municipio usado para simular prazos no navegador. O Apps Script tambem
-  // deve ter SEL_MUNICIPIO_CALENDARIO com o mesmo valor.
   municipioCalendario: "Rio de Janeiro",
-
-  // Tempo maximo de espera das chamadas ao Apps Script.
   apiTimeoutMs: 90000,
 
-  // Link rapido para o Painel publico de Contratacoes.
-  painelUrl: "https://decofcp2-afk.github.io/painel-contratacoes-reitoria/"
+  painelUrl: "https://decofcp2-afk.github.io/painel-contratacoes-reitoria/",
+
+  // Liga/desliga o uso do Firestore (leitura + escrita) no corte da Fase 3.
+  // Mantenha false ate o corte: lib/chave no Apps Script + regras publicadas.
+  firestoreAtivo: true,
+
+  // Firestore (leitura direta — substitui as chamadas de consulta ao Apps Script).
+  // A apiKey abaixo NAO e segredo: quem protege os dados sao as regras do Firestore.
+  firebase: {
+    apiKey: "AIzaSyBqtGYiH8Kfkvitfwe1si_DfFqz0P7bV5o",
+    authDomain: "gestao-de-processos-a0099.firebaseapp.com",
+    projectId: "gestao-de-processos-a0099",
+    storageBucket: "gestao-de-processos-a0099.firebasestorage.app",
+    messagingSenderId: "41645752441",
+    appId: "1:41645752441:web:c16e21168c8336773f94a8"
+  }
 };

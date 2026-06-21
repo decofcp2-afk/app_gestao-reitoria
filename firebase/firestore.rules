@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Modelo escolhido (Fase 1): login da equipe permanece no Apps Script.
+// - Leitura: pública nas coleções consumidas pelo Painel e pelo App Gestão.
+// - Escrita: SEMPRE bloqueada para o cliente. Toda gravação passa pelo Apps Script,
+//   que usa a conta de serviço (Admin) — e o Admin IGNORA estas regras.
+// - Dados sensíveis (e-mails, histórico, dispositivos) nunca são expostos ao cliente;
+//   o App Gestão acessa esses dados via Apps Script (autenticado por token).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----- Leitura pública / escrita só via conta de serviço -----
+    match /processos/{doc}    { allow read: if true; allow write: if false; }
+    match /etapas/{doc}       { allow read: if true; allow write: if false; }
+    match /calendario/{doc}   { allow read: if true; allow write: if false; }
+    match /servidores/{doc}   { allow read: if true; allow write: if false; } // sem e-mail
+    match /cargas/{doc}       { allow read: if true; allow write: if false; } // atribuicoes/capacidade
+    match /config/{doc}       { allow read: if true; allow write: if false; }
+
+    // ----- Coleções sensíveis: nunca expostas ao cliente -----
+    match /emails/{doc}       { allow read, write: if false; }
+    match /historico/{doc}    { allow read, write: if false; }
+    match /dispositivos/{doc} { allow read, write: if false; }
+
+    // ----- Bloqueio padrão para qualquer coleção não listada -----
+    match /{document=**}      { allow read, write: if false; }
+  }
+}

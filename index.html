@@ -407,6 +407,11 @@
     .section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 6px 2px; }
   </style>
   <script src="config.js"></script>
+  <!-- Firebase (compat) — leitura direta do Firestore (Fase 3). A apiKey em config.js
+       NAO e segredo; a protecao vem das regras do Firestore. Escrita/login seguem no Apps Script. -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="appsel-firestore.js"></script>
   <!-- SortableJS: drag-and-drop da fila (degrada para as setas ▲▼ se não carregar) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
@@ -905,6 +910,32 @@
     if (method === 'trocarSenhaApp') {
       trocarSenhaSegura(args[0], args[2], success, failure);
       return;
+    }
+    // Fase 3: leituras direto do Firestore (rápido). Fallback ao Apps Script.
+    var _temFs = window.AppselFirestore && window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo
+      && window.APPSEL_CONFIG.firebase && window.firebase;
+    if (_temFs && (method === 'getEtapasParaApp' || method === 'getCapacidadeApp')) {
+      var _fb = function() {
+        if (window.console) console.warn('Firestore falhou; usando Apps Script.', method);
+        callApi('appsel.call', { method: method, args: JSON.stringify(args) }, success, failure);
+      };
+      var prom = (method === 'getEtapasParaApp')
+        ? window.AppselFirestore.carregar({ isChefe: (typeof isChefeAtual_ === 'function') ? isChefeAtual_() : false })
+        : window.AppselFirestore.carregarCapacidade();
+      prom.then(success || function() {}).catch(_fb);
+      return;
+    }
+    // Escritas (e getHistorico, coleção privada) com args 1:1 → roteia para fs_*.
+    // As escritas que precisam de docId/matrícula são tratadas no ponto de chamada.
+    if (_temFs) {
+      var _fsMap = { getHistorico:1, salvarEmailProcesso:1, salvarLinkSuapProcessoApp:1,
+        salvarNomeProcessoFilaApp:1, editarProcessoFilaApp:1, excluirProcessoApp:1,
+        salvarOrdemFilaApp:1, devolverProcessoFilaApp:1, iniciarProcessos:1,
+        cadastrarProcesso:1, atribuirResponsaveisApp:1 };
+      if (_fsMap[method]) {
+        callApi('appsel.call', { method: 'fs_' + method, args: JSON.stringify(args) }, success, failure);
+        return;
+      }
     }
     callApi('appsel.call', {
       method: method,
@@ -2459,7 +2490,7 @@ function confirmarStatusEtapa(novoStatus) {
   if (!et) return;
   if (novoStatus === et.status) { fecharStatusEtapa(); return; }
   fecharStatusEtapa();
-  google.script.run
+  var runner = google.script.run
     .withSuccessHandler(function(res) {
       if (res.ok) {
         et.status = novoStatus;
@@ -2470,8 +2501,12 @@ function confirmarStatusEtapa(novoStatus) {
         if (idx >= 0) abrirProcesso(idx);
       } else { toast('Erro: '+(res.erro||''), 'err'); }
     })
-    .withFailureHandler(function(e) { toast('Erro: '+(e.message||e), 'err'); })
-    .atualizarStatusEtapa(et.linha, novoStatus, AUTH_TOKEN);
+    .withFailureHandler(function(e) { toast('Erro: '+(e.message||e), 'err'); });
+  if (window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo) {
+    runner.fs_atualizarStatusEtapa(et.docId, novoStatus, AUTH_TOKEN);
+  } else {
+    runner.atualizarStatusEtapa(et.linha, novoStatus, AUTH_TOKEN);
+  }
 }
 
 function editarEmailProcAtivo_() {
@@ -2591,7 +2626,7 @@ function regredirEtapaAtual(etIdx) {
       'Confirmar retorno',
       'A etapa atual voltará para "Não iniciada" e a etapa anterior ficará "Em andamento".',
       function() {
-        google.script.run
+        var runner = google.script.run
           .withSuccessHandler(function(res) {
             if (res && res.ok) {
               toast('↩ Etapa anterior reaberta.', 'ok');
@@ -2603,8 +2638,12 @@ function regredirEtapaAtual(etIdx) {
               toast('Erro: ' + (res && res.erro ? res.erro : 'Não foi possível regredir.'), 'err');
             }
           })
-          .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), 'err'); })
-          .regredirEtapa({ processoId: p.id, linhaEtapaAtual: et.linha, etapaAtual: et.nome, servidor: SERVIDOR, motivo: motivo, authToken: AUTH_TOKEN });
+          .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), 'err'); });
+        if (window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo) {
+          runner.fs_regredirEtapa({ processoId: p.id, docEtapa: et.docId, etapaAtual: et.nome, servidor: SERVIDOR, motivo: motivo, authToken: AUTH_TOKEN });
+        } else {
+          runner.regredirEtapa({ processoId: p.id, linhaEtapaAtual: et.linha, etapaAtual: et.nome, servidor: SERVIDOR, motivo: motivo, authToken: AUTH_TOKEN });
+        }
       },
       'Voltar etapa'
     );
@@ -2792,7 +2831,7 @@ function confirmarConclusao() {
   var btn = document.getElementById('btn-confirmar');
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
 
-  google.script.run
+  var runner = google.script.run
     .withSuccessHandler(function(res) {
       if (res && res.ok) {
         CONC.et.status = 'ok';
@@ -2815,17 +2854,23 @@ function confirmarConclusao() {
     .withFailureHandler(function(e) {
       toast('Erro: ' + (e.message||e), 'err');
       if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar conclusão'; }
-    })
-    .concluirEtapa({
-      linhaEtapa:     CONC.et.linha,
-      processoId:     PROC_ATI.id,
-      nomeEtapa:      CONC.et.nome,
-      dataRealizacao: CONC.dataRealiz,
-      motivo:         CONC.motivo,
-      servidor:       SERVIDOR,
-      diasAtraso:     CONC.diasAtraso,
-      authToken:      AUTH_TOKEN
     });
+  var _concArgs = {
+    processoId:     PROC_ATI.id,
+    nomeEtapa:      CONC.et.nome,
+    dataRealizacao: CONC.dataRealiz,
+    motivo:         CONC.motivo,
+    servidor:       SERVIDOR,
+    diasAtraso:     CONC.diasAtraso,
+    authToken:      AUTH_TOKEN
+  };
+  if (window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo) {
+    _concArgs.docEtapa = CONC.et.docId;
+    runner.fs_concluirEtapa(_concArgs);
+  } else {
+    _concArgs.linhaEtapa = CONC.et.linha;
+    runner.concluirEtapa(_concArgs);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -3968,6 +4013,7 @@ function renderCapacidade_() {
         + ' data-linha="' + s.linhaSum + '"'
         + ' data-col="' + s.colOutros + '"'
         + ' data-outros="' + s.outros + '"'
+        + ' data-matricula="' + (s.matricula || '') + '"'
         + ' data-serv="' + esc(s.servidor) + '"'
         + ' onclick="editarOutros_(this)">Editar</button>'
         + '</div>';
@@ -4055,13 +4101,17 @@ function editarOutros_(btn) {
   }, function(val) {
     var num = parseFloat(val);
     if (isNaN(num)) { toast('Valor inválido.', 'err'); return; }
-    google.script.run
+    var runner = google.script.run
       .withSuccessHandler(function(r) {
         if (r.ok) { toast('Outros atualizado!', 'ok'); CAP_CARREGADO = false; carregarCapacidade_(); }
         else toast('Erro: '+(r.erro||''), 'err');
       })
-      .withFailureHandler(function(e){ toast('Erro: '+(e.message||e),'err'); })
-      .salvarOutrosCap({ linha: isNaN(linha) ? 0 : linha, valor: num, col: isNaN(col) ? 2 : col, servidor: servidor, fase: CAP_PHASE, authToken: AUTH_TOKEN });
+      .withFailureHandler(function(e){ toast('Erro: '+(e.message||e),'err'); });
+    if (window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo) {
+      runner.fs_salvarOutros({ matricula: btn.dataset.matricula, valor: num, authToken: AUTH_TOKEN });
+    } else {
+      runner.salvarOutrosCap({ linha: isNaN(linha) ? 0 : linha, valor: num, col: isNaN(col) ? 2 : col, servidor: servidor, fase: CAP_PHASE, authToken: AUTH_TOKEN });
+    }
   });
 }
 
@@ -4173,16 +4223,17 @@ function salvarPontuacao_() {
     var el = document.querySelector('#pont-body input[name="pont-'+name+'"]:checked');
     return el ? parseFloat(el.value)||0 : 0;
   };
+  var fsOn = window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo;
   var params = {
-    linha: r.linha,
     pts11: isInt ? get('modal')  : get('sessao'),
     pts12: isInt ? get('nat')    : get('nat'),
     pts23: isInt ? get('irp')    : get('grupos'),
     authToken: AUTH_TOKEN
   };
+  if (fsOn) params.docId = r.docId; else params.linha = r.linha;
   var btn = document.querySelector('#pont-footer .btn-prim');
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
-  google.script.run
+  var runner = google.script.run
     .withSuccessHandler(function(res) {
       if (res && res.ok) {
         fecharPontuacao();
@@ -4196,8 +4247,8 @@ function salvarPontuacao_() {
     .withFailureHandler(function(e) {
       toast('Erro: '+(e.message||e), 'err');
       if (btn) { btn.disabled=false; btn.textContent='✓ Salvar pontuação'; }
-    })
-    .salvarPontuacaoCap(params);
+    });
+  if (fsOn) runner.fs_salvarPontuacaoCap(params); else runner.salvarPontuacaoCap(params);
 }
 
 // ══════════════════════════════════════════════════════════════════════

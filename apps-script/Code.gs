@@ -877,6 +877,26 @@ function _apiCallAppSEL_(method, args) {
     getEmails: getEmails,
     salvarEmail: salvarEmail
   };
+  // Fase 3 (corte): versões Firestore (FirestoreSync.gs). Aditivo — só são
+  // chamadas quando o frontend está com firestoreAtivo=true.
+  if (typeof fs_atualizarStatusEtapa === 'function') {
+    fns.fs_atualizarStatusEtapa   = fs_atualizarStatusEtapa;
+    fns.fs_concluirEtapa          = fs_concluirEtapa;
+    fns.fs_regredirEtapa          = fs_regredirEtapa;
+    fns.fs_devolverProcessoFilaApp= fs_devolverProcessoFilaApp;
+    fns.fs_iniciarProcessos       = fs_iniciarProcessos;
+    fns.fs_salvarEmailProcesso    = fs_salvarEmailProcesso;
+    fns.fs_salvarLinkSuapProcessoApp = fs_salvarLinkSuapProcessoApp;
+    fns.fs_salvarNomeProcessoFilaApp = fs_salvarNomeProcessoFilaApp;
+    fns.fs_editarProcessoFilaApp  = fs_editarProcessoFilaApp;
+    fns.fs_excluirProcessoApp     = fs_excluirProcessoApp;
+    fns.fs_salvarOrdemFilaApp     = fs_salvarOrdemFilaApp;
+    fns.fs_cadastrarProcesso      = fs_cadastrarProcesso;
+    fns.fs_atribuirResponsaveisApp= fs_atribuirResponsaveisApp;
+    fns.fs_salvarOutros           = fs_salvarOutros;
+    fns.fs_salvarPontuacaoCap     = fs_salvarPontuacaoCap;
+    if (typeof fs_getHistorico === 'function') fns.fs_getHistorico = fs_getHistorico;
+  }
   if (!fns[method]) throw new Error('Funcao nao permitida pela API publica.');
   return fns[method].apply(null, args);
 }
@@ -1825,7 +1845,10 @@ function enviarAvisosPrazo(modo) {
   }
 
   var emailsConfig = _getEmails_({ isChefe: true, nome: 'Sistema' });
-  var dadosRaw = _getEtapasParaApp_({ isChefe: true, nome: 'Sistema' });
+  // Fase 4: lê do Firestore quando FS_ATIVO='true'; senão da planilha.
+  var dadosRaw = (typeof _dadosProcessosParaAvisos_ === 'function')
+    ? _dadosProcessosParaAvisos_({ isChefe: true, nome: 'Sistema' })
+    : _getEtapasParaApp_({ isChefe: true, nome: 'Sistema' });
   // Suporta tanto retorno antigo (array) quanto novo ({processos, filaPrevisao})
   var dados = (dadosRaw && dadosRaw.processos) ? dadosRaw.processos : (dadosRaw || []);
 
@@ -2186,7 +2209,8 @@ function _coletarAvisosPrazo_(dados, hoje, filtroServidor, incluirAguardandoReq)
 
 function getAlertasApp(authToken) {
   var sess = _authRequire_(authToken, false);
-  var dadosRaw = _getEtapasParaApp_(sess);
+  var dadosRaw = (typeof _dadosProcessosParaAvisos_ === 'function')
+    ? _dadosProcessosParaAvisos_(sess) : _getEtapasParaApp_(sess);
   var dados = (dadosRaw && dadosRaw.processos) ? dadosRaw.processos : (dadosRaw || []);
   var hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   var filtroServidor = sess.isChefe ? '' : (sess.nome || '');
@@ -3690,6 +3714,16 @@ function salvarServidoresApp(lista, authToken) {
       alterados += _renomearServidorNasAbas_(rn.antigo, rn.novo);
     });
     if (renomes.length) _sincronizarCapacidadeComEtapas_();
+
+    // Fase 3: espelha equipe/e-mails no Firestore (aditivo; auth continua aqui).
+    try {
+      if (typeof fs_espelharServidores_ === 'function'
+          && PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID')) {
+        var emailsMap = {};
+        limpa.forEach(function(s) { emailsMap[s.nome] = props.getProperty('email_' + s.nome) || ''; });
+        fs_espelharServidores_(limpa, emailsMap);
+      }
+    } catch(eMirror) { /* espelho é best-effort; não bloqueia o salvar */ }
 
     return { ok: true, renomes: renomes.length, alterados: alterados, servidores: _getServidoresApp_() };
     } catch(e) { return { ok: false, erro: e.message }; }
