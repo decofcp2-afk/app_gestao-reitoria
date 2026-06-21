@@ -433,6 +433,9 @@
   </div>
   <div class="login-label">Acesso da equipe SEL/SEPMA</div>
   <form class="login-form" onsubmit="event.preventDefault();loginAppLocal();">
+    <select class="login-input" id="login-unidade" onchange="aplicarUnidadeLogin(this.value)" style="cursor:pointer">
+      <option style="color:#0b1d33">Carregando unidades…</option>
+    </select>
     <input class="login-input" id="login-matricula" autocomplete="username" placeholder="Matrícula">
     <input class="login-input" id="login-senha" type="password" autocomplete="current-password" placeholder="Senha">
     <button class="login-submit" id="login-submit" type="submit">Entrar</button>
@@ -4400,9 +4403,23 @@ function aplicarUnidadeApp(id){
   location.reload();
 }
 function fecharTrocaUnidadeApp(){ document.getElementById('ug-modal').style.display='none'; }
-// Mostra a unidade atual no item do menu.
+function aplicarUnidadeLogin(id){ if(!id) return; try{ localStorage.setItem('appsel_unidade', id); }catch(e){} }
+// Popula o seletor de unidade na tela de LOGIN.
+function popularUnidadesLogin(){
+  var sel=document.getElementById('login-unidade'); if(!sel) return;
+  if(!(window.AppselFirestore && window.AppselFirestore.listarUnidades)){ sel.innerHTML='<option style="color:#0b1d33" value="reitoria-sel">Reitoria / SEL</option>'; return; }
+  var atual = window.AppselFirestore.unidadeAtual();
+  window.AppselFirestore.listarUnidades().then(function(us){
+    if(!us.length){ sel.innerHTML='<option style="color:#0b1d33" value="reitoria-sel">Reitoria / SEL</option>'; return; }
+    sel.innerHTML = us.map(function(u){
+      return '<option style="color:#0b1d33" value="'+u.id+'"'+(u.id===atual?' selected':'')+'>'+(u.nome||u.id)+(u.ativo===false?' [inativa]':'')+'</option>';
+    }).join('');
+  }).catch(function(){ sel.innerHTML='<option style="color:#0b1d33" value="reitoria-sel">Reitoria / SEL</option>'; });
+}
+// Mostra a unidade atual no item do menu + popula o seletor do login.
 (function(){
-  function rotular(){
+  function init(){
+    popularUnidadesLogin();
     if(!(window.AppselFirestore && window.AppselFirestore.listarUnidades)) return;
     var atual = window.AppselFirestore.unidadeAtual();
     window.AppselFirestore.listarUnidades().then(function(us){
@@ -4410,7 +4427,7 @@ function fecharTrocaUnidadeApp(){ document.getElementById('ug-modal').style.disp
       var el=document.getElementById('hdr-unidade-nome'); if(el) el.textContent = u?(u.nome||atual):atual;
     }).catch(function(){});
   }
-  if(document.readyState!=='loading') rotular(); else document.addEventListener('DOMContentLoaded', rotular);
+  if(document.readyState!=='loading') init(); else document.addEventListener('DOMContentLoaded', init);
 })();
 </script>
 </body>
