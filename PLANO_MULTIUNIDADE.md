@@ -105,6 +105,36 @@ Privacidade coerente: os painéis já são públicos (decisão aprovada); o que 
 "público" são os arquivos do app, não os dados — coleções sensíveis seguem
 fechadas pelas regras do Firestore. **Não é preciso Firebase Hosting.**
 
+## Módulo de Administração (onboarding self-service)
+
+Em vez de o cadastro de cada campus ser feito manualmente pelo dev, o próprio app
+ganha uma área de **Administração**, visível conforme o papel:
+
+| Papel | Pode |
+|---|---|
+| **Diretor (super-admin)** | Criar/ativar/desativar unidades; nomear o admin de cada campus; ver tudo |
+| **Admin do campus** | Gerir SÓ a sua unidade: equipe/servidores, usuários, calendário, matriz de pontuação |
+| **Chefe / Equipe** | Operam os processos (como hoje) |
+
+**Modelo de adesão aprovado (2026-06-21):** o **diretor habilita** a unidade e
+nomeia o admin do campus (porta de entrada controlada); a partir daí **o campus
+se autogere**. Não há autocadastro aberto.
+
+Fluxo de uma unidade nova:
+1. Diretor cria `unidades/{novoId}` e indica o e-mail do admin do campus.
+2. Sistema **semeia** a unidade a partir de um *template*: calendário (feriados),
+   `config/matrizPontuacao` e config padrão — para não começar do zero.
+3. Diretor delega: o admin do campus monta a própria equipe e toca os processos.
+
+**Segurança:** toda escrita continua via Apps Script + conta de serviço, com
+**trava por papel + unidade** (o token de sessão carrega `unidadeId` e `papel`;
+um admin do Campus A não consegue tocar no Campus B). A tela é só o controle
+remoto; quem valida e grava é o Apps Script. Funções novas (guardadas por papel):
+`fs_criarUnidade`, `fs_definirAdminCampus`, `fs_cadastrarUsuario`, etc.
+
+Isto **substitui** o cadastro manual das Fases C/E pela Fase F abaixo. Não altera
+o modelo de dados nem a hospedagem.
+
 ## Fases de execução
 
 - **Fase A — Modelagem + migração estrutural.** Criar `unidades/{u}`, mover os
@@ -116,7 +146,10 @@ fechadas pelas regras do Firestore. **Não é preciso Firebase Hosting.**
   calendário); validar isolamento e e-mails.
 - **Fase D — Resumo + Painel do Diretor.** Gravação do `resumo/atual`; novo app
   só-leitura consolidado.
-- **Fase E — Rollout.** Demais unidades, treinamento, congelamento.
+- **Fase F — Onboarding self-service.** Módulo de Administração (ver seção acima):
+  papéis diretor/admin-campus, criação+seed de unidade, delegação. Substitui o
+  cadastro manual.
+- **Fase E — Rollout.** Demais unidades (já via Fase F), treinamento, congelamento.
 
 ## Riscos / pontos de atenção
 - **Cota Spark (leituras):** mitigada pelo documento-resumo (§4).
