@@ -152,11 +152,16 @@ o chefe do Campus A não consegue tocar no Campus B). A tela é só o controle
 remoto; quem valida e grava é o Apps Script. Funções novas (guardadas por papel):
 `fs_criarUnidade`, `fs_cadastrarUsuario`, etc.
 
-**Anti-abuso (recomendado, sem reintroduzir aprovação humana):** como o cadastro
-é aberto, restringir a criação de unidade a **e-mails institucionais**
-(domínio `*.g12.br` / `cp2.g12.br`) — o `fs_criarUnidade` só aceita se o e-mail do
-solicitante for institucional (validação por código enviado ao e-mail, à la login).
-Evita unidades-lixo sem precisar de ninguém autorizando.
+**Anti-abuso (aprovado 2026-06-21, sem reintroduzir aprovação humana):** a
+**unidade** tem um **e-mail institucional padrão** (domínio `*.g12.br` /
+`cp2.g12.br`); o `fs_criarUnidade` só cria a unidade se esse e-mail for
+institucional, validado por **código enviado ao e-mail** (à la login). Isso prova
+que é do CPII e evita unidades-lixo, sem ninguém autorizando.
+
+**E-mail dos servidores é livre:** cada servidor cadastrado na unidade pode usar
+**Gmail ou institucional** para receber os avisos de prazo — a restrição de
+domínio vale **só para o e-mail institucional da unidade** (o cadastro), não para
+os e-mails individuais da equipe.
 
 Isto **substitui** o cadastro manual das Fases C/E pela Fase F abaixo. Não altera
 o modelo de dados nem a hospedagem.
@@ -164,9 +169,11 @@ o modelo de dados nem a hospedagem.
 ### Wizard de cadastro + primeiro acesso (Fase F)
 
 1. **Assistente (wizard) em etapas**, aberto pela tela de login (§2), para a própria
-   unidade se configurar: nome/sigla → cadastro de servidores (nome, e-mail) →
-   marcar quem é **chefe** → concluir. Grava em `unidades/{u}/servidores` e
-   `/emails` e define os papéis (tudo via Apps Script). **Sem aprovação do diretor.**
+   unidade se configurar: nome/sigla + **e-mail institucional da unidade**
+   (validado por código, domínio `*.g12.br`) → cadastro de servidores (nome,
+   e-mail — **Gmail ou institucional, livre**) → marcar quem é **chefe** →
+   concluir. Grava em `unidades/{u}/servidores` e `/emails` e define os papéis
+   (tudo via Apps Script). **Sem aprovação do diretor.**
 2. **App idêntico, porém vazio:** a unidade nova usa o MESMO código do app atual —
    nasce com todas as funções (processos, fila, capacidade, e-mails). Só os dados
    começam vazios, exceto o que é **semeado** (calendário de feriados, matriz de
