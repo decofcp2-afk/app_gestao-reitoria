@@ -459,6 +459,8 @@
         <div id="hdr-menu" class="hdr-menu" hidden onclick="event.stopPropagation()">
           <button class="hdr-menu-item" onclick="confirmarTroca();toggleHdrMenu_()">🔄 Trocar usuário</button>
           <div class="hdr-menu-sep"></div>
+          <button type="button" class="hdr-menu-item" id="hdr-unidade-item" onclick="abrirTrocaUnidadeApp();toggleHdrMenu_()">🏛️ <span id="hdr-unidade-nome">Trocar unidade</span></button>
+          <div class="hdr-menu-sep"></div>
           <button type="button" class="hdr-menu-item" onclick="abrirPainel_(event);toggleHdrMenu_();return false;"><img src="painel-icon.svg" alt="" class="hdr-menu-icon">Painel de Contratações</button>
           <div class="hdr-menu-sep" id="hdr-config-sep"></div>
           <button class="hdr-menu-item" id="hdr-config-item" onclick="switchTab('config');toggleHdrMenu_()">⚙️ Configurações</button>
@@ -4362,6 +4364,54 @@ if ('serviceWorker' in navigator) {
       });
   });
 }
+</script>
+
+<!-- ───────── Seletor de Unidade (App Gestão) ───────── -->
+<div id="ug-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(8,18,33,.6);align-items:center;justify-content:center;padding:24px 16px" onclick="if(event.target===this)fecharTrocaUnidadeApp()">
+  <div style="background:var(--card,#fff);color:var(--text,#0b1d33);max-width:420px;width:100%;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--navy,#0b1d33);color:#fff">
+      <strong style="font-size:15px">🏛️ Trocar unidade</strong>
+      <button onclick="fecharTrocaUnidadeApp()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="padding:16px 18px">
+      <div style="font-size:13px;opacity:.7;margin-bottom:10px;line-height:1.4">Selecione a unidade para gerir os processos:</div>
+      <select id="ug-select" onchange="aplicarUnidadeApp(this.value)" style="width:100%;padding:11px;font-size:15px;border:1px solid var(--border,rgba(0,0,0,.25));border-radius:8px;background:var(--card,#fff);color:inherit;cursor:pointer">
+        <option>Carregando…</option>
+      </select>
+    </div>
+  </div>
+</div>
+<script>
+function abrirTrocaUnidadeApp(){
+  var modal=document.getElementById('ug-modal'), sel=document.getElementById('ug-select');
+  modal.style.display='flex'; sel.innerHTML='<option>Carregando…</option>';
+  if(!(window.AppselFirestore && window.AppselFirestore.listarUnidades)){ sel.innerHTML='<option>Indisponível</option>'; return; }
+  var atual = window.AppselFirestore.unidadeAtual();
+  window.AppselFirestore.listarUnidades().then(function(us){
+    if(!us.length){ sel.innerHTML='<option value="reitoria-sel">Reitoria / SEL (atual)</option>'; return; }
+    sel.innerHTML = us.map(function(u){
+      return '<option value="'+u.id+'"'+(u.id===atual?' selected':'')+'>'+(u.nome||u.id)+(u.id===atual?' (atual)':'')+(u.ativo===false?' [inativa]':'')+'</option>';
+    }).join('');
+  }).catch(function(){ sel.innerHTML='<option value="reitoria-sel">Reitoria / SEL (atual)</option>'; });
+}
+function aplicarUnidadeApp(id){
+  if(!id) return;
+  try{ localStorage.setItem('appsel_unidade', id); }catch(e){}
+  location.reload();
+}
+function fecharTrocaUnidadeApp(){ document.getElementById('ug-modal').style.display='none'; }
+// Mostra a unidade atual no item do menu.
+(function(){
+  function rotular(){
+    if(!(window.AppselFirestore && window.AppselFirestore.listarUnidades)) return;
+    var atual = window.AppselFirestore.unidadeAtual();
+    window.AppselFirestore.listarUnidades().then(function(us){
+      var u=(us||[]).filter(function(x){return x.id===atual;})[0];
+      var el=document.getElementById('hdr-unidade-nome'); if(el) el.textContent = u?(u.nome||atual):atual;
+    }).catch(function(){});
+  }
+  if(document.readyState!=='loading') rotular(); else document.addEventListener('DOMContentLoaded', rotular);
+})();
 </script>
 </body>
 </html>

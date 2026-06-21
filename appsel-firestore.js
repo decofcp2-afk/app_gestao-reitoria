@@ -270,9 +270,26 @@
     };
   }
 
-  // Unidade alvo (multiunidade). Por ora vem do config; futuro: do login.
+  // Unidade alvo (multiunidade): última escolhida (localStorage) → config → reitoria-sel.
   function _unidadeId() {
+    try { var ls = root.localStorage.getItem('appsel_unidade'); if (ls) return ls; } catch (e) {}
     return (root.APPSEL_CONFIG && root.APPSEL_CONFIG.unidadeId) || 'reitoria-sel';
+  }
+
+  // Lista as unidades cadastradas (para o seletor do topo).
+  function listarUnidades() {
+    var cfg = (root.APPSEL_CONFIG && root.APPSEL_CONFIG.firebase) || null;
+    if (!cfg || !root.firebase) return Promise.reject(new Error('Firebase nao configurado.'));
+    if (!root.firebase.apps || !root.firebase.apps.length) root.firebase.initializeApp(cfg);
+    return root.firebase.firestore().collection('unidades').get().then(function (snap) {
+      return snap.docs.map(function (d) {
+        var o = d.data();
+        return { id: d.id, nome: o.nome || d.id, sigla: o.sigla || '', ativo: o.ativo !== false };
+      }).sort(function (a, b) {
+        if (a.id === 'reitoria-sel') return -1; if (b.id === 'reitoria-sel') return 1;
+        return String(a.nome).localeCompare(String(b.nome), 'pt-BR');
+      });
+    });
   }
 
   function carregar(opts) {
@@ -447,7 +464,8 @@
 
   root.AppselFirestore = {
     construir: construir, carregar: carregar, montarCalendario: montarCalendario,
-    construirCapacidade: construirCapacidade, carregarCapacidade: carregarCapacidade
+    construirCapacidade: construirCapacidade, carregarCapacidade: carregarCapacidade,
+    listarUnidades: listarUnidades, unidadeAtual: _unidadeId
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.AppselFirestore;
 })(typeof window !== 'undefined' ? window : globalThis);
