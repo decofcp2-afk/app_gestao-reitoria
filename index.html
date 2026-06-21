@@ -3014,7 +3014,8 @@ function renderFila_() {
       + '<div style="display:flex;align-items:center;gap:6px;">'
       + '<span style="font-size:10px;font-weight:700;background:'+tipoBg+';color:'+tipoColor+';padding:2px 7px;border-radius:8px;white-space:nowrap;">'+tipoFila+'</span>'
       + '<span class="fila-card-nome" style="flex:1">' + esc(p.nome) + '</span>'
-      + (isChefe_ ? '<button style="border:1px solid var(--border);background:#fff;color:var(--muted);border-radius:7px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();editarNomeFila_(\''+p.id+'\')">Editar</button>' : '')
+      + (isChefe_ ? '<button style="border:1px solid var(--border);background:#fff;color:var(--navy);border-radius:7px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();editarProcessoFila_(\''+p.id+'\')">✎ Editar</button>' : '')
+      + (isChefe_ ? '<button style="border:1px solid #fecaca;background:#fff;color:#dc2626;border-radius:7px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-left:4px;" onclick="event.stopPropagation();excluirProcFila_(\''+p.id+'\')">🗑 Excluir</button>' : '')
       + '</div>'
       + '<div class="fila-card-sub">' + (p.num?esc(p.num)+' · ':'') + esc(p.modal||'') + (p.req?' · '+esc(p.req):'') + '</div>'
       + (statusPreservado ? '<div style="font-size:11px;color:#475569;margin-top:4px;line-height:1.35;">Status preservado: '+esc(statusPreservado)+'</div>' : '')
@@ -3187,6 +3188,136 @@ function editarNomeFila_(pid) {
       .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), 'err'); })
       .salvarNomeProcessoFilaApp({ processoId: pid, nome: novo, authToken: AUTH_TOKEN });
   });
+}
+
+// ── Edição completa do processo pela Fila ─────────────────────────────────
+var EDIT_PROC = null; // dados em edição
+
+function editarProcessoFila_(pid) {
+  if (!isChefeAtual_()) return;
+  var p = (FILA_ORDER || []).find(function(x){ return x && x.id === pid; });
+  if (!p) return;
+  var d0Iso = '';
+  if (p.d0_iso) d0Iso = p.d0_iso;
+  else if (p.d0) { try { d0Iso = _toIsoLocal_(p.d0); } catch(e) { d0Iso = ''; } }
+  EDIT_PROC = {
+    id:         p.id,
+    objeto:     p.nome || '',
+    modalidade: p.modal || MODALIDADES[0],
+    d0:         d0Iso,
+    nroSuap:    p.num || '',
+    temIRP:     !!p.temIRP,
+    setor:      p.req || '',
+    emailReq:   p.emailR || '',
+    linkSuap:   (p.suap && p.suap !== '#') ? p.suap : ''
+  };
+  document.getElementById('ov-novo').classList.add('open');
+  document.getElementById('modal-novo').classList.add('open');
+  renderEditProc_();
+}
+
+function _toIsoLocal_(d) {
+  if (!(d instanceof Date)) d = new Date(d);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function renderEditProc_() {
+  var e = EDIT_PROC;
+  document.getElementById('novo-step-lbl').textContent = 'Editar processo';
+  var sr = document.getElementById('novo-steps-row');
+  if (sr) sr.innerHTML = '';
+  var body   = document.getElementById('novo-step-body');
+  var footer = document.getElementById('novo-footer');
+
+  body.innerHTML =
+    '<div class="step-title">✎ Editar processo</div>'
+    + '<div class="step-desc">Ajuste os dados cadastrais. Os responsáveis continuam sendo definidos pelo botão “Atribuir”.</div>'
+    + '<div class="form-group"><label class="form-label">Objeto <span class="req">*</span></label>'
+    + '<input type="text" class="field-input" id="e-objeto" placeholder="Objeto do processo" value="'+esc(e.objeto||'')+'" maxlength="200"></div>'
+    + '<div class="form-group"><label class="form-label">Modalidade</label>'
+    + '<select class="field-input" id="e-modal">'
+    + MODALIDADES.map(function(m){ return '<option'+(e.modalidade===m?' selected':'')+'>'+m+'</option>'; }).join('')
+    + '</select></div>'
+    + '<div class="form-group"><label class="form-label">D0 — Data de abertura</label>'
+    + '<input type="date" class="field-input" id="e-d0" value="'+(e.d0||'')+'"></div>'
+    + '<div class="form-group"><label class="form-label">Setor Requisitante</label>'
+    + '<input type="text" class="field-input" id="e-setor" placeholder="Ex: DIRED, DECOF, DIAD…" value="'+esc(e.setor||'')+'"></div>'
+    + '<div class="form-group"><div class="toggle-row">'
+    + '<div><label>Tem IRP?</label><small>Intenção de Registro de Preços</small></div>'
+    + '<label class="toggle"><input type="checkbox" id="e-irp"'+(e.temIRP?' checked':'')+'>'
+    + '<span class="toggle-slider"></span></label></div></div>'
+    + '<div class="form-group"><label class="form-label">N° SUAP</label>'
+    + '<input type="text" class="field-input" id="e-suap" placeholder="23040.000000/2026-00" value="'+esc(e.nroSuap||'')+'"></div>'
+    + '<div class="form-group"><label class="form-label">Link SUAP (URL)</label>'
+    + '<input type="url" class="field-input" id="e-link" placeholder="https://suap.cpii.gov.br/…" value="'+esc(e.linkSuap||'')+'"></div>'
+    + '<div class="form-group"><label class="form-label">E-mail do Requisitante</label>'
+    + '<input type="email" class="field-input" id="e-email" placeholder="setor@cp2.g12.br" value="'+esc(e.emailReq||'')+'"></div>';
+
+  footer.innerHTML =
+    '<button class="btn-prim" id="btn-salvar-edit" onclick="salvarEditProc_()">✓ Salvar alterações</button>'
+    + '<button class="btn-sec" onclick="fecharNovoProc()">Cancelar</button>';
+}
+
+function salvarEditProc_() {
+  var obj = (document.getElementById('e-objeto').value || '').trim();
+  if (obj.length < 4) { toast('Informe um objeto/nome mais completo.', 'err'); return; }
+  var btn = document.getElementById('btn-salvar-edit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        fecharNovoProc();
+        CAP_DATA = null; CAP_CARREGADO = false;
+        toast('✓ Processo atualizado!', 'ok');
+        setTimeout(carregarDados, 800);
+      } else {
+        toast('Erro: ' + (res && res.erro ? res.erro : 'Não foi possível salvar.'), 'err');
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Salvar alterações'; }
+      }
+    })
+    .withFailureHandler(function(ex) {
+      toast('Erro: ' + (ex.message||ex), 'err');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Salvar alterações'; }
+    })
+    .editarProcessoFilaApp({
+      processoId: EDIT_PROC.id,
+      objeto:     obj,
+      modalidade: document.getElementById('e-modal').value,
+      d0:         document.getElementById('e-d0').value || '',
+      nroSuap:    (document.getElementById('e-suap').value || '').trim(),
+      temIRP:     document.getElementById('e-irp').checked ? 'Sim' : 'Não',
+      setor:      (document.getElementById('e-setor').value || '').trim(),
+      emailReq:   (document.getElementById('e-email').value || '').trim(),
+      linkSuap:   (document.getElementById('e-link').value || '').trim(),
+      authToken:  AUTH_TOKEN
+    });
+}
+
+// ── Exclusão de processo pela Fila ────────────────────────────────────────
+function excluirProcFila_(pid) {
+  if (!isChefeAtual_()) return;
+  var p = (FILA_ORDER || []).find(function(x){ return x && x.id === pid; });
+  if (!p) return;
+  dialogoConfirmar_(
+    'Excluir processo',
+    'Tem certeza que deseja EXCLUIR “' + (p.nome || pid) + '”?\n\nIsto remove o processo, suas etapas e a carga de capacidade vinculada. Esta ação não pode ser desfeita.',
+    function() {
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.ok) {
+            CAP_DATA = null; CAP_CARREGADO = false;
+            toast('✓ Processo excluído.', 'ok');
+            setTimeout(carregarDados, 600);
+          } else {
+            toast('Erro: ' + (res && res.erro ? res.erro : 'Não foi possível excluir.'), 'err');
+          }
+        })
+        .withFailureHandler(function(ex) { toast('Erro: ' + (ex.message||ex), 'err'); })
+        .excluirProcessoApp({ processoId: pid, authToken: AUTH_TOKEN });
+    },
+    'Excluir'
+  );
 }
 
 function moverFilaItem_(idx, dir) {

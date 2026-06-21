@@ -860,6 +860,8 @@ function _apiCallAppSEL_(method, args) {
     salvarEmailProcesso: salvarEmailProcesso,
     salvarLinkSuapProcessoApp: salvarLinkSuapProcessoApp,
     salvarNomeProcessoFilaApp: salvarNomeProcessoFilaApp,
+    editarProcessoFilaApp: editarProcessoFilaApp,
+    excluirProcessoApp: excluirProcessoApp,
     salvarOrdemFilaApp: salvarOrdemFilaApp,
     regredirEtapa: regredirEtapa,
     devolverProcessoFilaApp: devolverProcessoFilaApp,
@@ -1182,7 +1184,9 @@ function _getEtapasParaApp_(sess) {
         num:   String(r[iP.num]  || '').trim(),
         nome:  String(r[iP.nome] || '').trim(),
         modal: String(r[iP.modal]|| '').trim(),
+        temIRP: iP.irp >= 0 ? String(r[iP.irp] || '').trim().toLowerCase() === 'sim' : false,
         req:   iP.req >= 0 ? String(r[iP.req] || '').trim() : '',
+        emailR: iP.emailR >= 0 ? String(r[iP.emailR] || '').trim() : '',
         suap:  String(r[iP.suap] || '#').trim()
       });
       continue;
@@ -3024,6 +3028,219 @@ function salvarNomeProcessoFilaApp(params) {
   });
 }
 
+// ── editarProcessoFilaApp ──────────────────────────────────────────────────
+// Edita os dados cadastrais de um processo direto pela Fila (sem ir à planilha).
+// Espelha os campos do cadastro, EXCETO responsáveis (que continuam pelo
+// botão "Atribuir"). Só chefia.
+// params: { processoId, objeto, modalidade, d0 (YYYY-MM-DD ou ''),
+//           nroSuap, temIRP ('Sim'|'Não'), setor, emailReq, linkSuap, authToken }
+function editarProcessoFilaApp(params) {
+  return _withAppLockResult_('editar processo na fila', function() {
+    try {
+      params = params || {};
+      _authRequire_(params.authToken, true);
+      var pid = String(params.processoId || '').trim();
+      if (!pid) throw new Error('Processo não informado.');
+
+      var objeto = String(params.objeto || '').trim();
+      if (objeto.length < 4) throw new Error('Informe um objeto/nome mais completo.');
+      if (objeto.length > 200) objeto = objeto.substring(0, 200).trim();
+
+      var shP = _ss_().getSheetByName(ABA_PROC);
+      if (!shP) throw new Error('Aba Processos não encontrada.');
+      var lP = _lerAba_(shP, 'ProcessoID');
+      var hP = lP.header;
+      var iId    = hP.indexOf('ProcessoID');
+      var iObj   = hP.indexOf('Objeto');
+      var iModal = hP.indexOf('Modalidade');
+      var iD0    = hP.indexOf('D0 (Data Abertura)');
+      var iIrp   = hP.indexOf('Tem IRP?');
+      var iReq   = hP.indexOf('Setor Requisitante');
+      var iSuap  = hP.indexOf('Link SUAP');
+      var iNum   = hP.indexOf('N° SUAP');
+      var iEmail = hP.indexOf('EmailRequisitante');
+      if (iId < 0 || iObj < 0) throw new Error('Colunas ProcessoID/Objeto não encontradas.');
+
+      // Só permite editar processos que estão na Fila (sem D0, em planejamento
+      // ou retornados) — não processos em andamento normal.
+      var dados = _getEtapasParaApp_({ isChefe: true, nome: 'Sistema' });
+      var todos = (dados.processos || []).concat(dados.filaPrevisao || []);
+      var proc = todos.find(function(p) { return p.id === pid; });
+
+      for (var i = lP.hIdx + 1; i < lP.values.length; i++) {
+        if (String(lP.values[i][iId] || '').trim() !== pid) continue;
+        var linha = i + 1;
+        var d0Atual = iD0 >= 0 ? _parseDate_(lP.values[i][iD0]) : null;
+        var podeEditar = !d0Atual || !proc || proc.status === 'planejamento' || proc.retornoFila;
+        if (!podeEditar) throw new Error('Só é possível editar pela Fila processos que ainda não começaram ou que retornaram.');
+
+        // Objeto / nome
+        shP.getRange(linha, iObj + 1).setValue(objeto);
+        // Modalidade
+        if (iModal >= 0 && params.modalidade !== undefined) {
+          shP.getRange(linha, iModal + 1).setValue(String(params.modalidade || '').trim());
+        }
+        // D0 (pode ser limpo para devolver à condição "sem D0")
+        if (iD0 >= 0 && params.d0 !== undefined) {
+          if (String(params.d0 || '').trim()) {
+            var d0Obj = new Date(params.d0 + 'T12:00:00');
+            shP.getRange(linha, iD0 + 1).setValue(d0Obj).setNumberFormat('DD/MM/YYYY');
+          } else {
+            shP.getRange(linha, iD0 + 1).setValue('');
+          }
+        }
+        // Tem IRP?
+        if (iIrp >= 0 && params.temIRP !== undefined) {
+          shP.getRange(linha, iIrp + 1).setValue(params.temIRP === 'Sim' ? 'Sim' : 'Não');
+        }
+        // Setor requisitante
+        if (iReq >= 0 && params.setor !== undefined) {
+          shP.getRange(linha, iReq + 1).setValue(String(params.setor || '').trim());
+        }
+        // E-mail requisitante
+        if (iEmail >= 0 && params.emailReq !== undefined) {
+          shP.getRange(linha, iEmail + 1).setValue(String(params.emailReq || '').trim());
+        }
+        // N° SUAP
+        if (iNum >= 0 && params.nroSuap !== undefined) {
+          shP.getRange(linha, iNum + 1).setValue(String(params.nroSuap || '').trim());
+        }
+        // Link SUAP
+        if (iSuap >= 0 && params.linkSuap !== undefined) {
+          var lk = String(params.linkSuap || '').trim();
+          shP.getRange(linha, iSuap + 1).setValue(lk || '#');
+        }
+
+        // Propaga o objeto para a aba Capacidade e Etapas (separador do bloco)
+        _atualizarObjetoCapacidade_(pid, objeto);
+        _atualizarSeparadorEtapas_(pid, objeto);
+        _limparCacheCapacidade_();
+        return { ok: true, nome: objeto };
+      }
+      throw new Error('Processo ' + pid + ' não encontrado.');
+    } catch(e) { return { ok: false, erro: e.message }; }
+  });
+}
+
+// ── excluirProcessoApp ─────────────────────────────────────────────────────
+// Remove COMPLETAMENTE um processo: limpa a linha na aba Processos, o bloco de
+// etapas correspondente na aba Etapas e os registros de Capacidade vinculados.
+// Operação destrutiva e irreversível. Só chefia.
+// params: { processoId, authToken }
+function excluirProcessoApp(params) {
+  return _withAppLockResult_('excluir processo', function() {
+    try {
+      params = params || {};
+      _authRequire_(params.authToken, true);
+      var pid = String(params.processoId || '').trim();
+      if (!pid) throw new Error('Processo não informado.');
+
+      var ss = _ss_();
+
+      // ── 1) Aba Processos: limpa a linha do processo ────────────────────
+      var shP = ss.getSheetByName(ABA_PROC);
+      if (!shP) throw new Error('Aba Processos não encontrada.');
+      var lP = _lerAba_(shP, 'ProcessoID');
+      var iIdP = lP.header.indexOf('ProcessoID');
+      if (iIdP < 0) throw new Error('Coluna ProcessoID não encontrada em Processos.');
+      var linhaProc = -1;
+      var objeto = '';
+      for (var i = lP.hIdx + 1; i < lP.values.length; i++) {
+        if (String(lP.values[i][iIdP] || '').trim() === pid) {
+          linhaProc = i + 1;
+          var iObjP = lP.header.indexOf('Objeto');
+          if (iObjP >= 0) objeto = String(lP.values[i][iObjP] || '').trim();
+          break;
+        }
+      }
+      if (linhaProc < 0) throw new Error('Processo ' + pid + ' não encontrado.');
+      shP.getRange(linhaProc, 1, 1, shP.getLastColumn()).clearContent();
+
+      // ── 2) Aba Etapas: limpa o bloco (separador + linhas) do processo ──
+      var shE = ss.getSheetByName(ABA_ETP);
+      if (shE) {
+        var lE = _lerAba_(shE, 'ProcessoID');
+        var iPidE = lE.header.indexOf('ProcessoID');
+        if (iPidE >= 0) {
+          var linhasEtapa = [];
+          var minRow = Infinity;
+          for (var e = lE.hIdx + 1; e < lE.values.length; e++) {
+            if (String(lE.values[e][iPidE] || '').trim() === pid) {
+              var rowReal = e + 1;
+              linhasEtapa.push(rowReal);
+              if (rowReal < minRow) minRow = rowReal;
+            }
+          }
+          if (linhasEtapa.length) {
+            // Limpa cada linha de etapa
+            linhasEtapa.forEach(function(rw) {
+              shE.getRange(rw, 1, 1, shE.getLastColumn()).clearContent();
+            });
+            // Limpa o separador (linha imediatamente acima do bloco), se for
+            // o título do objeto e não pertencer a outro processo.
+            var sepRow = minRow - 1;
+            if (sepRow > lE.hIdx + 1) {
+              var sepVal = String(shE.getRange(sepRow, 1).getValue() || '').trim();
+              var sepPid = String(shE.getRange(sepRow, iPidE + 1).getValue() || '').trim();
+              if (sepVal && !sepPid) {
+                shE.getRange(sepRow, 1, 1, shE.getLastColumn()).clearContent();
+              }
+            }
+          }
+        }
+      }
+
+      // ── 3) Aba Capacidade: limpa os registros do processo ──────────────
+      var shC = null;
+      ss.getSheets().forEach(function(s) { if (/capacidade/i.test(s.getName())) shC = s; });
+      if (shC) {
+        var dataC = shC.getRange(1, 1, shC.getLastRow(), shC.getLastColumn()).getValues();
+        var regHdr = -1;
+        for (var r = 0; r < dataC.length; r++) {
+          var rr = dataC[r].map(function(c){ return String(c).trim(); });
+          if (rr[0].indexOf('Servidor') >= 0 && rr[2] === 'ProcessoID') { regHdr = r; break; }
+        }
+        if (regHdr >= 0) {
+          var iPidC = dataC[regHdr].map(function(c){ return String(c).trim(); }).indexOf('ProcessoID');
+          if (iPidC >= 0) {
+            for (var c = regHdr + 1; c < dataC.length; c++) {
+              if (String(dataC[c][iPidC] || '').trim() === pid) {
+                shC.getRange(c + 1, 1, 1, shC.getLastColumn()).clearContent();
+              }
+            }
+          }
+        }
+      }
+
+      _limparCacheCapacidade_();
+      return { ok: true, pid: pid, objeto: objeto };
+    } catch(e) { return { ok: false, erro: e.message }; }
+  });
+}
+
+// Atualiza o separador (título do bloco) do processo na aba Etapas.
+function _atualizarSeparadorEtapas_(pid, objeto) {
+  try {
+    var shE = _ss_().getSheetByName(ABA_ETP);
+    if (!shE) return;
+    var lE = _lerAba_(shE, 'ProcessoID');
+    var iPidE = lE.header.indexOf('ProcessoID');
+    if (iPidE < 0) return;
+    var minRow = Infinity;
+    for (var e = lE.hIdx + 1; e < lE.values.length; e++) {
+      if (String(lE.values[e][iPidE] || '').trim() === pid) {
+        var rw = e + 1; if (rw < minRow) minRow = rw;
+      }
+    }
+    if (minRow === Infinity) return;
+    var sepRow = minRow - 1;
+    if (sepRow > lE.hIdx + 1) {
+      var sepPid = String(shE.getRange(sepRow, iPidE + 1).getValue() || '').trim();
+      if (!sepPid) shE.getRange(sepRow, 1).setValue(objeto);
+    }
+  } catch(e) { /* silencioso: separador é cosmético */ }
+}
+
 // Persiste a ordem manual da fila (drag-and-drop). Só chefia.
 // params: { ordem: [pid1, pid2, ...] (ordem desejada), authToken }
 // Grava 1,2,3,... na coluna 'OrdemFila' da aba Processos. Se a coluna não
@@ -3508,7 +3725,6 @@ function salvarEmail(servidor, email, authToken) {
       throw new Error('Você só pode alterar o próprio e-mail.');
     }
     if (email && email.indexOf('@') < 0) throw new Error('E-mail inválido.');
-    PropertiesService.getScriptProperties().setProperty('email_' + servidor, email);
     _salvarServidoresConfigSheet_(_getServidoresApp_());
     return { ok: true };
     } catch(e) { return { ok: false, erro: e.message }; }
