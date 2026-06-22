@@ -92,6 +92,32 @@ function _fsBase_() {
     + '/databases/(default)/documents/unidades/' + _fsUnidade_();
 }
 
+// Lista os ids das unidades ATIVAS (doc unidades/{id} com ativo != false).
+// Usado pelo orquestrador de avisos por e-mail (triggers de tempo), que precisa
+// percorrer todas as unidades — diferente de _fsBase_, que é escopado a uma só.
+function _fsListarUnidadesAtivas_() {
+  try {
+    var rootBase = 'https://firestore.googleapis.com/v1/projects/'
+      + PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID')
+      + '/databases/(default)/documents';
+    var res = _fsReq_('post', rootBase + ':runQuery', {
+      structuredQuery: { from: [{ collectionId: 'unidades' }] }
+    });
+    var out = [];
+    (res || []).forEach(function (row) {
+      if (!row.document) return;
+      var id = String(row.document.name || '').split('/').pop();
+      if (!id) return;
+      var o = _fsDocToObj_(row.document);
+      if (o.ativo === false) return;          // pula unidades desativadas
+      out.push(id);
+    });
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
 function _fsReq_(method, url, payload) {
   var opt = { method: method, headers: { Authorization: 'Bearer ' + _fsToken_() }, muteHttpExceptions: true, contentType: 'application/json' };
   if (payload) opt.payload = JSON.stringify(payload);

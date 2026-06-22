@@ -57,6 +57,11 @@ function _emailServidorFallback_(servidor) {
 }
 
 function _chefiaEmailFallback_() {
+  // O fallback global de chefia (SEL_CHEFIA_EMAIL) é da Reitoria. Em rotina
+  // multiunidade ele só deve valer para a Reitoria — senão a chefia da Reitoria
+  // receberia os avisos de prazo de TODOS os campi. Cada unidade já tem a
+  // própria chefia via CHEFES_LISTA + e-mails por unidade.
+  if (!_ehReitoria_()) return '';
   return _configProp_('SEL_CHEFIA_EMAIL', CHEFIA_EMAIL);
 }
 
@@ -2190,16 +2195,43 @@ function enviarAvisosPrazo(modo) {
   return 'E-mails enviados: ' + enviados + ' (' + (enviarProximos ? avisosProximos.length : 0) + ' proximos + ' + (enviarVencidos ? avisosVencidos.length : 0) + ' vencidos), agrupados por processo.';
 }
 
+// Estes dois são chamados pelos TRIGGERS de tempo (sem contexto de unidade).
+// Antes rodavam só a unidade padrão (reitoria-sel), então os demais campi nunca
+// recebiam aviso automático de prazo. Agora percorrem TODAS as unidades ativas.
 function enviarAvisosPrazoProximos() {
-  return enviarAvisosPrazo('proximos');
+  return _enviarAvisosTodasUnidades_('proximos');
 }
 
 function enviarAvisosPrazoVencidos() {
-  return enviarAvisosPrazo('vencidos');
+  return _enviarAvisosTodasUnidades_('vencidos');
+}
+
+// Orquestrador multiunidade: para cada unidade ativa, fixa o escopo em
+// _FS_UNIDADE_REQ e roda a varredura/envio (que já é unidade-aware). Mantém o
+// comportamento antigo (uma unidade) quando o Firestore está desligado ou a
+// lista de unidades não pôde ser obtida.
+function _enviarAvisosTodasUnidades_(modo) {
+  if (typeof _fsServerAtivo_ !== 'function' || !_fsServerAtivo_()) {
+    return enviarAvisosPrazo(modo);
+  }
+  var unidades = (typeof _fsListarUnidadesAtivas_ === 'function') ? _fsListarUnidadesAtivas_() : [];
+  if (!unidades.length) return enviarAvisosPrazo(modo);
+
+  var prev = (typeof _FS_UNIDADE_REQ === 'string') ? _FS_UNIDADE_REQ : '';
+  var resumo = [];
+  unidades.forEach(function(uid) {
+    _FS_UNIDADE_REQ = uid;
+    try { resumo.push(uid + ' → ' + enviarAvisosPrazo(modo)); }
+    catch (e) { resumo.push(uid + ' → ERRO: ' + (e && e.message ? e.message : e)); }
+  });
+  _FS_UNIDADE_REQ = prev;
+  return resumo.join('\n');
 }
 
 function enviarAvisosPrazoApp(authToken) {
   _authRequire_(authToken, true);
+  // Envio manual a partir do app: escopo da unidade do próprio chefe (já vem em
+  // _FS_UNIDADE_REQ pela API), portanto não percorre as demais unidades.
   return enviarAvisosPrazo();
 }
 
