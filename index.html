@@ -463,13 +463,13 @@
         <div id="hdr-menu" class="hdr-menu" hidden onclick="event.stopPropagation()">
           <button class="hdr-menu-item" onclick="confirmarTroca();toggleHdrMenu_()">🔄 Trocar usuário</button>
           <div class="hdr-menu-sep"></div>
-          <button type="button" class="hdr-menu-item" id="hdr-unidade-item" onclick="abrirTrocaUnidadeApp();toggleHdrMenu_()">🏛️ <span id="hdr-unidade-nome">Trocar unidade</span></button>
-          <div class="hdr-menu-sep"></div>
           <button type="button" class="hdr-menu-item" onclick="abrirPainel_(event);toggleHdrMenu_();return false;"><img src="painel-icon.svg" alt="" class="hdr-menu-icon">Painel de Contratações</button>
           <div class="hdr-menu-sep" id="hdr-config-sep"></div>
           <button class="hdr-menu-item" id="hdr-config-item" onclick="switchTab('config');toggleHdrMenu_()">⚙️ Configurações</button>
           <div class="hdr-menu-sep"></div>
           <button type="button" class="hdr-menu-item" onclick="iniciarTour();toggleHdrMenu_()">❔ Tour de ajuda</button>
+          <div class="hdr-menu-sep"></div>
+          <button type="button" class="hdr-menu-item" onclick="logout();toggleHdrMenu_()" style="color:var(--red,#b02035)">🚪 Sair</button>
         </div>
       </div>
     </div>
@@ -540,16 +540,18 @@
         </div>
       </div>
     </div>
-    <div class="cfg-section" id="cfg-equipe-section">
-      <div class="cfg-head">Equipe SEL/SEPMA</div>
-      <div class="cfg-card" id="cfg-equipe-card">
-        <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+      <div class="cfg-section" id="cfg-equipe-section" style="flex:1;min-width:260px;margin-bottom:0;">
+        <div class="cfg-head">Equipe SEL/SEPMA</div>
+        <div class="cfg-card" id="cfg-equipe-card">
+          <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div>
+        </div>
       </div>
-    </div>
-    <div class="cfg-section">
-      <div class="cfg-head">E-mails dos servidores</div>
-      <div class="cfg-card" id="cfg-emails-card">
-        <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div>
+      <div class="cfg-section" style="flex:1;min-width:260px;margin-bottom:0;">
+        <div class="cfg-head">E-mails dos servidores</div>
+        <div class="cfg-card" id="cfg-emails-card">
+          <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div>
+        </div>
       </div>
     </div>
     <div class="cfg-section">
@@ -564,7 +566,7 @@
       <div class="cfg-head" style="color:#b02035">Excluir unidade</div>
       <div class="cfg-card">
         <div class="cfg-row cfg-row-col">
-          <div class="note">Apaga uma unidade e todos os seus dados (processos, etapas, equipe). Use para remover unidades de teste — depois ela pode ser recriada com dados reais. <b>A Reitoria não pode ser excluída.</b></div>
+          <div class="note">Apaga uma unidade e todos os seus dados (processos, etapas, equipe). <b>A Reitoria não pode ser excluída.</b></div>
           <select id="cfg-excluir-unidade" class="field-input" style="width:100%"><option>Carregando…</option></select>
           <button class="btn-cfg" style="background:#b02035;color:#fff" onclick="excluirUnidadeApp()">🗑️ Excluir unidade selecionada</button>
           <div id="cfg-excluir-msg" style="font-size:12px;min-height:14px"></div>
@@ -1197,7 +1199,7 @@ function dialogoCampo_(opts, cb) {
 }
 
 function isChefeAtual_() {
-  return SESSAO_CHEFE || CHEFES.indexOf(SERVIDOR) >= 0;
+  return SESSAO_CHEFE || isChefeAtual_();
 }
 
 function isRetornoFila_(p) {
@@ -1351,7 +1353,7 @@ function carregarServidores_() {
 function renderEquipeConfig_() {
   var card = document.getElementById('cfg-equipe-card');
   if (!card) return;
-  var isChefe = CHEFES.indexOf(SERVIDOR) >= 0;
+  var isChefe = isChefeAtual_();
   var h = '';
   SERV_DATA.forEach(function(s, i) {
     var p = PALETA_CORES.find(function(p){ return p.cor === s.cor; }) || PALETA_CORES[7];
@@ -2074,7 +2076,7 @@ function renderEtapas(filtrado) {
   var html = '';
 
   // ── Banner dinâmico ───────────────────────────────────────────
-  var isChefe = CHEFES.indexOf(SERVIDOR) >= 0;
+  var isChefe = isChefeAtual_();
   var urgentesVenc = lista.filter(function(p) {
     return p.status !== 'aguardando' && p.status !== 'paralisado' && temPrazoVencido(p);
   }).length;
@@ -2135,7 +2137,7 @@ function renderEtapas(filtrado) {
       var respAtual = extAtiva ? (p.servidorExt || p.servidor || '') : (p.servidor || p.servidorExt || '');
       var ownerHtml = respAtual
         ? '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return s.nome===respAtual;})||{cor:'#6b7280'})+';cursor:pointer;" title="Clique para trocar responsável" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">'+esc(respAtual)+'</span>'
-        : (CHEFES.indexOf(SERVIDOR)>=0 ? '<span style="background:var(--bg);color:var(--muted);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;cursor:pointer;" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">+ Atribuir</span>' : '');
+        : (isChefeAtual_() ? '<span style="background:var(--bg);color:var(--muted);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;cursor:pointer;" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">+ Atribuir</span>' : '');
       out += '<div class="proc-card" onclick="abrirProcesso(' + idx + ')" style="'+(alerta?'border-left:4px solid #f59e0b;':'')+'">'
         + (alerta ? '<div class="proc-warn-badge" title="Prazo vencido — informe o motivo">!</div>' : '')
         + '<div class="proc-card-top">'
@@ -3043,7 +3045,7 @@ function renderFila_() {
     FILA_ORDER = filaTotal.slice();
     FILA_SEL = {}; FILA_SERV = {}; FILA_D0 = {}; FILA_EXPAND = {};
   }
-  var isChefe_ = CHEFES.indexOf(SERVIDOR) >= 0;
+  var isChefe_ = isChefeAtual_();
   if (!FILA_ORDER.length) {
     cont.innerHTML = '<div class="empty"><div class="ei">✅</div><p>Nenhum processo aguardando.</p><p style="font-size:12px;color:var(--muted);margin-top:6px;">Novos processos sem D0 e processos retornados aparecerão aqui.</p></div>';
     return;
@@ -4009,7 +4011,7 @@ function renderCapacidade_() {
       return String(a.objeto || '').localeCompare(String(b.objeto || ''), 'pt-BR');
     });
   CAP_REG = registros;
-  var podeEditar = CHEFES.indexOf(SERVIDOR) >= 0;
+  var podeEditar = isChefeAtual_();
 
   function corPct(p) { return p >= 90 ? 'var(--red)' : p >= 60 ? 'var(--amber)' : 'var(--green)'; }
 
@@ -4449,6 +4451,8 @@ function _tourKey_(){
   return 'sel_tour_v1_' + u + '_' + (typeof SERVIDOR!=='undefined'?SERVIDOR:'');
 }
 function maybeIniciarTour_(){
+  var u = (window.AppselFirestore && window.AppselFirestore.unidadeAtual) ? window.AppselFirestore.unidadeAtual() : 'reitoria-sel';
+  if (u === 'reitoria-sel') return; // a Reitoria já conhece o sistema
   try { if (localStorage.getItem(_tourKey_())) return; } catch(e){}
   iniciarTour();
 }
