@@ -3099,17 +3099,19 @@ function renderFila_() {
       + '<div style="display:flex;align-items:center;gap:6px;">'
       + '<span style="font-size:10px;font-weight:700;background:'+tipoBg+';color:'+tipoColor+';padding:2px 7px;border-radius:8px;white-space:nowrap;">'+tipoFila+'</span>'
       + '<span class="fila-card-nome" style="flex:1">' + esc(p.nome) + '</span>'
-      + (isChefe_ ? '<button style="border:1px solid var(--border);background:#fff;color:var(--navy);border-radius:7px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();editarProcessoFila_(\''+p.id+'\')">✎ Editar</button>' : '')
-      + (isChefe_ ? '<button style="border:1px solid #fecaca;background:#fff;color:#dc2626;border-radius:7px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;margin-left:4px;" onclick="event.stopPropagation();excluirProcFila_(\''+p.id+'\')">🗑 Excluir</button>' : '')
       + '</div>'
       + '<div class="fila-card-sub">' + (p.num?esc(p.num)+' · ':'') + esc(p.modal||'') + (p.req?' · '+esc(p.req):'') + '</div>'
       + (statusPreservado ? '<div style="font-size:11px;color:#475569;margin-top:4px;line-height:1.35;">Status preservado: '+esc(statusPreservado)+'</div>' : '')
       + (retornoFila && motivoFila ? '<div style="font-size:11px;color:#92400e;margin-top:4px;line-height:1.35;">Motivo: '+esc(motivoFila)+'</div>' : '')
-      // Resumo rápido
-      + '<div style="display:flex;gap:12px;margin-top:6px;font-size:11px;flex-wrap:wrap;">'
+      // Resumo rápido + ações (Editar/Excluir alinhados à direita, na mesma linha do D0)
+      + '<div style="display:flex;align-items:center;gap:12px;margin-top:6px;font-size:11px;flex-wrap:wrap;">'
       + '<span style="color:var(--muted);">D0: <b style="color:var(--text2);">'+_fmtBR_(d0Date)+'</b></span>'
       + (fimProc ? '<span style="color:var(--muted);">Conclusão estimada: <b style="color:var(--navy);">'+_fmtBR_(fimProc)+'</b></span>' : '')
       + '<span style="color:var(--blue);font-weight:600;">'+(expanded?'▲ Ocultar etapas':'▼ Ver etapas simuladas')+'</span>'
+      + (isChefe_ ? '<span style="display:flex;gap:6px;margin-left:auto;">'
+          + '<button style="border:1px solid var(--border);background:#fff;color:var(--navy);border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();editarProcessoFila_(\''+p.id+'\')">✎ Editar</button>'
+          + '<button style="border:1px solid #fecaca;background:#fff;color:#dc2626;border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();excluirProcFila_(\''+p.id+'\')">🗑 Excluir</button>'
+          + '</span>' : '')
       + '</div>'
       + '</div>'
       + '<div class="fila-card-ord">'
