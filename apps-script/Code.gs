@@ -124,16 +124,28 @@ function _adminUser_() {
            isAdmin: true, email: 'decof.cp2@gmail.com' };
 }
 
+// ── Parte 3: equipe/login POR UNIDADE ──────────────────────────────────────
+// Chaves por unidade (request-scoped via _FS_UNIDADE_REQ). Para reitoria-sel há
+// FALLBACK às chaves globais legadas, então a Reitoria não muda até o 1º salvar.
+function _reqUni_() {
+  return (typeof _FS_UNIDADE_REQ === 'string' && _FS_UNIDADE_REQ) ? _FS_UNIDADE_REQ : 'reitoria-sel';
+}
+function _servKey_()  { return 'SEL_SERVIDORES_JSON__' + _reqUni_(); }
+function _usersKey_() { return 'SEL_AUTH_USERS_JSON__' + _reqUni_(); }
+function _emailKey_(nome) { return 'email__' + _reqUni_() + '__' + String(nome || ''); }
+function _ehReitoria_() { return _reqUni_() === 'reitoria-sel'; }
+
 function _authUsers_() {
   var props = PropertiesService.getScriptProperties();
-  var raw = props.getProperty('SEL_AUTH_USERS_JSON');
+  var raw = props.getProperty(_usersKey_());
+  if (!raw && _ehReitoria_()) raw = props.getProperty('SEL_AUTH_USERS_JSON'); // legado
   if (!raw) return {};
   try { return JSON.parse(raw) || {}; } catch(e) { return {}; }
 }
 
 function _authSaveUsers_(users) {
   PropertiesService.getScriptProperties()
-    .setProperty('SEL_AUTH_USERS_JSON', JSON.stringify(users || {}));
+    .setProperty(_usersKey_(), JSON.stringify(users || {}));
 }
 
 function _authSyncServidores_(lista) {
@@ -181,6 +193,8 @@ function _authCreateSession_(user) {
     nome: user.nome,
     matricula: user.matricula,
     isChefe: !!user.isChefe,
+    isAdmin: !!user.isAdmin,
+    unidade: _reqUni_(),
     exp: exp
   }));
   return { token: token, exp: exp };
@@ -3638,16 +3652,18 @@ function salvarPontuacaoCap(params) {
 // Lê de PropertiesService (chave SEL_SERVIDORES_JSON). Se não existir, usa padrão.
 function _getServidoresApp_() {
   var props = PropertiesService.getScriptProperties();
-  var raw   = props.getProperty('SEL_SERVIDORES_JSON');
+  var ehRei = _ehReitoria_();
+  var raw   = props.getProperty(_servKey_());
+  if (!raw && ehRei) raw = props.getProperty('SEL_SERVIDORES_JSON'); // legado (Reitoria)
   var lista;
   if (raw) {
     try { lista = JSON.parse(raw); } catch(e) { lista = null; }
   }
-  if (!lista || !lista.length) {
+  // Planilha e lista padrão só valem para a Reitoria; unidades novas começam vazias.
+  if ((!lista || !lista.length) && ehRei) {
     lista = _lerServidoresConfigSheet_();
   }
-  if (!lista || !lista.length) {
-    // Lista padrão inicial
+  if ((!lista || !lista.length) && ehRei) {
     lista = [
       { nome:'Amanda',  matricula:'amanda',  cor:'#2563eb', isChefe:true  },
       { nome:'Beatriz', matricula:'beatriz', cor:'#db2777', isChefe:false },
@@ -3655,10 +3671,13 @@ function _getServidoresApp_() {
       { nome:'Samuel',  matricula:'samuel',  cor:'#d97706', isChefe:true  }
     ];
   }
-  // Enriquece com email de PropertiesService ou EMAILS_SEL
+  if (!lista) lista = [];
+  // Enriquece com email por unidade (Reitoria mantém fallback ao legado/EMAILS_SEL).
   lista.forEach(function(s) {
     s.matricula = s.matricula || _authMatriculaPadrao_(s.nome);
-    s.email = props.getProperty('email_' + s.nome) || _emailServidorFallback_(s.nome) || '';
+    s.email = props.getProperty(_emailKey_(s.nome))
+      || (ehRei ? (props.getProperty('email_' + s.nome) || _emailServidorFallback_(s.nome)) : '')
+      || '';
   });
   _authSyncServidores_(lista);
   return lista;
@@ -3729,14 +3748,14 @@ function salvarServidoresApp(lista, authToken) {
       throw new Error('Não removi servidor com processo ativo: ' + bloqueados.join(', ') + '. Reatribua os processos antes de remover.');
     }
 
-    props.setProperty('SEL_SERVIDORES_JSON', JSON.stringify(limpa));
-    _salvarServidoresConfigSheet_(limpa);
+    props.setProperty(_servKey_(), JSON.stringify(limpa));
+    if (_ehReitoria_()) _salvarServidoresConfigSheet_(limpa); // planilha é só da Reitoria
     _authSyncServidores_(limpa);
 
     var alterados = 0;
     renomes.forEach(function(rn) {
-      var oldEmailKey = 'email_' + rn.antigo;
-      var newEmailKey = 'email_' + rn.novo;
+      var oldEmailKey = _emailKey_(rn.antigo);
+      var newEmailKey = _emailKey_(rn.novo);
       var oldEmail = props.getProperty(oldEmailKey);
       if (oldEmail && !props.getProperty(newEmailKey)) props.setProperty(newEmailKey, oldEmail);
       alterados += _renomearServidorNasAbas_(rn.antigo, rn.novo);
@@ -3748,7 +3767,7 @@ function salvarServidoresApp(lista, authToken) {
       if (typeof fs_espelharServidores_ === 'function'
           && PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID')) {
         var emailsMap = {};
-        limpa.forEach(function(s) { emailsMap[s.nome] = props.getProperty('email_' + s.nome) || ''; });
+        limpa.forEach(function(s) { emailsMap[s.nome] = props.getProperty(_emailKey_(s.nome)) || ''; });
         fs_espelharServidores_(limpa, emailsMap);
       }
     } catch(eMirror) { /* espelho é best-effort; não bloqueia o salvar */ }
@@ -3770,7 +3789,9 @@ function _getEmails_(sess) {
   var emails = {};
   lista.forEach(function(s) {
     if (sess.isChefe || _normServidorNome_(sess.nome) === _normServidorNome_(s.nome)) {
-      emails[s.nome] = props.getProperty('email_' + s.nome) || _emailServidorFallback_(s.nome) || '';
+      emails[s.nome] = props.getProperty(_emailKey_(s.nome))
+        || (_ehReitoria_() ? (props.getProperty('email_' + s.nome) || _emailServidorFallback_(s.nome)) : '')
+        || '';
     }
   });
   return emails;
@@ -3787,7 +3808,8 @@ function salvarEmail(servidor, email, authToken) {
       throw new Error('Você só pode alterar o próprio e-mail.');
     }
     if (email && email.indexOf('@') < 0) throw new Error('E-mail inválido.');
-    _salvarServidoresConfigSheet_(_getServidoresApp_());
+    PropertiesService.getScriptProperties().setProperty(_emailKey_(servidor), String(email || '').trim());
+    if (_ehReitoria_()) _salvarServidoresConfigSheet_(_getServidoresApp_());
     return { ok: true };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
