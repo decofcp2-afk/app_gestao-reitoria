@@ -189,7 +189,25 @@ o modelo de dados nem a hospedagem.
    destacando cada área da tela, para facilitar a usuários leigos. Implementação
    leve (sem dependência paga), compatível com GitHub Pages.
 
-## Fases de execução
+## Estado da execução (2026-06-21)
+
+- **Fases A e B — CONCLUÍDAS, em produção.** Reitoria roda sob `unidades/reitoria-sel/`; raiz mantida como backup.
+- **Seletor de unidade — em produção** nos 2 apps: Painel (botão "🏛️ <unidade> ▾" no desktop, item no menu 🔗 no mobile; modal central) e App Gestão (item no menu do topo + **seletor na tela de login**). Unidade padrão = última escolhida (localStorage); Painel aceita `?u=`.
+- **Autocadastro — em produção** (após redeploy): tela de login tem "Não encontrou sua unidade? Cadastre aqui" → modal (nome, sigla, e-mail institucional `@*.g12.br`) → `fs_criarUnidade` (cria + semeia calendário/matriz). Testado ponta a ponta.
+- **Excluir unidade — em produção** (após redeploy): Configurações → seletor (sem a Reitoria) + confirmação "EXCLUIR" → `fs_excluirUnidade` (recusa reitoria-sel). Também `firebase/excluir_unidade.py` (admin).
+- **Unidade de demonstração:** `sao-cristovao-i` criada com 5 processos fictícios (andamento/atrasado/concluído/em fila/a iniciar) para mostrar ao diretor.
+- **Scripts:** `firebase/criar_unidade.py`, `firebase/excluir_unidade.py` (admin); `_seed_demo_sc1.py` (demo, não versionado).
+
+### PENDENTE da Fase F (fazer com calma, NÃO na véspera de trabalho)
+- **Parte 2 — escrita por unidade:** hoje a escrita do App Gestão ainda vai para `FS_UNIDADE` (reitoria-sel); editar logado em outra unidade grava na Reitoria. Plano: frontend envia `unidade` nas chamadas `fs_*`; dispatcher do Code.gs lê `unidade` do request → global `_FS_UNIDADE_REQ` → `_fsUnidade_` prefere ela (fallback FS_UNIDADE = retrocompatível). Até lá, em outra unidade **apenas visualizar**.
+- **Parte 3 — login/equipe por unidade (ALTO RISCO):** auth/servidores/sessões são GLOBAIS (Script Properties). Tornar por unidade (ex.: ler `unidades/{u}/servidores`) mantendo a Reitoria funcionando.
+- **Wizard de equipe** no autocadastro (cadastrar servidores + chefe) — depende da parte 3.
+
+### Outras pendências
+- **Fase D:** documento `resumo/atual` + visão consolidada (otimização p/ muitas unidades).
+- **Segurança:** rotação da chave de serviço exposta no histórico do Git.
+
+## Fases de execução (referência original)
 
 - **Fase A — Modelagem + migração estrutural.** Criar `unidades/{u}`, mover os
   dados atuais para `unidades/reitoria-sel/...`, publicar regras novas e índices
