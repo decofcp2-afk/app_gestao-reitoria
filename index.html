@@ -2531,7 +2531,9 @@ function abrirStatusEtapa(etIdx) {
       + '<span style="font-size:18px;">'+o.icon+'</span>'+o.label+(isSel?' <span style="margin-left:auto;font-size:12px;">✓ Atual</span>':'')
       + '</button>';
   });
-  h += '<button onclick="fecharStatusEtapa()" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:14px;font-weight:700;color:var(--muted);">← Voltar</button>';
+  h += '<button onclick="fecharStatusEtapa()" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:14px;font-weight:700;color:var(--navy);">'
+    + '<svg class="proc-back-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="var(--blue)"/><path d="M11.4 6.4 5.6 12l5.8 5.6v-3.4h7v-4.4h-7z" fill="#fff"/></svg>'
+    + 'Voltar</button>';
   h += '</div>';
   document.getElementById('st-body').innerHTML = h;
   document.getElementById('ov-st').classList.add('open');
@@ -4466,6 +4468,7 @@ var TOUR_STEPS = [
   { e:'📋', t:'Acompanhar etapas e prazos', h:'Em <b>Etapas</b>, conclua ou regrida cada etapa conforme o andamento. Atrasos aparecem destacados; o sistema recalcula as datas em cascata.' },
   { e:'⚖️', t:'Capacidade e responsáveis', h:'Na aba <b>Capacidade</b> você acompanha a <b>carga de trabalho</b> de cada servidor e a <b>ocupação do setor</b> (🟢 disponível / 🟡 limitada / 🔴 máxima), que também aparece no Painel. Para <b>trocar o responsável</b> por um processo, clique no nome do responsável (ou em <b>+ Atribuir</b>) dentro do processo, em Etapas — a pontuação é ajustada automaticamente na Capacidade.' },
   { e:'🗂️', t:'Fila de prioridade', h:'Processos sem data entram na <b>Fila</b>. Lá você define a ordem de prioridade e inicia quando for a vez.' },
+  { e:'↩️', t:'Devolver um processo à fila', h:'Precisou pausar e despriorizar um processo em andamento? Dentro do processo, use <b>↩ Voltar processo para a fila</b>. Ele retorna à <b>Fila</b> com o <b>status preservado</b> e o <b>motivo registrado</b> (sem perder o histórico) e sai da <b>capacidade ativa</b> até ser reiniciado.' },
   { e:'📊', t:'Painel público', h:'Tudo aparece no <b>Painel de Contratações</b> (somente leitura), por unidade — para o público e a gestão acompanharem.' },
   { e:'✅', t:'Pronto para começar!', h:'Dica: comece pelas <b>Configurações</b> (equipe e e-mails). Você pode rever este tour quando quiser pelo menu <b>❔ Tour de ajuda</b>.' }
 ];
