@@ -1460,6 +1460,7 @@ function removerServConfirm_(idx) {
             localStorage.setItem('selServidores', JSON.stringify(listaSalva));
             aplicarServidores_(listaSalva);
             renderEquipeConfig_();
+            renderEmailsConfig_(EMAILS_CACHE);  // remove o servidor tambem da lista de e-mails
             CAP_CARREGADO = false;
             if (!document.getElementById('tab-capacidade').hidden) carregarCapacidade_();
             toast('✓ Servidor removido.', 'ok');

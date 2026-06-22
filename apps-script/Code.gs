@@ -3793,6 +3793,16 @@ function salvarServidoresApp(lista, authToken) {
     if (_ehReitoria_()) _salvarServidoresConfigSheet_(limpa); // planilha é só da Reitoria
     _authSyncServidores_(limpa);
 
+    // Limpa o e-mail dos servidores REMOVIDOS (não estão na nova lista e não foram
+    // renomeados). Sem isso, o e-mail antigo permanecia no PropertiesService e o
+    // servidor continuava aparecendo na lista de E-mails mesmo após a remoção.
+    antiga.forEach(function(s) {
+      var k = _normServidorNome_(s.nome);
+      if (!k || novos[k] || antigosRenomeados[k]) return;
+      try { props.deleteProperty(_emailKey_(s.nome)); } catch(e) {}
+      if (_ehReitoria_()) { try { props.deleteProperty('email_' + s.nome); } catch(e) {} } // chave legada
+    });
+
     var alterados = 0;
     renomes.forEach(function(rn) {
       var oldEmailKey = _emailKey_(rn.antigo);
