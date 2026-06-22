@@ -461,9 +461,9 @@
       </button>
       <div class="user-chip" onclick="toggleHdrMenu_()">👤 <span id="hdr-nome"></span> ⋮
         <div id="hdr-menu" class="hdr-menu" hidden onclick="event.stopPropagation()">
-          <button class="hdr-menu-item" onclick="confirmarTroca();toggleHdrMenu_()">🔄 Trocar usuário</button>
-          <div class="hdr-menu-sep"></div>
           <button type="button" class="hdr-menu-item" onclick="abrirPainel_(event);toggleHdrMenu_();return false;"><img src="painel-icon.svg" alt="" class="hdr-menu-icon">Painel de Contratações</button>
+          <div class="hdr-menu-sep"></div>
+          <button class="hdr-menu-item" onclick="confirmarTroca();toggleHdrMenu_()">🔄 Trocar usuário</button>
           <div class="hdr-menu-sep" id="hdr-config-sep"></div>
           <button class="hdr-menu-item" id="hdr-config-item" onclick="switchTab('config');toggleHdrMenu_()">⚙️ Configurações</button>
           <div class="hdr-menu-sep"></div>
@@ -1199,7 +1199,11 @@ function dialogoCampo_(opts, cb) {
 }
 
 function isChefeAtual_() {
-  return SESSAO_CHEFE || isChefeAtual_();
+  // Chefe se a sessão já marca chefe/admin (cobre o admin global, que não é
+  // servidor de unidade) OU se o perfil do servidor atual estiver como chefe.
+  if (SESSAO_CHEFE || SESSAO_ADMIN) return true;
+  var perfil = SERV_DATA.find(function(s){ return s.nome === SERVIDOR; });
+  return perfil ? !!perfil.isChefe : false;
 }
 
 function isRetornoFila_(p) {

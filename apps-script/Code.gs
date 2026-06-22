@@ -1016,7 +1016,13 @@ function loginProofApp(matricula, challengeId, proof) {
     var lista, user;
     if (_isAdminMat_(mat)) {
       user = _adminUser_();
-      lista = [];
+      // O admin global não pertence a nenhuma equipe, mas administra a unidade
+      // que está acessando (escopo vindo em params.unidade → _FS_UNIDADE_REQ).
+      // Antes retornávamos lista vazia aqui, então o admin via "Nenhum servidor
+      // cadastrado" mesmo quando a unidade tinha equipe (e-mails e responsáveis
+      // dos processos apareciam por virem de outras fontes). Carregamos a equipe
+      // da unidade atual para que a gestão de servidores funcione para o admin.
+      lista = _getServidoresApp_();
     } else {
       lista = _getServidoresApp_();
       user = _authSyncServidores_(lista)[mat];
