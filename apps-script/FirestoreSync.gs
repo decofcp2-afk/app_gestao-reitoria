@@ -318,6 +318,42 @@ function fs_criarUnidade(params) {
   });
 }
 
+// ── Dados cadastrais da unidade (endereço + e-mail institucional) ──────────
+// Lidos/exibidos no rodapé do Painel público. Edição só por chefe/admin.
+function fs_getDadosUnidade(params) {
+  try {
+    params = params || {};
+    _authRequire_(params.authToken, false);
+    var uid = _fsUnidade_();
+    var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
+    var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
+    var doc; try { doc = _fsReq_('get', projBase + '/unidades/' + uid); } catch (e) { doc = null; }
+    var o = (doc && doc.fields) ? _fsDocToObj_(doc) : {};
+    return { ok: true, id: uid, nome: o.nome || '', sigla: o.sigla || '',
+      emailInstitucional: o.emailInstitucional || '', endereco: o.endereco || '' };
+  } catch (e) { return { ok: false, erro: e.message }; }
+}
+
+function fs_salvarDadosUnidade(params) {
+  return _withAppLockResult_('salvar dados da unidade (fs)', function() {
+    try {
+      params = params || {};
+      _authRequire_(params.authToken, true); // só chefe/admin
+      var uid = _fsUnidade_();
+      var endereco = String(params.endereco || '').trim();
+      var email = String(params.emailInstitucional || '').trim();
+      if (email && email.indexOf('@') < 0) throw new Error('E-mail institucional inválido.');
+      var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
+      var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
+      // updateMask preserva os demais campos do doc (nome, sigla, ativo…).
+      var url = projBase + '/unidades/' + uid
+        + '?updateMask.fieldPaths=endereco&updateMask.fieldPaths=emailInstitucional';
+      _fsReq_('patch', url, { fields: _fsToFields_({ endereco: endereco, emailInstitucional: email }) });
+      return { ok: true, endereco: endereco, emailInstitucional: email };
+    } catch (e) { return { ok: false, erro: e.message }; }
+  });
+}
+
 // Exclui uma unidade inteira (doc + subcoleções). DESTRUTIVO. Recusa reitoria-sel.
 function fs_excluirUnidade(params) {
   return _withAppLockResult_('excluir unidade (fs)', function() {

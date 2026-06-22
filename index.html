@@ -540,6 +540,22 @@
         </div>
       </div>
     </div>
+    <div class="cfg-section">
+      <div class="cfg-head">Dados da unidade</div>
+      <div class="cfg-card">
+        <div class="cfg-row cfg-row-col">
+          <span class="note">Estes dados aparecem no rodapé do <b>Painel de Contratações</b> público desta unidade. São atualizados no painel ao trocar de unidade.</span>
+          <label>Endereço</label>
+          <input type="text" class="field-input" id="cfg-uni-endereco" placeholder="Ex.: Campo de São Cristóvão, 177 · São Cristóvão — Rio de Janeiro / RJ" maxlength="160" style="width:100%">
+          <label style="margin-top:8px">E-mail institucional</label>
+          <input type="email" class="field-input" id="cfg-uni-email" placeholder="Ex.: decof.sc1@cp2.g12.br" maxlength="120" style="width:100%">
+          <div class="cfg-actions" style="margin-top:8px">
+            <button class="btn-cfg" id="btn-uni-salvar" onclick="salvarDadosUnidade_()">Salvar dados da unidade</button>
+            <span id="cfg-uni-msg" style="font-size:12px;min-height:14px"></span>
+          </div>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
       <div class="cfg-section" id="cfg-equipe-section" style="flex:1;min-width:260px;margin-bottom:0;">
         <div class="cfg-head">Equipe SEL/SEPMA</div>
@@ -1646,7 +1662,7 @@ function switchTab(tab) {
   document.getElementById('fab-novo').hidden = (tab !== 'etapas' || !isChefeAtual_());
   document.getElementById('fbar').hidden = (tab !== 'etapas');
   if (tab === 'historico'  && !HIST_CARREGADO) carregarHistorico();
-  if (tab === 'config') { renderEquipeConfig_(); carregarEmails_(); verificarTriggerConfig_(); }
+  if (tab === 'config') { renderEquipeConfig_(); carregarEmails_(); verificarTriggerConfig_(); carregarDadosUnidade_(); }
   if (tab === 'capacidade') {
     if (CAP_CARREGADO && CAP_DATA) renderCapacidade_();
     else carregarCapacidade_();
@@ -4557,6 +4573,40 @@ function popularUnidadesLogin(){
       return '<option style="color:#0b1d33" value="'+u.id+'"'+(u.id===atual?' selected':'')+'>'+(u.nome||u.id)+(u.ativo===false?' [inativa]':'')+'</option>';
     }).join('');
   }).catch(function(){ sel.innerHTML='<option style="color:#0b1d33" value="reitoria-sel">Reitoria / SEL</option>'; });
+}
+// ── Dados da unidade (endereço + e-mail institucional → rodapé do painel) ──
+function carregarDadosUnidade_(){
+  var endEl = document.getElementById('cfg-uni-endereco');
+  var mailEl = document.getElementById('cfg-uni-email');
+  if (!endEl || !mailEl) return;
+  google.script.run
+    .withSuccessHandler(function(d){
+      if (d && d.ok){
+        endEl.value  = d.endereco || '';
+        mailEl.value = d.emailInstitucional || '';
+      }
+    })
+    .withFailureHandler(function(){})
+    .fs_getDadosUnidade({ authToken: (typeof AUTH_TOKEN!=='undefined'?AUTH_TOKEN:'') });
+}
+function salvarDadosUnidade_(){
+  var endEl = document.getElementById('cfg-uni-endereco');
+  var mailEl = document.getElementById('cfg-uni-email');
+  var msg = document.getElementById('cfg-uni-msg');
+  var btn = document.getElementById('btn-uni-salvar');
+  var endereco = (endEl.value||'').trim();
+  var email = (mailEl.value||'').trim();
+  if (email && email.indexOf('@') < 0){ msg.style.color='#b02035'; msg.textContent='E-mail inválido.'; return; }
+  if (btn) btn.disabled = true;
+  msg.style.color='inherit'; msg.textContent='Salvando…';
+  google.script.run
+    .withSuccessHandler(function(r){
+      if (btn) btn.disabled = false;
+      if (r && r.ok){ msg.style.color='#1e7a45'; msg.textContent='✓ Dados salvos. O painel desta unidade será atualizado.'; }
+      else { msg.style.color='#b02035'; msg.textContent='Erro: '+((r&&r.erro)||'falhou'); }
+    })
+    .withFailureHandler(function(e){ if (btn) btn.disabled = false; msg.style.color='#b02035'; msg.textContent='Erro: '+((e&&e.message)||e); })
+    .fs_salvarDadosUnidade({ endereco: endereco, emailInstitucional: email, authToken: (typeof AUTH_TOKEN!=='undefined'?AUTH_TOKEN:'') });
 }
 // Excluir unidade (Configurações). Destrutivo — via Apps Script (fs_excluirUnidade).
 function popularExcluirUnidade(){

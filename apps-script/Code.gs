@@ -933,6 +933,8 @@ function _apiCallAppSEL_(method, args) {
     if (typeof fs_getHistorico === 'function') fns.fs_getHistorico = fs_getHistorico;
     if (typeof fs_excluirUnidade === 'function') fns.fs_excluirUnidade = fs_excluirUnidade;
     if (typeof fs_criarUnidade === 'function') fns.fs_criarUnidade = fs_criarUnidade;
+    if (typeof fs_getDadosUnidade === 'function') fns.fs_getDadosUnidade = fs_getDadosUnidade;
+    if (typeof fs_salvarDadosUnidade === 'function') fns.fs_salvarDadosUnidade = fs_salvarDadosUnidade;
   }
   if (!fns[method]) throw new Error('Funcao nao permitida pela API publica.');
   return fns[method].apply(null, args);
