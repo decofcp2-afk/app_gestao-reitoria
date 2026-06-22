@@ -1036,6 +1036,7 @@ function loginProofApp(matricula, challengeId, proof) {
       nome: user.nome,
       matricula: user.matricula,
       isChefe: !!user.isChefe,
+      isAdmin: !!user.isAdmin,
       mustChange: !!user.mustChange,
       servidores: lista
     };
@@ -1086,6 +1087,7 @@ function loginApp(matricula, senha) {
       nome: user.nome,
       matricula: user.matricula,
       isChefe: !!user.isChefe,
+      isAdmin: !!user.isAdmin,
       mustChange: !!user.mustChange,
       servidores: lista
     };
@@ -1105,6 +1107,7 @@ function validarSessaoApp(token) {
       nome: sess.nome,
       matricula: sess.matricula,
       isChefe: !!sess.isChefe,
+      isAdmin: !!sess.isAdmin,
       mustChange: !!sess.mustChange,
       servidores: lista
     };

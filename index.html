@@ -990,6 +990,8 @@
 // ESTADO
 // ══════════════════════════════════════════════════════════════════════
 var SERVIDOR   = '';
+var SESSAO_CHEFE = false;   // isChefe vindo da sessão (cobre o admin global, que não é servidor de unidade)
+var SESSAO_ADMIN = false;   // conta admin global
 var AUTH_TOKEN = '';
 var AUTH_EXP   = 0;
 var DATA       = [];
@@ -1098,6 +1100,8 @@ function carregarCacheOffline_(nome) {
 function aplicarCacheOffline_(cache, detalhe) {
   if (!cache || !cache.servidor) return false;
   SERVIDOR = cache.servidor;
+  if (cache.isChefe !== undefined) SESSAO_CHEFE = !!cache.isChefe;
+  if (cache.isAdmin !== undefined) SESSAO_ADMIN = !!cache.isAdmin;
   OFFLINE_LAST_SYNC = cache.ts || '';
   DATA = cache.data || [];
   FILA = cache.fila || [];
@@ -1191,7 +1195,7 @@ function dialogoCampo_(opts, cb) {
 }
 
 function isChefeAtual_() {
-  return CHEFES.indexOf(SERVIDOR) >= 0;
+  return SESSAO_CHEFE || CHEFES.indexOf(SERVIDOR) >= 0;
 }
 
 function isRetornoFila_(p) {
@@ -1488,8 +1492,10 @@ function aplicarSessao_(sess) {
   AUTH_TOKEN = sess.token || AUTH_TOKEN;
   AUTH_EXP = sess.exp || AUTH_EXP || 0;
   SERVIDOR = sess.nome;
+  SESSAO_CHEFE = !!sess.isChefe;
+  SESSAO_ADMIN = !!sess.isAdmin;
   FILTRO_INICIAL_APLICADO = false;
-  sessionStorage.setItem('selSessao', JSON.stringify({ token: AUTH_TOKEN, exp: AUTH_EXP, nome: SERVIDOR }));
+  sessionStorage.setItem('selSessao', JSON.stringify({ token: AUTH_TOKEN, exp: AUTH_EXP, nome: SERVIDOR, isChefe: SESSAO_CHEFE, isAdmin: SESSAO_ADMIN }));
   document.getElementById('tela-login').hidden = true;
   document.getElementById('app').hidden = false;
   document.getElementById('hdr-nome').textContent = SERVIDOR;
