@@ -440,6 +440,7 @@
     <input class="login-input" id="login-senha" type="password" autocomplete="current-password" placeholder="Senha">
     <button class="login-submit" id="login-submit" type="submit">Entrar</button>
     <button class="login-link" id="login-reset" type="button" onclick="solicitarResetSenhaLocal()">Esqueci minha senha</button>
+    <button class="login-link" type="button" onclick="abrirCadastroUnidade()" style="opacity:.95">Não encontrou sua unidade? Cadastre aqui</button>
     <div class="login-error" id="login-erro"></div>
   </form>
 </div>
@@ -4380,6 +4381,24 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
+<!-- ───────── Cadastro de Unidade (autocadastro) ───────── -->
+<div id="uc-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(8,18,33,.6);align-items:center;justify-content:center;padding:24px 16px;overflow:auto" onclick="if(event.target===this)fecharCadastroUnidade()">
+  <div style="background:var(--card,#fff);color:var(--text,#0b1d33);max-width:440px;width:100%;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--navy,#0b1d33);color:#fff">
+      <strong style="font-size:15px">🏛️ Cadastrar nova unidade</strong>
+      <button onclick="fecharCadastroUnidade()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <form style="padding:16px 18px;display:flex;flex-direction:column;gap:10px" onsubmit="submeterCadastroUnidade(event)">
+      <div style="font-size:13px;opacity:.7;line-height:1.4">Cadastre o seu setor de licitações. A unidade já vem com o calendário e a matriz de pontuação padrão — depois você cadastra a equipe.</div>
+      <input class="field-input" id="uc-nome" placeholder="Nome da unidade (ex.: São Cristóvão I)">
+      <input class="field-input" id="uc-sigla" placeholder="Sigla (ex.: SC1)" maxlength="10">
+      <input class="field-input" id="uc-email" type="email" placeholder="E-mail institucional da unidade (@...g12.br)">
+      <button class="btn-cfg" type="submit" style="background:var(--navy,#0b1d33);color:#fff">Cadastrar unidade</button>
+      <div id="uc-msg" style="font-size:12px;min-height:14px;text-align:center"></div>
+    </form>
+  </div>
+</div>
+
 <!-- ───────── Seletor de Unidade (App Gestão) ───────── -->
 <div id="ug-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(8,18,33,.6);align-items:center;justify-content:center;padding:24px 16px" onclick="if(event.target===this)fecharTrocaUnidadeApp()">
   <div style="background:var(--card,#fff);color:var(--text,#0b1d33);max-width:420px;width:100%;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden">
@@ -4414,6 +4433,29 @@ function aplicarUnidadeApp(id){
   location.reload();
 }
 function fecharTrocaUnidadeApp(){ document.getElementById('ug-modal').style.display='none'; }
+function abrirCadastroUnidade(){ var m=document.getElementById('uc-modal'); if(m){ m.style.display='flex'; var msg=document.getElementById('uc-msg'); if(msg) msg.textContent=''; } }
+function fecharCadastroUnidade(){ var m=document.getElementById('uc-modal'); if(m) m.style.display='none'; }
+function submeterCadastroUnidade(ev){
+  ev.preventDefault();
+  var nome=(document.getElementById('uc-nome').value||'').trim();
+  var sigla=(document.getElementById('uc-sigla').value||'').trim();
+  var email=(document.getElementById('uc-email').value||'').trim();
+  var msg=document.getElementById('uc-msg');
+  if(nome.length<3){ msg.style.color='#b02035'; msg.textContent='Informe o nome da unidade.'; return; }
+  if(!/@.*g12\.br$/i.test(email)){ msg.style.color='#b02035'; msg.textContent='Use um e-mail institucional (@...g12.br).'; return; }
+  msg.style.color='inherit'; msg.textContent='Cadastrando…';
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r&&r.ok){
+        msg.style.color='#1e7a45'; msg.textContent='Unidade criada! Selecione-a no topo e entre com sua matrícula.';
+        try{ localStorage.setItem('appsel_unidade', r.id); }catch(e){}
+        if(typeof popularUnidadesLogin==='function') popularUnidadesLogin();
+        setTimeout(fecharCadastroUnidade, 1800);
+      } else { msg.style.color='#b02035'; msg.textContent='Erro: '+((r&&r.erro)||'falhou'); }
+    })
+    .withFailureHandler(function(e){ msg.style.color='#b02035'; msg.textContent='Erro: '+((e&&e.message)||e); })
+    .fs_criarUnidade({ nome:nome, sigla:sigla, email:email });
+}
 function aplicarUnidadeLogin(id){ if(!id) return; try{ localStorage.setItem('appsel_unidade', id); }catch(e){} }
 // Popula o seletor de unidade na tela de LOGIN.
 function popularUnidadesLogin(){

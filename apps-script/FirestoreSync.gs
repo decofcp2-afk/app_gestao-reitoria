@@ -214,6 +214,42 @@ function _fsSetCargaAtivo_(pid, faseToken, ativo) {
 // ESCRITAS (fs_*) — frontend passa `docEtapa` (ex.: "SEL-2026-001_05") e `pid`.
 // ════════════════════════════════════════════════════════════════════════
 
+// Gera id (slug) da unidade a partir do nome.
+function _slugUnidade_(s) {
+  s = String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return s.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// Autocadastro de unidade (aberto, guardado por e-mail institucional). Cria o doc
+// e semeia calendario + config a partir da reitoria-sel.
+function fs_criarUnidade(params) {
+  return _withAppLockResult_('criar unidade (fs)', function() {
+    try {
+      params = params || {};
+      var nome = String(params.nome || '').trim();
+      var sigla = String(params.sigla || '').trim();
+      var email = String(params.email || '').trim().toLowerCase();
+      if (nome.length < 3) throw new Error('Informe o nome da unidade.');
+      if (!/@.*g12\.br$/.test(email)) throw new Error('Use um e-mail institucional (@...g12.br).');
+      var uid = _slugUnidade_(nome);
+      if (!uid) throw new Error('Nome inválido.');
+      var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
+      var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
+      var ex; try { ex = _fsReq_('get', projBase + '/unidades/' + uid); } catch (e) { ex = null; }
+      if (ex && ex.name) throw new Error('Já existe uma unidade com esse nome.');
+      _fsReq_('patch', projBase + '/unidades/' + uid, { fields: _fsToFields_({ nome: nome, sigla: sigla, emailInstitucional: email, ativo: true }) });
+      ['calendario', 'config'].forEach(function(col) {
+        var data; try { data = _fsReq_('get', projBase + '/unidades/reitoria-sel/' + col + '?pageSize=300'); } catch (e) { data = {}; }
+        (data.documents || []).forEach(function(d) {
+          var docId = String(d.name || '').split('/').pop();
+          if (docId) _fsReq_('patch', projBase + '/unidades/' + uid + '/' + col + '/' + docId, { fields: d.fields || {} });
+        });
+      });
+      return { ok: true, id: uid };
+    } catch(e) { return { ok: false, erro: e.message }; }
+  });
+}
+
 // Exclui uma unidade inteira (doc + subcoleções). DESTRUTIVO. Recusa reitoria-sel.
 function fs_excluirUnidade(params) {
   return _withAppLockResult_('excluir unidade (fs)', function() {

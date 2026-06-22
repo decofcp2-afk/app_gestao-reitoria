@@ -897,6 +897,7 @@ function _apiCallAppSEL_(method, args) {
     fns.fs_salvarPontuacaoCap     = fs_salvarPontuacaoCap;
     if (typeof fs_getHistorico === 'function') fns.fs_getHistorico = fs_getHistorico;
     if (typeof fs_excluirUnidade === 'function') fns.fs_excluirUnidade = fs_excluirUnidade;
+    if (typeof fs_criarUnidade === 'function') fns.fs_criarUnidade = fs_criarUnidade;
   }
   if (!fns[method]) throw new Error('Funcao nao permitida pela API publica.');
   return fns[method].apply(null, args);
