@@ -214,6 +214,32 @@ function _fsSetCargaAtivo_(pid, faseToken, ativo) {
 // ESCRITAS (fs_*) — frontend passa `docEtapa` (ex.: "SEL-2026-001_05") e `pid`.
 // ════════════════════════════════════════════════════════════════════════
 
+// Exclui uma unidade inteira (doc + subcoleções). DESTRUTIVO. Recusa reitoria-sel.
+function fs_excluirUnidade(params) {
+  return _withAppLockResult_('excluir unidade (fs)', function() {
+    try {
+      params = params || {};
+      _authRequire_(params.authToken, true); // só chefe
+      var uid = String(params.unidade || '').trim();
+      if (!uid) throw new Error('Unidade não informada.');
+      if (uid === 'reitoria-sel') throw new Error('A Reitoria não pode ser excluída.');
+      var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
+      var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
+      var cols = ['processos','etapas','cargas','calendario','config','emails','historico','dispositivos','resumo'];
+      var apagados = 0;
+      cols.forEach(function(col) {
+        var data; try { data = _fsReq_('get', projBase + '/unidades/' + uid + '/' + col + '?pageSize=300'); } catch(e) { data = {}; }
+        (data.documents || []).forEach(function(d) {
+          var docId = String(d.name || '').split('/').pop();
+          if (docId) { _fsReq_('delete', projBase + '/unidades/' + uid + '/' + col + '/' + docId); apagados++; }
+        });
+      });
+      _fsReq_('delete', projBase + '/unidades/' + uid);
+      return { ok: true, apagados: apagados };
+    } catch(e) { return { ok: false, erro: e.message }; }
+  });
+}
+
 function fs_atualizarStatusEtapa(docEtapa, novoStatus, authToken) {
   return _withAppLockResult_('atualizar status de etapa (fs)', function() {
     try {

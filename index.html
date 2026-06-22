@@ -557,6 +557,17 @@
         <div class="cfg-row"><label>Dashboard público</label><span class="val" style="color:var(--blue);font-size:12px;">painel separado</span></div>
       </div>
     </div>
+    <div class="cfg-section">
+      <div class="cfg-head" style="color:#b02035">Excluir unidade</div>
+      <div class="cfg-card">
+        <div class="cfg-row cfg-row-col">
+          <div class="note">Apaga uma unidade e todos os seus dados (processos, etapas, equipe). Use para remover unidades de teste — depois ela pode ser recriada com dados reais. <b>A Reitoria não pode ser excluída.</b></div>
+          <select id="cfg-excluir-unidade" class="field-input" style="width:100%"><option>Carregando…</option></select>
+          <button class="btn-cfg" style="background:#b02035;color:#fff" onclick="excluirUnidadeApp()">🗑️ Excluir unidade selecionada</button>
+          <div id="cfg-excluir-msg" style="font-size:12px;min-height:14px"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <nav class="bottom-nav">
@@ -4416,10 +4427,41 @@ function popularUnidadesLogin(){
     }).join('');
   }).catch(function(){ sel.innerHTML='<option style="color:#0b1d33" value="reitoria-sel">Reitoria / SEL</option>'; });
 }
+// Excluir unidade (Configurações). Destrutivo — via Apps Script (fs_excluirUnidade).
+function popularExcluirUnidade(){
+  var sel=document.getElementById('cfg-excluir-unidade'); if(!sel) return;
+  if(!(window.AppselFirestore && window.AppselFirestore.listarUnidades)){ sel.innerHTML='<option value="">Indisponível</option>'; return; }
+  window.AppselFirestore.listarUnidades().then(function(us){
+    var outras=(us||[]).filter(function(u){return u.id!=='reitoria-sel';});
+    sel.innerHTML = outras.length
+      ? outras.map(function(u){return '<option value="'+u.id+'">'+(u.nome||u.id)+'</option>';}).join('')
+      : '<option value="">(nenhuma unidade de teste)</option>';
+  }).catch(function(){ sel.innerHTML='<option value="">erro ao listar</option>'; });
+}
+function excluirUnidadeApp(){
+  var sel=document.getElementById('cfg-excluir-unidade'), msg=document.getElementById('cfg-excluir-msg');
+  var id=sel.value; if(!id){ msg.style.color='#b02035'; msg.textContent='Selecione uma unidade.'; return; }
+  if(id==='reitoria-sel'){ msg.style.color='#b02035'; msg.textContent='A Reitoria não pode ser excluída.'; return; }
+  var nome=sel.options[sel.selectedIndex].text;
+  var t=prompt('Para confirmar a exclusão de "'+nome+'" e TODOS os seus dados, digite EXCLUIR:');
+  if(t===null) return;
+  if(String(t).trim().toUpperCase()!=='EXCLUIR'){ msg.style.color='#b02035'; msg.textContent='Confirmação incorreta.'; return; }
+  msg.style.color='inherit'; msg.textContent='Excluindo…';
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(r&&r.ok){ msg.style.color='#1e7a45'; msg.textContent='Unidade excluída ('+(r.apagados||0)+' itens).';
+        try{ if(localStorage.getItem('appsel_unidade')===id) localStorage.setItem('appsel_unidade','reitoria-sel'); }catch(e){}
+        popularExcluirUnidade(); }
+      else { msg.style.color='#b02035'; msg.textContent='Erro: '+((r&&r.erro)||'falhou'); }
+    })
+    .withFailureHandler(function(e){ msg.style.color='#b02035'; msg.textContent='Erro: '+((e&&e.message)||e); })
+    .fs_excluirUnidade({ unidade:id, authToken: (typeof AUTH_TOKEN!=='undefined'?AUTH_TOKEN:'') });
+}
 // Mostra a unidade atual no item do menu + popula o seletor do login.
 (function(){
   function init(){
     popularUnidadesLogin();
+    popularExcluirUnidade();
     if(!(window.AppselFirestore && window.AppselFirestore.listarUnidades)) return;
     var atual = window.AppselFirestore.unidadeAtual();
     window.AppselFirestore.listarUnidades().then(function(us){
