@@ -80,6 +80,9 @@ function _fsToken_() {
 // Unidade alvo (multiunidade). Default reitoria-sel; pode vir da Script Property
 // FS_UNIDADE (futuro: derivada da sessão do usuário no corte multiunidade real).
 function _fsUnidade_() {
+  // Parte 2: unidade vinda do request (global setado no doGet). Fallback p/ a
+  // Script Property FS_UNIDADE (triggers/e-mails) e, por fim, reitoria-sel.
+  if (typeof _FS_UNIDADE_REQ === 'string' && _FS_UNIDADE_REQ) return _FS_UNIDADE_REQ;
   return PropertiesService.getScriptProperties().getProperty('FS_UNIDADE') || 'reitoria-sel';
 }
 

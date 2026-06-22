@@ -818,6 +818,13 @@
   function callApi(route, params, success, failure) {
     success = success || function() {};
     failure = failure || function(e) { console.error(e); };
+    // Parte 2: anexa a unidade-alvo às chamadas do Apps Script (escrita por unidade).
+    if (params && !params.unidade) {
+      try {
+        params.unidade = (window.AppselFirestore && window.AppselFirestore.unidadeAtual)
+          ? window.AppselFirestore.unidadeAtual() : '';
+      } catch (e) {}
+    }
     if (!apiUrl) {
       failure(new Error('Configure a URL do Apps Script em config.js antes de usar o AppSEL.'));
       return;

@@ -113,6 +113,17 @@ function _authHash_(senha, salt) {
   return Utilities.base64Encode(bytes);
 }
 
+// Conta ADMIN global (não pertence a nenhuma unidade; não aparece nas equipes).
+// Acesso global (isChefe) para configurações específicas e exclusão de unidades.
+// Senha 1234 TEMPORÁRIA — trocar depois. E-mail p/ redefinição: decof.cp2@gmail.com.
+var ADMIN_SALT = 'cpii-decof-admin-salt-v1';
+function _isAdminMat_(mat) { return _authNorm_(mat) === 'admin'; }
+function _adminUser_() {
+  return { nome: 'Administrador Geral', matricula: 'admin', salt: ADMIN_SALT,
+           hash: _authHash_('1234', ADMIN_SALT), isChefe: true, mustChange: false,
+           isAdmin: true, email: 'decof.cp2@gmail.com' };
+}
+
 function _authUsers_() {
   var props = PropertiesService.getScriptProperties();
   var raw = props.getProperty('SEL_AUTH_USERS_JSON');
@@ -186,14 +197,14 @@ function _authGetSession_(token) {
     props.deleteProperty(_authSessionKey_(token));
     throw new Error('Sessão expirada. Faça login novamente.');
   }
-  var users = _authUsers_();
-  var user = users[_authNorm_(sess.matricula)];
+  var user = _isAdminMat_(sess.matricula) ? _adminUser_() : _authUsers_()[_authNorm_(sess.matricula)];
   if (!user) {
     props.deleteProperty(_authSessionKey_(token));
     throw new Error('Usuário removido da equipe. Faça login novamente.');
   }
   sess.mustChange = !!user.mustChange;
   sess.isChefe = !!user.isChefe;
+  sess.isAdmin = !!user.isAdmin;
   sess.nome = user.nome || sess.nome;
   return sess;
 }
@@ -781,9 +792,14 @@ function _lerAba_(sh, chave) {
 }
 
 // API publica para o GitHub Pages. O Apps Script fica como back-end do AppSEL.
+// Unidade-alvo desta requisição (parte 2: escrita por unidade). Por-execução.
+var _FS_UNIDADE_REQ = '';
+
 function doGet(e) {
   var params = (e && e.parameter) || {};
   var route = String(params.route || '').trim();
+  // Escopo de unidade vindo do frontend (sanitizado). Vazio => fallback p/ FS_UNIDADE.
+  _FS_UNIDADE_REQ = String(params.unidade || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
 
   try {
     var payload;
@@ -939,9 +955,14 @@ function _limparChallengesExpirados_() {
 function loginChallengeApp(matricula) {
   try {
     _limparChallengesExpirados_();
-    var lista = _getServidoresApp_();
-    var users = _authSyncServidores_(lista);
     var mat = _authNorm_(matricula);
+    var users = {};
+    if (_isAdminMat_(mat)) {
+      users[mat] = _adminUser_();
+    } else {
+      var lista = _getServidoresApp_();
+      users = _authSyncServidores_(lista);
+    }
     if (!mat || !users[mat]) return { ok: false, erro: 'Matricula ou senha invalida.' };
 
     var challengeId = Utilities.getUuid();
@@ -978,9 +999,14 @@ function loginProofApp(matricula, challengeId, proof) {
       return { ok: false, erro: 'Matricula ou senha invalida.' };
     }
 
-    var lista = _getServidoresApp_();
-    var users = _authSyncServidores_(lista);
-    var user = users[mat];
+    var lista, user;
+    if (_isAdminMat_(mat)) {
+      user = _adminUser_();
+      lista = [];
+    } else {
+      lista = _getServidoresApp_();
+      user = _authSyncServidores_(lista)[mat];
+    }
     if (!user) return { ok: false, erro: 'Matricula ou senha invalida.' };
 
     var esperado = _sha256Base64_(String(user.hash || '') + '::' + String(ch.nonce || ''));
