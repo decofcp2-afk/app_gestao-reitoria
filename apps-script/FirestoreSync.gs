@@ -223,6 +223,14 @@ function _slugUnidade_(s) {
   return s.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+// Senha temporária legível (sem caracteres ambíguos).
+function _gerarSenhaTemp_() {
+  var c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var s = '';
+  for (var i = 0; i < 7; i++) s += c.charAt(Math.floor(Math.random() * c.length));
+  return s;
+}
+
 // Autocadastro de unidade (aberto, guardado por e-mail institucional). Cria o doc
 // e semeia calendario + config a partir da reitoria-sel.
 function fs_criarUnidade(params) {
@@ -248,7 +256,38 @@ function fs_criarUnidade(params) {
           if (docId) _fsReq_('patch', projBase + '/unidades/' + uid + '/' + col + '/' + docId, { fields: d.fields || {} });
         });
       });
-      return { ok: true, id: uid };
+
+      // Cria o 1º chefe da unidade (auth por unidade — parte 3) com senha temporária.
+      var login = _authNorm_(email.split('@')[0]) || _authNorm_(sigla) || ('gestor-' + uid);
+      var nomeResp = String(params.responsavel || '').trim() || ('Gestor(a) ' + (sigla || nome));
+      var senhaTemp = _gerarSenhaTemp_();
+      var salt = _authSalt_();
+      var props = PropertiesService.getScriptProperties();
+      var servidores = [{ nome: nomeResp, matricula: login, cor: '#2563eb', isChefe: true }];
+      var users = {}; users[login] = { nome: nomeResp, matricula: login, salt: salt,
+        hash: _authHash_(senhaTemp, salt), isChefe: true, mustChange: true };
+      props.setProperty('SEL_SERVIDORES_JSON__' + uid, JSON.stringify(servidores));
+      props.setProperty('SEL_AUTH_USERS_JSON__' + uid, JSON.stringify(users));
+      props.setProperty('email__' + uid + '__' + nomeResp, email);
+
+      // Envia login + senha temporária por e-mail (best-effort, não bloqueia).
+      var appUrl = 'https://decofcp2-afk.github.io/app_gestao-reitoria/';
+      try {
+        MailApp.sendEmail({
+          to: email,
+          subject: 'Acesso ao Sistema de Gestão de Etapas — ' + nome,
+          htmlBody:
+            '<p>Olá! A unidade <b>' + nome + '</b> foi cadastrada no Sistema de Gestão de Etapas (Licitações) do Colégio Pedro II.</p>' +
+            '<p><b>Acesse:</b> <a href="' + appUrl + '">' + appUrl + '</a><br>' +
+            'Na tela de login, selecione a unidade <b>' + nome + '</b> e use:</p>' +
+            '<p style="font-size:16px"><b>Login:</b> ' + login + '<br><b>Senha temporária:</b> ' + senhaTemp + '</p>' +
+            '<p>No <b>primeiro acesso</b> você será guiado por um tour com as <b>configurações iniciais</b> ' +
+            '(cadastrar a equipe, e-mails e conferir o calendário). Troque a senha temporária quando solicitado.</p>' +
+            '<p style="color:#888;font-size:12px">Mensagem automática — não responda.</p>'
+        });
+      } catch(eMail) { /* cota/erro de e-mail não bloqueia a criação */ }
+
+      return { ok: true, id: uid, login: login };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
 }

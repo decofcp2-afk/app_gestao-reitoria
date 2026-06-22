@@ -468,6 +468,8 @@
           <button type="button" class="hdr-menu-item" onclick="abrirPainel_(event);toggleHdrMenu_();return false;"><img src="painel-icon.svg" alt="" class="hdr-menu-icon">Painel de Contratações</button>
           <div class="hdr-menu-sep" id="hdr-config-sep"></div>
           <button class="hdr-menu-item" id="hdr-config-item" onclick="switchTab('config');toggleHdrMenu_()">⚙️ Configurações</button>
+          <div class="hdr-menu-sep"></div>
+          <button type="button" class="hdr-menu-item" onclick="iniciarTour();toggleHdrMenu_()">❔ Tour de ajuda</button>
         </div>
       </div>
     </div>
@@ -1513,6 +1515,7 @@ function aplicarSessao_(sess) {
   else {
     carregarDados();
     preCarregarCapacidade_();
+    try { if (window.maybeIniciarTour_) window.maybeIniciarTour_(); } catch(e) {}
   }
 }
 
@@ -4405,12 +4408,73 @@ if ('serviceWorker' in navigator) {
       <div style="font-size:13px;opacity:.7;line-height:1.4">Cadastre o seu setor de licitações. A unidade já vem com o calendário e a matriz de pontuação padrão — depois você cadastra a equipe.</div>
       <input class="field-input" id="uc-nome" placeholder="Nome da unidade (ex.: São Cristóvão I)">
       <input class="field-input" id="uc-sigla" placeholder="Sigla (ex.: SC1)" maxlength="10">
-      <input class="field-input" id="uc-email" type="email" placeholder="E-mail institucional da unidade (@...g12.br)">
+      <input class="field-input" id="uc-responsavel" placeholder="Nome do responsável (chefe)">
+      <input class="field-input" id="uc-email" type="email" placeholder="E-mail institucional (@...g12.br) — receberá o acesso">
       <button class="btn-cfg" type="submit" style="background:var(--navy,#0b1d33);color:#fff">Cadastrar unidade</button>
       <div id="uc-msg" style="font-size:12px;min-height:14px;text-align:center"></div>
     </form>
   </div>
 </div>
+
+<!-- ───────── Tour de primeiro acesso ───────── -->
+<div id="tour-modal" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(8,18,33,.72);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)tourFechar(false)">
+  <div style="background:var(--card,#fff);color:var(--text,#0b1d33);max-width:460px;width:100%;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.45);overflow:hidden">
+    <div style="padding:18px 20px 6px"><div id="tour-emoji" style="font-size:34px">👋</div>
+      <div id="tour-titulo" style="font-size:18px;font-weight:800;margin-top:6px"></div></div>
+    <div id="tour-texto" style="padding:6px 20px 14px;font-size:14px;line-height:1.55;color:var(--text,#0b1d33)"></div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:0 20px 8px" id="tour-dots"></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;padding:12px 20px 18px;border-top:1px solid var(--border,rgba(0,0,0,.08))">
+      <button onclick="tourFechar(true)" style="background:none;border:none;color:var(--muted,#5a6b80);font-size:13px;cursor:pointer">Pular</button>
+      <div style="display:flex;gap:8px">
+        <button id="tour-prev" onclick="tourNav(-1)" style="padding:9px 14px;border:1px solid var(--border,rgba(0,0,0,.2));background:var(--card,#fff);color:inherit;border-radius:8px;cursor:pointer">Anterior</button>
+        <button id="tour-next" onclick="tourNav(1)" style="padding:9px 16px;border:none;background:var(--navy,#0b1d33);color:#fff;border-radius:8px;cursor:pointer;font-weight:700">Próximo</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+var TOUR_STEPS = [
+  { e:'👋', t:'Bem-vindo(a)!', h:'Este é o <b>Sistema de Gestão de Etapas</b> das contratações da sua unidade. Ele organiza cada processo, seus prazos e responsáveis — e publica o andamento no Painel público (transparência).' },
+  { e:'⚙️', t:'1º passo: Configurações iniciais', h:'Comece pelo menu <b>⚙️ Configurações</b> (canto superior direito):<br>• <b>Equipe</b> — cadastre os servidores e marque quem é <b>chefe</b>.<br>• <b>E-mails</b> — cada servidor recebe os avisos de prazo.<br>• <b>Calendário</b> — confira feriados/horários.<br>Faça isso antes de tudo para o sistema funcionar como planejado.' },
+  { e:'🔑', t:'Troque a senha temporária', h:'Se você entrou com a senha temporária do e-mail, o sistema pede para criar uma senha sua. Cada servidor cadastrado entra com a própria matrícula (senha inicial <b>123456</b>, trocada no 1º acesso).' },
+  { e:'➕', t:'Criar um processo', h:'Use o botão <b>+</b> (novo processo) para iniciar uma contratação, informar o objeto e definir o <b>D0</b> (data inicial). As 9 etapas são geradas automaticamente.' },
+  { e:'📋', t:'Acompanhar etapas e prazos', h:'Em <b>Etapas</b>, conclua ou regrida cada etapa conforme o andamento. Atrasos aparecem destacados; o sistema recalcula as datas em cascata.' },
+  { e:'🗂️', t:'Fila de prioridade', h:'Processos sem data entram na <b>Fila</b>. Lá você define a ordem de prioridade e inicia quando for a vez.' },
+  { e:'📊', t:'Painel público', h:'Tudo aparece no <b>Painel de Contratações</b> (somente leitura), por unidade — para o público e a gestão acompanharem.' },
+  { e:'✅', t:'Pronto para começar!', h:'Dica: comece pelas <b>Configurações</b> (equipe e e-mails). Você pode rever este tour quando quiser pelo menu <b>❔ Tour de ajuda</b>.' }
+];
+var TOUR_I = 0;
+function _tourKey_(){
+  var u = (window.AppselFirestore && window.AppselFirestore.unidadeAtual) ? window.AppselFirestore.unidadeAtual() : 'reitoria-sel';
+  return 'sel_tour_v1_' + u + '_' + (typeof SERVIDOR!=='undefined'?SERVIDOR:'');
+}
+function maybeIniciarTour_(){
+  try { if (localStorage.getItem(_tourKey_())) return; } catch(e){}
+  iniciarTour();
+}
+function iniciarTour(){ TOUR_I = 0; document.getElementById('tour-modal').style.display='flex'; tourRender(); }
+function tourRender(){
+  var s = TOUR_STEPS[TOUR_I];
+  document.getElementById('tour-emoji').textContent = s.e;
+  document.getElementById('tour-titulo').textContent = s.t;
+  document.getElementById('tour-texto').innerHTML = s.h;
+  document.getElementById('tour-prev').style.visibility = TOUR_I===0 ? 'hidden' : 'visible';
+  document.getElementById('tour-next').textContent = (TOUR_I===TOUR_STEPS.length-1) ? 'Concluir' : 'Próximo';
+  document.getElementById('tour-dots').innerHTML = TOUR_STEPS.map(function(_,i){
+    return '<span style="width:7px;height:7px;border-radius:50%;background:'+(i===TOUR_I?'var(--navy,#0b1d33)':'rgba(0,0,0,.2)')+'"></span>';
+  }).join('');
+}
+function tourNav(d){
+  TOUR_I += d;
+  if (TOUR_I >= TOUR_STEPS.length) { tourFechar(true); return; }
+  if (TOUR_I < 0) TOUR_I = 0;
+  tourRender();
+}
+function tourFechar(marcar){
+  document.getElementById('tour-modal').style.display='none';
+  if (marcar) { try { localStorage.setItem(_tourKey_(), '1'); } catch(e){} }
+}
+</script>
 
 <!-- ───────── Seletor de Unidade (App Gestão) ───────── -->
 <div id="ug-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(8,18,33,.6);align-items:center;justify-content:center;padding:24px 16px" onclick="if(event.target===this)fecharTrocaUnidadeApp()">
@@ -4452,6 +4516,7 @@ function submeterCadastroUnidade(ev){
   ev.preventDefault();
   var nome=(document.getElementById('uc-nome').value||'').trim();
   var sigla=(document.getElementById('uc-sigla').value||'').trim();
+  var responsavel=(document.getElementById('uc-responsavel').value||'').trim();
   var email=(document.getElementById('uc-email').value||'').trim();
   var msg=document.getElementById('uc-msg');
   if(nome.length<3){ msg.style.color='#b02035'; msg.textContent='Informe o nome da unidade.'; return; }
@@ -4460,14 +4525,14 @@ function submeterCadastroUnidade(ev){
   google.script.run
     .withSuccessHandler(function(r){
       if(r&&r.ok){
-        msg.style.color='#1e7a45'; msg.textContent='Unidade criada! Selecione-a no topo e entre com sua matrícula.';
-        try{ localStorage.setItem('appsel_unidade', r.id); }catch(e){}
+        msg.style.color='#1e7a45';
+        msg.innerHTML='Unidade criada! Enviamos o <b>login</b> e a <b>senha temporária</b> para <b>'+email+'</b>. Verifique a caixa de entrada (e o spam).';
         if(typeof popularUnidadesLogin==='function') popularUnidadesLogin();
-        setTimeout(fecharCadastroUnidade, 1800);
+        setTimeout(fecharCadastroUnidade, 4000);
       } else { msg.style.color='#b02035'; msg.textContent='Erro: '+((r&&r.erro)||'falhou'); }
     })
     .withFailureHandler(function(e){ msg.style.color='#b02035'; msg.textContent='Erro: '+((e&&e.message)||e); })
-    .fs_criarUnidade({ nome:nome, sigla:sigla, email:email });
+    .fs_criarUnidade({ nome:nome, sigla:sigla, email:email, responsavel:responsavel });
 }
 function aplicarUnidadeLogin(id){ if(!id) return; try{ localStorage.setItem('appsel_unidade', id); }catch(e){} }
 // Popula o seletor de unidade na tela de LOGIN.
