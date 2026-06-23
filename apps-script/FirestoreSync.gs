@@ -359,7 +359,8 @@ function fs_excluirUnidade(params) {
   return _withAppLockResult_('excluir unidade (fs)', function() {
     try {
       params = params || {};
-      _authRequire_(params.authToken, true); // só chefe
+      var sess = _authRequire_(params.authToken, true);
+      if (!sess.isAdmin) throw new Error('Ação restrita ao administrador geral.'); // só admin global exclui unidades
       var uid = String(params.unidade || '').trim();
       if (!uid) throw new Error('Unidade não informada.');
       if (uid === 'reitoria-sel') throw new Error('A Reitoria não pode ser excluída.');

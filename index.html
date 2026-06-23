@@ -578,11 +578,11 @@
         <div class="cfg-row"><label>Dashboard público</label><span class="val" style="color:var(--blue);font-size:12px;">painel separado</span></div>
       </div>
     </div>
-    <div class="cfg-section">
+    <div class="cfg-section" id="cfg-excluir-section" hidden>
       <div class="cfg-head" style="color:#b02035">Excluir unidade</div>
       <div class="cfg-card">
         <div class="cfg-row cfg-row-col">
-          <div class="note">Apaga uma unidade e todos os seus dados (processos, etapas, equipe). <b>A Reitoria não pode ser excluída.</b></div>
+          <div class="note">Apaga uma unidade e todos os seus dados (processos, etapas, equipe). Restrito ao <b>administrador geral</b>. <b>A Reitoria não pode ser excluída.</b></div>
           <select id="cfg-excluir-unidade" class="field-input" style="width:100%"><option>Carregando…</option></select>
           <button class="btn-cfg" style="background:#b02035;color:#fff" onclick="excluirUnidadeApp()">🗑️ Excluir unidade selecionada</button>
           <div id="cfg-excluir-msg" style="font-size:12px;min-height:14px"></div>
@@ -1247,6 +1247,13 @@ function aplicarPerfilUI_() {
     var el = document.getElementById(id);
     if (el) el.hidden = !isChefe;
   });
+
+  // Excluir unidade é operação multiunidade: só o administrador geral vê/usa.
+  var elExcluir = document.getElementById('cfg-excluir-section');
+  if (elExcluir) {
+    elExcluir.hidden = !SESSAO_ADMIN;
+    if (SESSAO_ADMIN) popularExcluirUnidade();
+  }
 
   var tabAbertaRestrita = ['tab-fila', 'tab-historico', 'tab-config'].some(function(id) {
     var el = document.getElementById(id);
@@ -4614,6 +4621,7 @@ function salvarDadosUnidade_(){
 }
 // Excluir unidade (Configurações). Destrutivo — via Apps Script (fs_excluirUnidade).
 function popularExcluirUnidade(){
+  if(!SESSAO_ADMIN) return; // exclusão de unidade é restrita ao administrador geral
   var sel=document.getElementById('cfg-excluir-unidade'); if(!sel) return;
   if(!(window.AppselFirestore && window.AppselFirestore.listarUnidades)){ sel.innerHTML='<option value="">Indisponível</option>'; return; }
   window.AppselFirestore.listarUnidades().then(function(us){
@@ -4625,6 +4633,7 @@ function popularExcluirUnidade(){
 }
 function excluirUnidadeApp(){
   var sel=document.getElementById('cfg-excluir-unidade'), msg=document.getElementById('cfg-excluir-msg');
+  if(!SESSAO_ADMIN){ if(msg){ msg.style.color='#b02035'; msg.textContent='Ação restrita ao administrador geral.'; } return; }
   var id=sel.value; if(!id){ msg.style.color='#b02035'; msg.textContent='Selecione uma unidade.'; return; }
   if(id==='reitoria-sel'){ msg.style.color='#b02035'; msg.textContent='A Reitoria não pode ser excluída.'; return; }
   var nome=sel.options[sel.selectedIndex].text;
