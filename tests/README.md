@@ -32,5 +32,11 @@ npm test          # ou: node --test
 - Após a troca de fase, o responsável externo ativo vira o responsável corrente.
 - Fallback para o agente da etapa quando não há carga.
 
+### `prune-servidores.test.js` — poda de servidores fantasmas
+Spec da regra de `_fsPodarServidoresOrfaos_` (Apps Script): remove docs de
+servidores que saíram da lista, mantém os atuais e — **trava de segurança** —
+nunca apaga nada quando a lista atual está vazia (evita perda de dados quando a
+lista não carregou). É um espelho da regra do GS; mantenha em sincronia.
+
 ### `helpers.js`
 Builders dos dados simulados (cargas, etapas, processos, servidores).

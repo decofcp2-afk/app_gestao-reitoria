@@ -842,16 +842,32 @@ function fs_atribuirResponsaveisApp(params) {
 // continuava existindo na coleção `servidores` do Firestore e reaparecia como
 // "fantasma" na aba Capacidade (que lê essa coleção diretamente).
 function fs_espelharServidores_(limpa, emailsMap) {
-  var atuais = {};
+  var matriculas = [];
   (limpa || []).forEach(function(s){
     var mid = String(s.matricula || '').trim();
     if (!mid) return;
-    atuais[mid] = true;
+    matriculas.push(mid);
     _fsSet_('servidores/' + mid, { matricula: mid, nome: s.nome, cor: s.cor || '', chefe: !!s.isChefe });
     var email = (emailsMap || {})[s.nome] || '';
     _fsSet_('emails/' + mid, { matricula: mid, nome: s.nome, email: email });
   });
-  // Poda: apaga docs de servidores que não estão mais na lista atual.
+  _fsPodarServidoresOrfaos_(matriculas);
+}
+
+// Poda (best-effort) das coleções `servidores`/`emails` da unidade corrente os
+// docs cuja matrícula NÃO está em `matriculasAtuais` — impede que um servidor
+// excluído reapareça como fantasma na Capacidade (que lê `servidores` direto).
+//
+// SEGURANÇA: nunca poda quando a lista atual está vazia. Lista vazia em geral
+// significa "não carregou" (e não "zero servidores"); podar nesse caso apagaria
+// todos os servidores da unidade. Na dúvida, não apaga nada.
+function _fsPodarServidoresOrfaos_(matriculasAtuais) {
+  var atuais = {};
+  (matriculasAtuais || []).forEach(function(m){
+    var k = String(m || '').trim();
+    if (k) atuais[k] = true;
+  });
+  if (!Object.keys(atuais).length) return; // trava de segurança
   ['servidores', 'emails'].forEach(function(col){
     var ids;
     try { ids = _fsIdsDaColecao_(col); } catch (e) { return; } // best-effort
