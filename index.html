@@ -2,6 +2,33 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <!-- ════════════════════════════════════════════════════════════════════
+       Fase 0 do PLANO_SEGURANCA.md — Content-Security-Policy.
+       Restringe de onde scripts/estilos/conexões podem vir, mitigando XSS e
+       injeção de recursos externos. 'unsafe-inline' permanece porque a UI
+       ainda usa handlers inline (onclick=) e <style> inline; será removido na
+       Fase 3 (migração para addEventListener). As origens abaixo cobrem o uso
+       atual: gstatic/jsdelivr (libs), script.google(usercontent) (Apps Script
+       + JSONP/redirect) e *.googleapis (Firestore).
+       NOTA: hospedado em GitHub Pages (estático), então CSP só via <meta> —
+       report-only não é suportado por meta. VERIFICAR EM NAVEGADOR antes de
+       tirar o PR de draft.
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://script.google.com https://script.googleusercontent.com;
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob:;
+    font-src 'self' data:;
+    connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleapis.com https://*.firebaseio.com;
+    frame-src 'self';
+    base-uri 'self';
+    object-src 'none';
+    form-action 'self' https://script.google.com;
+    manifest-src 'self';
+    worker-src 'self';
+  ">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#1a3a5c">
   <meta name="application-name" content="AppSEL">
