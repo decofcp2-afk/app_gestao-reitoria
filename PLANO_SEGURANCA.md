@@ -48,21 +48,34 @@ fronteiras claras, substituindo as chamadas dispersas.
 ### Fase 1 — Camada de Acesso a Dados (`data-gateway.js`)
 Único módulo autorizado a falar com o backend.
 
-**Estado em 2026-06-23:** a Fase 1 já está **majoritariamente atendida**, porém
+**Estado em 2026-06-23:** a Fase 1 está **quase concluída**. O gateway funciona
 **inline** no `index.html` (bloco IIFE `callApi`/`invoke`/`makeRunner`, ~linhas
-776–1015) em vez de em um módulo separado. A leitura já está isolada em
-`appsel-firestore.js` (`AppselFirestore.carregar*`). Falta apenas a **extração**
-para arquivo próprio (auditabilidade) e o **token automático**.
+776–1015); a leitura está isolada em `appsel-firestore.js`
+(`AppselFirestore.carregar*`); o **token já é anexado automaticamente** (ver
+abaixo, ATIVO em produção via Apps Script v61). Falta apenas a **extração** para
+arquivo próprio (auditabilidade) e a **limpeza dos call sites** que ainda mandam
+o token posicional (opcional — hoje é redundante, não obrigatório).
 
 - [x] `api.read(route, params)` — leitura encapsulada em `AppselFirestore` (Firestore) com fallback ao Apps Script; o despacho leitura×escrita vive em `invoke()`.
 - [x] `api.write(route, params)` — sempre via Apps Script (`callApi('appsel.call', …)`).
 - [x] Centraliza timeout, retry e tratamento de erro padronizado (✅ `callApi`: timeout + fallback JSONP + `asError`) **e anexa o token de sessão automaticamente** (2026-06-23): `callApi` adiciona `token` no topo da requisição (como a `unidade`); o `Code.gs` (v61) usa `_AUTH_TOKEN_REQ` como fallback em `_authGetSession_` quando a função não recebe o token posicional. **Verificado ao vivo** (write de status de etapa via fallback retornou `ok:true`, sem token posicional). Mudança aditiva: os ~38 call sites que ainda passam o token posicional seguem válidos.
 - [~] Telas já chamam o backend **apenas** via `invoke`/`makeRunner` (emula `google.script.run`), mas o gateway ainda **não é módulo separado** — continua embutido no `index.html`. **Pendente:** extrair para `data-gateway.js`.
 
-**Próximos passos (ordem segura — apurada pelo [INVENTARIO_CHAMADAS.md](INVENTARIO_CHAMADAS.md)):**
-1. **Padronizar o token** em todos os ~40 pontos de chamada para o estilo nomeado `authToken` (hoje há posicional com posição variável — `resetarSenhaServidorApp`/`trocarSenhaApp` no 1º arg, outros no 2º/3º). Ajustar as assinaturas correspondentes no `Code.gs`. **Mudança de produção com risco de auth → branch + teste de login e de uma escrita de cada estilo antes de mergear.**
-2. Só então **anexar o token automaticamente** em `callApi` (um único lugar), removendo-o dos pontos de chamada.
-3. **Extrair** o bloco inline (`callApi`/`invoke`/`makeRunner`) para `data-gateway.js`, espelhando o que `appsel-firestore.js` fez pela leitura.
+**Token automático — CONCLUÍDO (2026-06-23).** Em vez de padronizar os ~40 call
+sites (arriscado), foi usada uma abordagem **aditiva e retrocompatível**:
+`callApi` anexa `token` no topo da requisição (como a `unidade`) e o `Code.gs`
+(`doGet` → `_AUTH_TOKEN_REQ` → fallback em `_authGetSession_`) o usa quando a
+função não recebe o token posicional. Deployado como **Apps Script v61** (mesma
+URL `/exec`) e verificado ao vivo. Os call sites antigos seguem válidos.
+
+**Próximos passos (opcionais, na ordem):**
+1. **Limpar os ~38 call sites** que ainda mandam o token posicional, agora que é
+   redundante. Cada remoção é independente e segura (o servidor já faz fallback).
+   Cuidado com os de token no **1º arg** (`resetarSenhaServidorApp`,
+   `trocarSenhaApp`): remover desloca os demais — passar `null` na 1ª posição.
+2. **Extrair** o bloco inline (`callApi`/`invoke`/`makeRunner`) para
+   `data-gateway.js`, espelhando o que `appsel-firestore.js` fez pela leitura e o
+   que o painel já fez (ver repo do painel).
 
 ### Fase 2 — Camada de Autenticação/Sessão (`auth.js` + endurecimento no `Code.gs`)
 - [ ] Cliente: guardião de sessão (armazenamento, expiração, renovação, logout automático em 401).
