@@ -831,17 +831,43 @@ function fs_atribuirResponsaveisApp(params) {
   });
 }
 
-// Espelho aditivo de servidores/emails no Firestore (chamado dentro de
+// Espelho de servidores/emails no Firestore (chamado dentro de
 // salvarServidoresApp, no corte). Auth/senhas continuam nas Script Properties.
 // limpa: [{nome,matricula,cor,isChefe}]; emailsMap: {nome: email}.
+//
+// IMPORTANTE: não é mais apenas aditivo. Além de gravar os servidores da lista
+// atual, REMOVE das coleções `servidores`/`emails` os documentos cuja matrícula
+// não está mais na lista. Sem essa poda, um servidor excluído na aba Config
+// continuava existindo na coleção `servidores` do Firestore e reaparecia como
+// "fantasma" na aba Capacidade (que lê essa coleção diretamente).
 function fs_espelharServidores_(limpa, emailsMap) {
+  var atuais = {};
   (limpa || []).forEach(function(s){
     var mid = String(s.matricula || '').trim();
     if (!mid) return;
+    atuais[mid] = true;
     _fsSet_('servidores/' + mid, { matricula: mid, nome: s.nome, cor: s.cor || '', chefe: !!s.isChefe });
     var email = (emailsMap || {})[s.nome] || '';
     _fsSet_('emails/' + mid, { matricula: mid, nome: s.nome, email: email });
   });
+  // Poda: apaga docs de servidores que não estão mais na lista atual.
+  ['servidores', 'emails'].forEach(function(col){
+    var ids;
+    try { ids = _fsIdsDaColecao_(col); } catch (e) { return; } // best-effort
+    ids.forEach(function(id){
+      if (!atuais[id]) {
+        try { _fsDelete_(col + '/' + id); } catch (e) {}
+      }
+    });
+  });
+}
+
+// Lista os ids (último segmento do path) de todos os docs de uma coleção da
+// unidade corrente. Usado pela poda de servidores removidos.
+function _fsIdsDaColecao_(col) {
+  return _fs_().query(col).Execute().map(function(d){
+    return String(d.path || '').split('/').pop();
+  }).filter(function(id){ return !!id; });
 }
 
 // ════════════════════════════════════════════════════════════════════════

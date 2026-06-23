@@ -1,0 +1,9 @@
+{
+  "name": "app-gestao-reitoria",
+  "version": "1.0.0",
+  "description": "Sistema interno da Reitoria (SEL/SEPMA) — testes de capacidade, troca de fase e consistência de servidores.",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
