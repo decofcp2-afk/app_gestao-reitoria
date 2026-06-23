@@ -1608,12 +1608,16 @@ function abrirTrocaSenhaObrigatoria_() {
         .withSuccessHandler(function(res) {
           if (res && res.ok) {
             toast('Senha alterada.', 'ok');
+            // Primeiro acesso de usuário novo passa por aqui (mustChange=true no
+            // login). Agendamos o tour ANTES das cargas (uma exceção nelas não
+            // pode bloquear o onboarding) e adiamos um tick: abrir o modal no
+            // mesmo ciclo do fechamento do diálogo de senha fazia o tour só
+            // aparecer após um reload.
+            setTimeout(function(){
+              try { if (window.maybeIniciarTour_) window.maybeIniciarTour_(); } catch(e) {}
+            }, 300);
             carregarDados();
             preCarregarCapacidade_();
-            // Primeiro acesso de usuário novo passa por aqui (mustChange=true no
-            // login), então o tour precisa ser disparado também neste caminho —
-            // o login normal já o faz no ramo else de mustChange.
-            try { if (window.maybeIniciarTour_) window.maybeIniciarTour_(); } catch(e) {}
           }
           else { toast('Erro: ' + (res && res.erro ? res.erro : 'Não foi possível trocar a senha.'), 'err'); abrirTrocaSenhaObrigatoria_(); }
         })
