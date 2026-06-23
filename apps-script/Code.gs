@@ -3731,7 +3731,18 @@ function _getServidoresApp_() {
 // lista: [{nome, cor, isChefe}] — e-mails são mantidos separadamente.
 function getServidoresApp(authToken) {
   _authRequire_(authToken, false);
-  return _getServidoresApp_();
+  var lista = _getServidoresApp_();
+  // Poda fantasmas no Firestore ao carregar (best-effort): remove docs de
+  // servidores já excluídos para que a Capacidade não os exiba, mesmo sem um
+  // novo "salvar equipe". Escopado à unidade do request (mesma de _servKey_).
+  // Não bloqueia o retorno em caso de erro.
+  try {
+    if (typeof _fsPodarServidoresOrfaos_ === 'function'
+        && PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID')) {
+      _fsPodarServidoresOrfaos_(lista.map(function(s){ return s.matricula; }));
+    }
+  } catch (e) {}
+  return lista;
 }
 
 function salvarServidoresApp(lista, authToken) {
