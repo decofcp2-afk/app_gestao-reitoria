@@ -1188,6 +1188,7 @@ function abrirDialogo_(opts, cb) {
     if (opts.tipo && tag === 'input') inp.type = opts.tipo;
     if (opts.placeholder) inp.placeholder = opts.placeholder;
     if (opts.textarea) inp.style.minHeight = '110px';
+    if (opts.tipo === 'password') _addPwToggle_(inp);
     wrap.hidden = false;
     setTimeout(function(){ inp.focus(); if (inp.select) inp.select(); }, 80);
   } else {
@@ -1212,6 +1213,34 @@ function dialogoConfirmar_(titulo, mensagem, cb, okTxt) {
 function dialogoCampo_(opts, cb) {
   opts.campo = true;
   abrirDialogo_(opts, function(ok, valor){ if (ok) cb(String(valor || '').trim()); });
+}
+
+// Adiciona um botão de "ver senha" (olho) a um <input type="password">.
+// Idempotente: ignora se já aplicado ao elemento.
+function _addPwToggle_(input) {
+  if (!input || input.dataset.pwToggle) return;
+  input.dataset.pwToggle = '1';
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;display:block;width:100%';
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  input.style.paddingRight = '42px';
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.tabIndex = -1;
+  btn.setAttribute('aria-label', 'Mostrar senha');
+  btn.textContent = '👁';
+  btn.style.cssText = 'position:absolute;right:8px;top:50%;transform:translateY(-50%);'
+    + 'background:none;border:none;cursor:pointer;font-size:17px;line-height:1;opacity:.6;padding:4px';
+  btn.onclick = function(e) {
+    e.preventDefault();
+    var mostrar = input.type === 'password';
+    input.type = mostrar ? 'text' : 'password';
+    btn.textContent = mostrar ? '🙈' : '👁';
+    btn.setAttribute('aria-label', mostrar ? 'Ocultar senha' : 'Mostrar senha');
+    try { input.focus(); } catch (_) {}
+  };
+  wrap.appendChild(btn);
 }
 
 function isChefeAtual_() {
@@ -4429,6 +4458,9 @@ function editarEmail_(btn) {
 window.addEventListener('online', atualizarEstadoConexao_);
 window.addEventListener('offline', atualizarEstadoConexao_);
 setTimeout(atualizarEstadoConexao_, 300);
+
+// Botão de "ver senha" no campo de login.
+try { _addPwToggle_(document.getElementById('login-senha')); } catch (e) {}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
