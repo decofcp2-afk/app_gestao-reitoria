@@ -2119,7 +2119,11 @@ function renderEtapas(filtrado) {
 
   // Detecta processos com etapas atrasadas/paralisadas/aguardando OU com prazos vencidos na data
   function temPrazoVencido(p) {
-    if (p.status === 'ok' || isRetornoFila_(p)) return false;
+    // Mesma regra do envio automático (enviarAvisosPrazo) e da lista de cards:
+    // concluídos, devolvidos à fila e em planejamento ("a iniciar") não contam.
+    // Sem excluir planejamento, o banner contava uma "vencida" que não tem card
+    // na aba Etapas (processo em planejamento vive só na Fila).
+    if (p.status === 'ok' || p.status === 'planejamento' || isRetornoFila_(p)) return false;
     return p.etapas.some(function(et) {
       if (et.status === 'na' || et.status === 'ok' || et.retornoFila) return false;
       // Mesma regra do envio automático: prazo final da etapa já passou.
