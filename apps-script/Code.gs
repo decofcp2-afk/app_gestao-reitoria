@@ -1888,6 +1888,70 @@ function _avisosPodeEnviarHoje_(data) {
   return dow !== 0 && dow !== 6;
 }
 
+// ── Estado "aviso já enviado" (deduplicação) ──────────────────────────────
+// Estratégia conservadora de envio: cada etapa gera no MÁXIMO 1 e-mail de
+// "prazo próximo" e 1 de "vencido" na sua vida — e não um por dia útil como
+// antes. O estado é escopado por unidade (via _FS_UNIDADE_REQ): vai para o
+// Firestore quando FS_ATIVO='true', senão para uma aba oculta da planilha.
+// A chave inclui o fim_iso da etapa: se o prazo for remarcado, um novo aviso
+// volta a ser permitido.
+var ABA_AVISOS    = '__avisos_enviados'; // aba oculta, append-only (last-wins na leitura)
+var FS_COL_AVISOS = 'avisosEnviados';    // coleção Firestore por unidade
+
+function _avisoUsaFirestore_() {
+  return typeof _fsServerAtivo_ === 'function' && _fsServerAtivo_();
+}
+
+// Chave estável da etapa: unidade | processo | índice da etapa | tipo.
+// Usa o índice (e não o nome) para tolerar etapas com nomes repetidos.
+function _chaveAvisoEtapa_(p, etIdx, tipo) {
+  return _reqUni_() + '|' + String(p.id) + '|' + etIdx + '|' + tipo;
+}
+
+// Carrega o estado da unidade atual: { chave -> fim_iso já notificado }.
+function _avisosCarregarEstado_() {
+  var mapa = {};
+  try {
+    if (_avisoUsaFirestore_()) {
+      _fs_().query(FS_COL_AVISOS).Execute().forEach(function(d) {
+        var o = d.obj || {};
+        if (o.chave) mapa[o.chave] = String(o.fimIso || '');
+      });
+    } else {
+      var sh = _ss_().getSheetByName(ABA_AVISOS);
+      if (sh && sh.getLastRow() > 1) {
+        sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function(r) {
+          var chave = String(r[0] || '');
+          if (chave) mapa[chave] = String(r[1] || ''); // last-wins
+        });
+      }
+    }
+  } catch (e) {}
+  return mapa;
+}
+
+// Marca a etapa/tipo como já avisada para o fim_iso informado.
+function _avisoMarcar_(chave, fimIso) {
+  try {
+    if (_avisoUsaFirestore_()) {
+      var docId = String(chave).replace(/[^A-Za-z0-9_-]/g, '_');
+      _fsSet_(FS_COL_AVISOS + '/' + docId, {
+        chave: String(chave), fimIso: String(fimIso || ''), enviadoEm: new Date()
+      });
+    } else {
+      var ss = _ss_();
+      var sh = ss.getSheetByName(ABA_AVISOS);
+      if (!sh) {
+        sh = ss.insertSheet(ABA_AVISOS);
+        sh.getRange(1, 1, 1, 3).setValues([['Chave', 'FimIso', 'EnviadoEm']]);
+        sh.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#E8F0FE');
+        sh.hideSheet();
+      }
+      sh.appendRow([String(chave), String(fimIso || ''), new Date()]);
+    }
+  } catch (e) {}
+}
+
 function enviarAvisosPrazo(modo) {
   modo = String(modo || 'todos').toLowerCase();
   var enviarProximos = modo === 'todos' || modo === 'proximos';
@@ -2003,19 +2067,31 @@ function enviarAvisosPrazo(modo) {
     // até a etapa ser efetivamente concluída.
     if (p.status === 'ok' || p.status === 'planejamento' || p.retornoFila) return;
 
-    p.etapas.forEach(function(et) {
+    p.etapas.forEach(function(et, etIdx) {
       if (et.status === 'ok' || et.status === 'na' || et.retornoFila || !et.fim_iso) return;
       var fim  = new Date(et.fim_iso + 'T00:00:00');
       var diff = _contDU_(hoje, fim); // positivo = dias até vencer; negativo = já venceu
       var aguardaReq = p.status === 'aguardando' || et.status === 'aguardando';
 
       if (diff >= 0 && diff <= DIAS_AVISO) {
-        avisosProximos.push({ p: p, et: et, dias: diff, aguardandoReq: aguardaReq });
+        avisosProximos.push({ p: p, et: et, etIdx: etIdx, dias: diff, aguardandoReq: aguardaReq });
       } else if (diff < 0) {
-        avisosVencidos.push({ p: p, et: et, diasAtraso: -diff, aguardandoReq: aguardaReq });
+        avisosVencidos.push({ p: p, et: et, etIdx: etIdx, diasAtraso: -diff, aguardandoReq: aguardaReq });
       }
     });
   });
+
+  // Deduplicação: remove avisos cuja etapa já foi notificada para este fim_iso
+  // (com o tipo correspondente). Garante 1 e-mail de "próximo" + 1 de "vencido"
+  // por etapa, em vez de reenvio diário. Se o prazo mudou, o fim_iso difere e o
+  // aviso volta a ser permitido.
+  var jaEnviado = _avisosCarregarEstado_();
+  function _naoAvisado_(av, tipo) {
+    var ch = _chaveAvisoEtapa_(av.p, av.etIdx, tipo);
+    return jaEnviado[ch] !== String(av.et.fim_iso || '');
+  }
+  avisosProximos = avisosProximos.filter(function(av) { return _naoAvisado_(av, 'proximo'); });
+  avisosVencidos = avisosVencidos.filter(function(av) { return _naoAvisado_(av, 'vencido'); });
 
   var total = (enviarProximos ? avisosProximos.length : 0) + (enviarVencidos ? avisosVencidos.length : 0);
   if (!total) return 'Nenhum aviso para enviar hoje.';
@@ -2133,6 +2209,7 @@ function enviarAvisosPrazo(modo) {
 
   // ── Processa um PROCESSO com todas as suas etapas de um tipo ───────────
   function processarProcesso(p, avisos, tipo) {
+    var sentLocal = 0; // e-mails enviados nesta chamada (para confirmar a marcação)
     var procRefTexto = processoRefTexto_(p);
     var prefixoAssunto = tipo === 'vencido' ? '⚠️ Etapas vencidas' : '⏰ Prazos próximos';
 
@@ -2154,7 +2231,7 @@ function enviarAvisosPrazo(modo) {
     Object.keys(porServidor).forEach(function(nome) {
       var grp = porServidor[nome];
       var body = corpoProcesso_(p, grp.avisos, tipo);
-      if (enviar_(grp.email, prefixoAssunto + ': ' + procRefTexto + ' (' + grp.avisos.length + ' etapa' + (grp.avisos.length>1?'s':'') + ')', body)) enviados++;
+      if (enviar_(grp.email, prefixoAssunto + ': ' + procRefTexto + ' (' + grp.avisos.length + ' etapa' + (grp.avisos.length>1?'s':'') + ')', body)) { enviados++; sentLocal++; }
     });
 
     // 2. E-mail para a chefia — inclui também as etapas aguardando requisitante,
@@ -2164,7 +2241,7 @@ function enviarAvisosPrazo(modo) {
       var bodyChef = corpoProcesso_(p, avisos, tipo);
       var assuntoChef = prefixoAssunto + ': ' + procRefTexto + ' (' + nChef + ' etapa' + (nChef>1?'s':'') + ')';
       chefiaEmails.forEach(function(emailChef) {
-        if (enviar_(emailChef, assuntoChef, bodyChef)) enviados++;
+        if (enviar_(emailChef, assuntoChef, bodyChef)) { enviados++; sentLocal++; }
       });
     }
 
@@ -2173,8 +2250,9 @@ function enviarAvisosPrazo(modo) {
     if (p.emailR && p.emailR.indexOf('@') > 0) {
       var nReq = avisos.length;
       var bodyReq = corpoProcesso_(p, avisos, tipo, null, true);
-      if (enviar_(p.emailR, prefixoAssunto + ' — ' + p.nome + ' (' + nReq + ' etapa' + (nReq>1?'s':'') + ')', bodyReq)) enviados++;
+      if (enviar_(p.emailR, prefixoAssunto + ' — ' + p.nome + ' (' + nReq + ' etapa' + (nReq>1?'s':'') + ')', bodyReq)) { enviados++; sentLocal++; }
     }
+    return sentLocal;
   }
 
   // Agrupa os avisos por processo (preservando ordem) e processa cada processo de uma vez.
@@ -2187,7 +2265,15 @@ function enviarAvisosPrazo(modo) {
       porProc[pid].avisos.push(av);
     });
     ordem.forEach(function(pid) {
-      processarProcesso(porProc[pid].p, porProc[pid].avisos, tipo);
+      var grupo = porProc[pid];
+      var enviadosProc = processarProcesso(grupo.p, grupo.avisos, tipo);
+      // Só marca como avisado se ao menos um e-mail do processo saiu — assim,
+      // falha de cota/configuração permite reenviar na próxima execução.
+      if (enviadosProc > 0) {
+        grupo.avisos.forEach(function(av) {
+          _avisoMarcar_(_chaveAvisoEtapa_(av.p, av.etIdx, tipo), av.et.fim_iso);
+        });
+      }
     });
   }
 

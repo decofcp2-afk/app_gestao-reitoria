@@ -98,6 +98,7 @@ Regras atuais:
 - O codigo tambem possui uma trava interna para nao enviar no sabado ou domingo.
 - Se existir acionador antigo em conta pessoal, ele deve ser excluido em `Apps Script > Acionadores`.
 - Processos devolvidos para a fila, suspensos/paralisados ou ainda em planejamento nao enviam aviso de atraso.
+- **Envio conservador (anti-cota):** cada etapa gera no maximo **um** e-mail de "prazo proximo" (na primeira varredura dentro da janela de `DIAS_AVISO`) e **um** de "vencido" (na primeira varredura apos vencer) — e nao mais um e-mail por dia util enquanto a pendencia existir. Isso evita estourar a cota diaria do `MailApp` (100/dia em conta pessoal `@gmail.com`; 1500/dia em conta Workspace). O estado de "ja avisado" e guardado por unidade: na colecao `avisosEnviados` do Firestore quando `FS_ATIVO='true'`, senao na aba oculta `__avisos_enviados` da planilha. Se o prazo da etapa for remarcado (muda o `fim_iso`), um novo aviso volta a ser permitido.
 
 ## Calendario de feriados oficiais
 
