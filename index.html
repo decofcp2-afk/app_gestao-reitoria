@@ -1059,7 +1059,13 @@ function metodoExigeOnline_(method) {
 }
 
 function offlineCacheKeyFor_(nome) {
-  return 'appselOfflineCache:' + encodeURIComponent(String(nome || '').trim() || 'anon');
+  // Inclui a unidade na chave: sem isso, o cache offline era compartilhado
+  // entre unidades para o mesmo usuário, fazendo dados de uma unidade (ex.:
+  // uma etapa vencida da reitoria) vazarem para outra unidade vazia.
+  var uni = '';
+  try { uni = localStorage.getItem('appsel_unidade') || ''; } catch (e) {}
+  return 'appselOfflineCache:' + encodeURIComponent(uni) + ':'
+    + encodeURIComponent(String(nome || '').trim() || 'anon');
 }
 
 function offlineFmtTs_(iso) {
