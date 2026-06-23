@@ -56,7 +56,7 @@ para arquivo próprio (auditabilidade) e o **token automático**.
 
 - [x] `api.read(route, params)` — leitura encapsulada em `AppselFirestore` (Firestore) com fallback ao Apps Script; o despacho leitura×escrita vive em `invoke()`.
 - [x] `api.write(route, params)` — sempre via Apps Script (`callApi('appsel.call', …)`).
-- [~] Centraliza timeout, retry e tratamento de erro padronizado (✅ `callApi`: timeout + fallback JSONP + `asError`). **Pendente:** anexar o token de sessão automaticamente — hoje `AUTH_TOKEN` ainda é passado manualmente nos `args` de cada chamada (a *unidade* já é anexada automaticamente em `callApi`).
+- [x] Centraliza timeout, retry e tratamento de erro padronizado (✅ `callApi`: timeout + fallback JSONP + `asError`) **e anexa o token de sessão automaticamente** (2026-06-23): `callApi` adiciona `token` no topo da requisição (como a `unidade`); o `Code.gs` (v61) usa `_AUTH_TOKEN_REQ` como fallback em `_authGetSession_` quando a função não recebe o token posicional. **Verificado ao vivo** (write de status de etapa via fallback retornou `ok:true`, sem token posicional). Mudança aditiva: os ~38 call sites que ainda passam o token posicional seguem válidos.
 - [~] Telas já chamam o backend **apenas** via `invoke`/`makeRunner` (emula `google.script.run`), mas o gateway ainda **não é módulo separado** — continua embutido no `index.html`. **Pendente:** extrair para `data-gateway.js`.
 
 **Próximos passos (ordem segura — apurada pelo [INVENTARIO_CHAMADAS.md](INVENTARIO_CHAMADAS.md)):**
