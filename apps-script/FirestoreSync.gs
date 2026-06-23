@@ -127,7 +127,6 @@ function _fsReq_(method, url, payload) {
     var code = resp.getResponseCode();
     var txt = resp.getContentText();
     if (code < 300) return txt ? JSON.parse(txt) : {};
-    // 429 (RESOURCE_EXHAUSTED) / 503: throttling transitorio -> repete com backoff (ate 3x).
     if ((code === 429 || code === 503) && tentativas < 3) {
       tentativas++;
       Utilities.sleep(400 * tentativas);
@@ -214,7 +213,7 @@ function _fsUpdate_(path, fields) { return _fs_().updateDocument(path, fields, t
 function _fsSet_(path, fields)    { return _fs_().updateDocument(path, fields); }          // sobrescreve
 function _fsCreate_(colecao, fields) { return _fs_().createDocument(colecao, fields); }    // id automático
 function _fsDelete_(path)         { return _fs_().deleteDocument(path); }
-// Não engole o erro: 404 vem como obj=null (getDocument); 429/403/5xx propagam.
+// Nao engole o erro: 404 vem como obj=null (getDocument); 429/403/5xx propagam.
 function _fsGet_(path)            { return _fs_().getDocument(path).obj || null; }
 
 function _fsQueryEq_(colecao, campo, valor) {
@@ -342,8 +341,6 @@ function fs_getDadosUnidade(params) {
     var uid = _fsUnidade_();
     var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
     var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
-    // Não mascara: 404 (unidade inexistente) vira doc=null; demais erros propagam
-    // para o catch externo e retornam ok:false com a mensagem real.
     var doc;
     try { doc = _fsReq_('get', projBase + '/unidades/' + uid); }
     catch (e) { if (e && e.httpCode === 404) doc = null; else throw e; }
@@ -822,16 +819,32 @@ function fs_atribuirResponsaveisApp(params) {
         throw new Error('Fase interna e fase externa precisam ter responsáveis diferentes em Pregão/Concorrência.');
       }
 
-      // 1) cargas: define servidor por fase
+      // 1) cargas: define servidor por fase. Se o processo NÃO tiver carga
+      // (ex.: criado por importação/seed que não semeou cargas), CRIA aqui —
+      // senão o processo nunca apareceria na aba Capacidade (que lê `cargas`).
+      var proc = _fsGet_('processos/' + pid) || {};
+      var objetoCarga = String(proc.objeto || '').trim();
+      var modalidadeCarga = String(proc.modalidade || params.modal || '').trim();
+      var servExtVal = ehPE ? servExt : (servExt || servInt || '');
       var cargas = _fsQueryEq_('cargas', 'processoId', pid);
       var foundInt = false, foundExt = false;
       cargas.forEach(function(c){
         var ext = String(c.obj.fase || '').toLowerCase().indexOf('ext') >= 0;
-        if (ext) { foundExt = true; _fsUpdate_(c.path, { servidor: ehPE ? servExt : (servExt || servInt || '') }); }
+        if (ext) { foundExt = true; _fsUpdate_(c.path, { servidor: servExtVal }); }
         else { foundInt = true; _fsUpdate_(c.path, { servidor: servInt || '' }); }
       });
-      if (servInt && !foundInt) avisos.push({ fase: 'Interna', msg: 'Processo não encontrado na Capacidade (fase interna).' });
-      if (ehPE && servExt && !foundExt) avisos.push({ fase: 'Externa', msg: 'Processo não encontrado na Capacidade (fase externa).' });
+      if (!foundInt) {
+        _fsSet_('cargas/' + pid + '_int_01', {
+          servidor: servInt || '', objeto: objetoCarga, processoId: pid,
+          ativo: false, modalidade: modalidadeCarga, fase: 'Fase Interna', p1: 0, p2: 0, p3: 0, total: 0
+        });
+      }
+      if (!foundExt) {
+        _fsSet_('cargas/' + pid + '_ext_01', {
+          servidor: servExtVal, objeto: objetoCarga, processoId: pid,
+          ativo: false, modalidade: modalidadeCarga, fase: 'Fase Externa', p1: 0, p2: 0, p3: 0, total: 0
+        });
+      }
 
       // 2) etapas: Agente Responsável por fase + ativa a fase corrente
       var etapas = _fsEtapasDoProc_(pid);
@@ -849,6 +862,85 @@ function fs_atribuirResponsaveisApp(params) {
       return { ok: true, avisos: avisos };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// MANUTENÇÃO (rodar manualmente no editor do Apps Script) — cria as cargas
+// faltantes de TODOS os processos de uma unidade. Útil para unidades populadas
+// por seed/importação que não semearam `cargas` (os processos não apareciam na
+// aba Capacidade). É IDEMPOTENTE: nunca duplica uma carga já existente, então
+// pode ser rodada quantas vezes quiser sem efeito colateral.
+//
+// COMO USAR: ajuste a constante UNIDADE_BACKFILL para o id (slug) da unidade
+// e rode `backfillCargasUnidade` no botão ▷ Executar. O resultado sai em Logs.
+// ════════════════════════════════════════════════════════════════════════
+var UNIDADE_BACKFILL = 'sao-cristovao-i'; // id (slug) da unidade-alvo do backfill
+
+function backfillCargasUnidade() {
+  var r = _fsBackfillCargas_(UNIDADE_BACKFILL);
+  Logger.log('── Backfill de cargas — unidade "' + UNIDADE_BACKFILL + '" ──');
+  Logger.log('Processos verificados ...... ' + r.processos);
+  Logger.log('Cargas internas criadas .... ' + r.intCriadas);
+  Logger.log('Cargas externas criadas .... ' + r.extCriadas);
+  Logger.log('Processos já completos ...... ' + r.jaOk);
+  Logger.log('Pronto. Reabra a aba Capacidade para conferir.');
+  return r;
+}
+
+function _fsBackfillCargas_(unidadeId) {
+  unidadeId = String(unidadeId || '').trim();
+  if (!unidadeId) throw new Error('Informe o id (slug) da unidade.');
+  _FS_UNIDADE_REQ = unidadeId; // escopa os helpers _fs* para esta unidade
+  try {
+    var out = { processos: 0, intCriadas: 0, extCriadas: 0, jaOk: 0 };
+    _fs_().query('processos').Execute().forEach(function(d){
+      var proc = d.obj || {};
+      var pid = String(proc.id || (d.path || '').split('/').pop() || '').trim();
+      if (!pid) return;
+      out.processos++;
+      var modalidade = String(proc.modalidade || '').trim();
+      var ehPE = _isModalidadeExtSegregada_(modalidade);
+      var objeto = String(proc.objeto || '').trim();
+
+      // Infere responsáveis e a fase corrente a partir das etapas (agente/status).
+      var servInt = '', servExt = '', faseAtual = '';
+      _fsEtapasDoProc_(pid).forEach(function(e){
+        var o = e.obj;
+        if (_isEtapaContratual_(o.fase, o.etapa)) return;
+        var ext = String(o.fase || '').toLowerCase().indexOf('ext') >= 0;
+        if (!ext && !servInt && o.agente) servInt = String(o.agente).trim();
+        if (ext && !servExt && o.agente) servExt = String(o.agente).trim();
+        var st = _normStatus_(o.status);
+        if (!faseAtual && st !== 'ok' && st !== 'na') faseAtual = ext ? 'externa' : 'interna';
+      });
+      var servExtVal = ehPE ? servExt : (servExt || servInt || '');
+
+      var hasInt = false, hasExt = false;
+      _fsQueryEq_('cargas', 'processoId', pid).forEach(function(c){
+        if (String(c.obj.fase || '').toLowerCase().indexOf('ext') >= 0) hasExt = true; else hasInt = true;
+      });
+
+      var fez = false;
+      if (!hasInt) {
+        _fsSet_('cargas/' + pid + '_int_01', {
+          servidor: servInt || '', objeto: objeto, processoId: pid,
+          ativo: (faseAtual === 'interna'), modalidade: modalidade, fase: 'Fase Interna', p1: 0, p2: 0, p3: 0, total: 0
+        });
+        out.intCriadas++; fez = true;
+      }
+      if (!hasExt) {
+        _fsSet_('cargas/' + pid + '_ext_01', {
+          servidor: servExtVal, objeto: objeto, processoId: pid,
+          ativo: (faseAtual === 'externa'), modalidade: modalidade, fase: 'Fase Externa', p1: 0, p2: 0, p3: 0, total: 0
+        });
+        out.extCriadas++; fez = true;
+      }
+      if (!fez) out.jaOk++;
+    });
+    return out;
+  } finally {
+    _FS_UNIDADE_REQ = ''; // restaura o escopo padrão (reitoria-sel/FS_UNIDADE)
+  }
 }
 
 // Espelho de servidores/emails no Firestore (chamado dentro de
