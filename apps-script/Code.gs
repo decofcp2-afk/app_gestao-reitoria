@@ -206,6 +206,11 @@ function _authCreateSession_(user) {
 }
 
 function _authGetSession_(token) {
+  // Fase 1 (data-gateway): se a função não recebeu o token posicional, usa o
+  // token anexado no topo da requisição pelo cliente (_AUTH_TOKEN_REQ).
+  if (!token && typeof _AUTH_TOKEN_REQ === 'string' && _AUTH_TOKEN_REQ) {
+    token = _AUTH_TOKEN_REQ;
+  }
   if (!token) throw new Error('Sessão expirada. Faça login novamente.');
   var props = PropertiesService.getScriptProperties();
   var raw = props.getProperty(_authSessionKey_(token));
@@ -813,12 +818,17 @@ function _lerAba_(sh, chave) {
 // API publica para o GitHub Pages. O Apps Script fica como back-end do AppSEL.
 // Unidade-alvo desta requisição (parte 2: escrita por unidade). Por-execução.
 var _FS_UNIDADE_REQ = '';
+// Token de sessão anexado no topo da requisição (Fase 1 data-gateway). Por-execução.
+var _AUTH_TOKEN_REQ = '';
 
 function doGet(e) {
   var params = (e && e.parameter) || {};
   var route = String(params.route || '').trim();
   // Escopo de unidade vindo do frontend (sanitizado). Vazio => fallback p/ FS_UNIDADE.
   _FS_UNIDADE_REQ = String(params.unidade || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  // Fase 1 (data-gateway): token de sessão anexado no topo da requisição pelo
+  // cliente. Serve de fallback quando a função não recebe o token posicional.
+  _AUTH_TOKEN_REQ = String(params.token || '').trim();
 
   try {
     var payload;

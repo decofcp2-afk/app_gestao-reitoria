@@ -872,6 +872,16 @@
           ? window.AppselFirestore.unidadeAtual() : '';
       } catch (e) {}
     }
+    // Fase 1 (data-gateway): anexa o token de sessão automaticamente, do mesmo
+    // modo que a unidade. O servidor usa isto como fallback quando a função não
+    // recebe o token posicional (ver _authGetSession_ no Code.gs). Não sobrepõe
+    // um token já informado (ex.: appsel.changePasswordHash).
+    if (params && !params.token) {
+      try {
+        var _tk = (window.AUTH_TOKEN || '');
+        if (_tk) params.token = _tk;
+      } catch (e) {}
+    }
     if (!apiUrl) {
       failure(new Error('Configure a URL do Apps Script em config.js antes de usar o AppSEL.'));
       return;
@@ -2676,7 +2686,7 @@ function editarEmailProcAtivo_() {
         } else { toast('Erro: ' + (res.erro || ''), 'err'); }
       })
       .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), 'err'); })
-      .salvarEmailProcesso(p.id, novo, AUTH_TOKEN);
+      .salvarEmailProcesso(p.id, novo); // token anexado automaticamente pelo gateway (Fase 1)
   });
 }
 
@@ -4229,7 +4239,7 @@ function editarEmailProcesso_(btn) {
         } else { toast('Erro: ' + (res.erro || ''), 'err'); }
       })
       .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), 'err'); })
-      .salvarEmailProcesso(r.pid, novo, AUTH_TOKEN);
+      .salvarEmailProcesso(r.pid, novo); // token anexado automaticamente pelo gateway (Fase 1)
   });
 }
 
