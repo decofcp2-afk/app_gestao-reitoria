@@ -121,11 +121,22 @@ function _fsListarUnidadesAtivas_() {
 function _fsReq_(method, url, payload) {
   var opt = { method: method, headers: { Authorization: 'Bearer ' + _fsToken_() }, muteHttpExceptions: true, contentType: 'application/json' };
   if (payload) opt.payload = JSON.stringify(payload);
-  var resp = UrlFetchApp.fetch(url, opt);
-  var code = resp.getResponseCode();
-  var txt = resp.getContentText();
-  if (code >= 300) throw new Error('Firestore HTTP ' + code + ': ' + txt);
-  return txt ? JSON.parse(txt) : {};
+  var tentativas = 0;
+  while (true) {
+    var resp = UrlFetchApp.fetch(url, opt);
+    var code = resp.getResponseCode();
+    var txt = resp.getContentText();
+    if (code < 300) return txt ? JSON.parse(txt) : {};
+    // 429 (RESOURCE_EXHAUSTED) / 503: throttling transitorio -> repete com backoff (ate 3x).
+    if ((code === 429 || code === 503) && tentativas < 3) {
+      tentativas++;
+      Utilities.sleep(400 * tentativas);
+      continue;
+    }
+    var err = new Error('Firestore HTTP ' + code + ': ' + txt);
+    err.httpCode = code;
+    throw err;
+  }
 }
 
 function _fsToVal_(v) {
@@ -161,7 +172,10 @@ function _fs_() {
   return {
     getDocument: function (path) {
       try { var d = _fsReq_('get', base + '/' + path); return { obj: _fsDocToObj_(d), path: d.name }; }
-      catch (e) { return { obj: null, path: null }; } // 404 = não existe
+      catch (e) {
+        if (e && e.httpCode === 404) return { obj: null, path: null }; // 404 = não existe
+        throw e; // 429/403/5xx: propaga em vez de virar "não encontrado"
+      }
     },
     updateDocument: function (path, fields, merge) {
       var url = base + '/' + path;
@@ -200,7 +214,8 @@ function _fsUpdate_(path, fields) { return _fs_().updateDocument(path, fields, t
 function _fsSet_(path, fields)    { return _fs_().updateDocument(path, fields); }          // sobrescreve
 function _fsCreate_(colecao, fields) { return _fs_().createDocument(colecao, fields); }    // id automático
 function _fsDelete_(path)         { return _fs_().deleteDocument(path); }
-function _fsGet_(path)            { try { return _fs_().getDocument(path).obj || null; } catch(e) { return null; } }
+// Não engole o erro: 404 vem como obj=null (getDocument); 429/403/5xx propagam.
+function _fsGet_(path)            { return _fs_().getDocument(path).obj || null; }
 
 function _fsQueryEq_(colecao, campo, valor) {
   var pref = 'unidades/' + _fsUnidade_() + '/';
@@ -327,7 +342,11 @@ function fs_getDadosUnidade(params) {
     var uid = _fsUnidade_();
     var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
     var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
-    var doc; try { doc = _fsReq_('get', projBase + '/unidades/' + uid); } catch (e) { doc = null; }
+    // Não mascara: 404 (unidade inexistente) vira doc=null; demais erros propagam
+    // para o catch externo e retornam ok:false com a mensagem real.
+    var doc;
+    try { doc = _fsReq_('get', projBase + '/unidades/' + uid); }
+    catch (e) { if (e && e.httpCode === 404) doc = null; else throw e; }
     var o = (doc && doc.fields) ? _fsDocToObj_(doc) : {};
     return { ok: true, id: uid, nome: o.nome || '', sigla: o.sigla || '',
       emailInstitucional: o.emailInstitucional || '', endereco: o.endereco || '' };

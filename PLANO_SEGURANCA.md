@@ -25,6 +25,11 @@ Aplicável a **app_gestao-reitoria** e, em paralelo, ao **painel-contratacoes-re
 acesso a dados, autenticação, validação e renderização** em módulos com
 fronteiras claras, substituindo as chamadas dispersas.
 
+> **Incidente aberto (2026-06-23):** leituras server-side do Firestore (API REST)
+> falhando com `RESOURCE_EXHAUSTED`, mascaradas como "Processo não encontrado".
+> Diagnóstico, correções de mascaramento já aplicadas e a ação pendente de
+> quota/billing estão em [INCIDENTE_FIRESTORE_REST.md](INCIDENTE_FIRESTORE_REST.md).
+
 ---
 
 ## 2. Princípios
