@@ -113,6 +113,8 @@
     .app-header-title { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .app-header-sub { font-size: 11px; opacity: .65; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .hdr-unidade-tag { background: rgba(255,255,255,.16); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+    .hdr-unidade-tag[hidden] { display: none; }
     .offline-banner { display: flex; align-items: center; gap: 8px; flex-shrink: 0; background: #fffbeb; border-bottom: 1px solid #fde68a; color: #92400e; padding: 8px 12px; font-size: 12px; line-height: 1.35; }
     .offline-banner[hidden] { display: none; }
     .offline-banner b { font-size: 12px; }
@@ -481,6 +483,7 @@
         <div class="app-header-title">Setor de Licitações · Gestão de Etapas</div>
         <div class="app-header-sub">Colégio Pedro II</div>
       </div>
+      <span class="hdr-unidade-tag" id="hdr-unidade" hidden title="Unidade exibida em tela"></span>
     </div>
     <div class="header-actions">
       <button class="notif-bell" id="notif-bell" onclick="toggleNotif_()" aria-label="Central de notificações" title="Central de notificações">
@@ -1181,6 +1184,7 @@ function aplicarCacheOffline_(cache, detalhe) {
   document.getElementById('app').hidden = false;
   document.getElementById('hdr-nome').textContent = SERVIDOR;
   document.getElementById('cfg-nome').textContent = SERVIDOR;
+  rotularUnidadeApp_();
   aplicarFiltroInicialUsuario_();
   renderPillsServ_();
   aplicarPerfilUI_();
@@ -1604,6 +1608,7 @@ function aplicarSessao_(sess) {
   document.getElementById('app').hidden = false;
   document.getElementById('hdr-nome').textContent = SERVIDOR;
   document.getElementById('cfg-nome').textContent = SERVIDOR;
+  rotularUnidadeApp_();
   if (sess.servidores && sess.servidores.length) {
     localStorage.setItem('selServidores', JSON.stringify(sess.servidores));
     aplicarServidores_(sess.servidores);
@@ -4644,6 +4649,20 @@ function aplicarUnidadeApp(id){
   if(!id) return;
   try{ localStorage.setItem('appsel_unidade', id); }catch(e){}
   location.reload();
+}
+// Mostra a unidade atual como tag no cabeçalho, com o nome cadastrado
+// (ex.: "Reitoria - SEL", "SCI - SEL/SEPMA"). Silencioso se indisponível.
+function rotularUnidadeApp_(){
+  var el = document.getElementById('hdr-unidade'); if(!el) return;
+  if(!(window.AppselFirestore && window.AppselFirestore.listarUnidades && window.AppselFirestore.unidadeAtual)) return;
+  var atual = window.AppselFirestore.unidadeAtual();
+  window.AppselFirestore.listarUnidades().then(function(us){
+    var u = (us||[]).filter(function(x){ return x.id===atual; })[0];
+    var nome = u ? (u.nome || atual) : atual;
+    if(!nome) return;
+    el.textContent = '🏛️ ' + nome;
+    el.hidden = false;
+  }).catch(function(){});
 }
 function fecharTrocaUnidadeApp(){ document.getElementById('ug-modal').style.display='none'; }
 function abrirCadastroUnidade(){ var m=document.getElementById('uc-modal'); if(m){ m.style.display='flex'; var msg=document.getElementById('uc-msg'); if(msg) msg.textContent=''; } }
