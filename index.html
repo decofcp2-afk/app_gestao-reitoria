@@ -1404,7 +1404,7 @@ function renderPillsServ_() {
   var h = '<button class="fpill'+(F_SERV===''?' active':'')+'" onclick="setFServ(this,\'\')">Todos</button>';
   SERV_DATA.forEach(function(s) {
     var p = PALETA_CORES.find(function(p){ return p.cor === s.cor; }) || PALETA_CORES[7];
-    h += '<button class="fpill'+(F_SERV===s.nome?' active':'')+'" onclick="setFServ(this,\''+s.nome+'\')" style="'+(F_SERV===s.nome?'':'color:'+p.txt+';border-color:'+p.bg+';background:'+p.bg)+'">' + s.nome + '</button>';
+    h += '<button class="fpill'+(F_SERV===s.nome?' active':'')+'" onclick="setFServ(this,\''+escJsAttr(s.nome)+'\')" style="'+(F_SERV===s.nome?'':'color:'+p.txt+';border-color:'+p.bg+';background:'+p.bg)+'">' + esc(s.nome) + '</button>';
   });
   cont.innerHTML = h;
 }
@@ -1458,7 +1458,7 @@ function renderEquipeConfig_() {
     var p = PALETA_CORES.find(function(p){ return p.cor === s.cor; }) || PALETA_CORES[7];
     h += '<div class="cfg-row" style="gap:10px;">'
       + '<div style="display:flex;align-items:center;gap:8px;flex:1;">'
-      + '<span class="avatar" style="background:'+s.cor+';width:30px;height:30px;font-size:12px;">'+s.nome.substring(0,2).toUpperCase()+'</span>'
+      + '<span class="avatar" style="background:'+s.cor+';width:30px;height:30px;font-size:12px;">'+esc(s.nome.substring(0,2).toUpperCase())+'</span>'
       + '<div><div style="font-size:13px;font-weight:600;">'+esc(s.nome)+'</div>'
       + '<div style="font-size:11px;color:var(--muted);">'+(s.isChefe?'🔑 Chefe':'Servidor')+' · matrícula '+esc(s.matricula||'')+'</div></div></div>'
       + (isChefe
@@ -3733,6 +3733,13 @@ function executarAvisosAgora() {
 // ══════════════════════════════════════════════════════════════════════
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Escapa um valor para uso seguro DENTRO de uma string JS entre aspas simples
+// que está dentro de um atributo HTML entre aspas duplas (ex.: onclick="f('VAL')").
+// Neutraliza a aspa simples (fecha a string JS) e barra invertida, e aplica esc()
+// para o contexto do atributo (que esc não cobre p/ aspas simples sozinho).
+function escJsAttr(s) {
+  return esc(String(s||'').replace(/\\/g,'\\\\').replace(/'/g,'\\u0027'));
 }
 
 function pad(n) { return String(n).padStart(2,'0'); }

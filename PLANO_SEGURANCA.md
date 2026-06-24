@@ -104,13 +104,14 @@ aspas simples `'`). São ~70 `innerHTML`. Auditoria parcial feita; corrigidos os
 - [x] Seletores de unidade (`abrirTrocaUnidadeApp` ~L4632, `popularUnidadesLogin` ~L4675,
   `popularExcluirUnidade` ~L4721): `u.id`/`u.nome` no `<option>` → agora com `esc()`.
 - [x] `submeterCadastroUnidade` (~L4658): `email` no `innerHTML` → agora `esc(email)`.
-- [ ] **PENDENTE — vetores de `s.nome` (nome do servidor, dado do backend) em múltiplos contextos**,
-  exigem escape por contexto (HTML/JS-string/CSS), pois `esc()` não cobre aspas simples:
-  - `renderPillsServ_` (~L1407): `s.nome` dentro de `onclick="setFServ(this,'…')"` **e** como texto.
-  - `aplicarServidores_` (~L1389): `s.nome` dentro de um seletor CSS `.st-NAME{…}` (injeção de CSS).
-  - avatar (~L1461): `s.nome.substring(0,2)` no `innerHTML`.
-  Melhor tratar junto com a migração `onclick→addEventListener` (abaixo). Risco real baixo
-  (nomes são de servidores cadastrados por admin), mas é stored-XSS legítimo no multiunidade.
+- [x] **Vetores de `s.nome` (nome do servidor) — corrigidos (2026-06-24):** novo helper
+  `escJsAttr()` (~L3737; neutraliza `'` e `\`, aplica `esc()`) para valor em string-JS dentro
+  de atributo. `renderPillsServ_` (~L1407): `onclick` agora usa `escJsAttr(s.nome)` e o texto
+  `esc(s.nome)`. Avatar (~L1461): `esc(...)` nas iniciais. Verificado no preview.
+  - [ ] **PENDENTE (baixo risco):** `aplicarServidores_` (~L1389) injeta `s.nome` num seletor
+    CSS `.st-NAME{…}`. Corrigir exige *slugificar* o nome igual onde a classe é aplicada
+    (`SERV_CLS[s.nome]`) — mudança em vários pontos; deixado p/ depois. Nome é admin-entered e
+    precisaria de `{}`/`<` p/ injetar, então risco prático é mínimo.
 - [ ] Varrer os ~70 `innerHTML` restantes (builders de processos/etapas/histórico/capacidade)
   confirmando que todo campo do backend passa por `esc()`.
 - [ ] Helpers `dom.text(el, valor)` e `dom.html(el, fragmentoConfiável)` substituindo os `innerHTML`.
