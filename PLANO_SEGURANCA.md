@@ -30,6 +30,15 @@ fronteiras claras, substituindo as chamadas dispersas.
 > Diagnóstico, correções de mascaramento já aplicadas e a ação pendente de
 > quota/billing estão em [INCIDENTE_FIRESTORE_REST.md](INCIDENTE_FIRESTORE_REST.md).
 
+> **Higiene de dados (2026-06-24):** normalizada a caixa do nome do servidor nas
+> cargas (`"BRUNO"`/`"Bruno"`, `"AMANDA"`/`"Amanda"`) — fonte de fragilidade em
+> agrupamentos por nome. Helper `_fsNomeServ_` (Title Case) aplicado na **origem**
+> (escritas de `cargas.servidor` em `FirestoreSync.gs`: criar processo, atribuir
+> responsáveis, backfill) + função de manutenção idempotente
+> `normalizarNomesCargasTodasUnidades()` para limpar os dados já existentes (rodar
+> no editor do Apps Script). Não afeta o KPI do painel (que soma por fase, não por
+> nome). Requer **deploy** do Apps Script para valer em produção.
+
 ---
 
 ## 2. Princípios

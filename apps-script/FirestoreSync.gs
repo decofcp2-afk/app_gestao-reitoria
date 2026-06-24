@@ -166,6 +166,18 @@ function _fsToFields_(obj) {
   var f = {}; Object.keys(obj).forEach(function (k) { f[k] = _fsToVal_(obj[k]); }); return f;
 }
 
+// Normaliza o nome do servidor para uma forma canônica (Title Case) antes de
+// gravar nas cargas. Evita duplicatas de caixa ("BRUNO"/"Bruno", "AMANDA"/
+// "Amanda") que fragilizam qualquer agrupamento por nome. Mesma regra já usada
+// em _fsTransicaoFase_ e na Capacidade. Preserva nomes compostos.
+function _fsNomeServ_(n) {
+  var s = String(n == null ? '' : n).trim();
+  if (!s) return s;
+  return s.toLowerCase().replace(/(^|[\s'\-])([a-zà-ÿ])/g, function (m, sep, ch) {
+    return sep + ch.toUpperCase();
+  });
+}
+
 function _fs_() {
   var base = _fsBase_();
   return {
@@ -790,11 +802,11 @@ function fs_cadastrarProcesso(params) {
 
       // Cargas iniciais (pontuação posterior) — inativas até iniciar.
       _fsSet_('cargas/' + novoPID + '_int_01', {
-        servidor: params.respInterno || '', objeto: objeto, processoId: novoPID,
+        servidor: _fsNomeServ_(params.respInterno || ''), objeto: objeto, processoId: novoPID,
         ativo: false, modalidade: modalidade, fase: 'Fase Interna', p1: 0, p2: 0, p3: 0, total: 0
       });
       _fsSet_('cargas/' + novoPID + '_ext_01', {
-        servidor: (ehPE ? (params.respExterno || '') : (params.respExterno || params.respInterno || '')),
+        servidor: _fsNomeServ_(ehPE ? (params.respExterno || '') : (params.respExterno || params.respInterno || '')),
         objeto: objeto, processoId: novoPID,
         ativo: false, modalidade: modalidade, fase: 'Fase Externa', p1: 0, p2: 0, p3: 0, total: 0
       });
@@ -810,8 +822,8 @@ function fs_atribuirResponsaveisApp(params) {
       params = params || {};
       _authRequire_(params.authToken, true);
       var pid = String(params.pid || '').trim();
-      var servInt = String(params.servInt || '');
-      var servExt = String(params.servExt || '');
+      var servInt = _fsNomeServ_(params.servInt || '');
+      var servExt = _fsNomeServ_(params.servExt || '');
       var mNorm = String(params.modal || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
       var ehPE = mNorm.indexOf('pregao') >= 0 || mNorm.indexOf('concorr') >= 0;
       var avisos = [];
@@ -908,8 +920,8 @@ function _fsBackfillCargas_(unidadeId) {
         var o = e.obj;
         if (_isEtapaContratual_(o.fase, o.etapa)) return;
         var ext = String(o.fase || '').toLowerCase().indexOf('ext') >= 0;
-        if (!ext && !servInt && o.agente) servInt = String(o.agente).trim();
-        if (ext && !servExt && o.agente) servExt = String(o.agente).trim();
+        if (!ext && !servInt && o.agente) servInt = _fsNomeServ_(o.agente);
+        if (ext && !servExt && o.agente) servExt = _fsNomeServ_(o.agente);
         var st = _normStatus_(o.status);
         if (!faseAtual && st !== 'ok' && st !== 'na') faseAtual = ext ? 'externa' : 'interna';
       });
@@ -940,6 +952,51 @@ function _fsBackfillCargas_(unidadeId) {
     return out;
   } finally {
     _FS_UNIDADE_REQ = ''; // restaura o escopo padrão (reitoria-sel/FS_UNIDADE)
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// MANUTENÇÃO — normaliza a caixa do nome do servidor nas cargas JÁ existentes
+// ("BRUNO"→"Bruno", "AMANDA"→"Amanda"). Complementa a normalização na origem
+// (_fsNomeServ_ nas escritas): esta limpa o histórico. É IDEMPOTENTE — só grava
+// quando o valor muda, então pode rodar quantas vezes quiser.
+//
+// COMO USAR: rode `normalizarNomesCargasTodasUnidades` no botão ▷ Executar.
+// O resultado (por unidade + total) sai em Logs.
+// ════════════════════════════════════════════════════════════════════════
+function normalizarNomesCargasTodasUnidades() {
+  var unidades = _fsListarUnidadesAtivas_();
+  var total = { unidades: 0, cargas: 0, corrigidas: 0 };
+  unidades.forEach(function (uid) {
+    var r = _fsNormalizarNomesCargas_(uid);
+    Logger.log('Unidade "' + uid + '": ' + r.corrigidas + ' de ' + r.cargas + ' cargas normalizadas.');
+    total.unidades++; total.cargas += r.cargas; total.corrigidas += r.corrigidas;
+  });
+  Logger.log('── Total: ' + total.corrigidas + ' carga(s) corrigida(s) em ' + total.unidades + ' unidade(s). ──');
+  return total;
+}
+
+function _fsNormalizarNomesCargas_(unidadeId) {
+  unidadeId = String(unidadeId || '').trim();
+  if (!unidadeId) throw new Error('Informe o id (slug) da unidade.');
+  _FS_UNIDADE_REQ = unidadeId; // escopa os helpers _fs* para esta unidade
+  try {
+    var pref = 'unidades/' + _fsUnidade_() + '/';
+    var out = { cargas: 0, corrigidas: 0 };
+    _fs_().query('cargas').Execute().forEach(function (d) {
+      out.cargas++;
+      var atual = String((d.obj && d.obj.servidor) || '');
+      var norm = _fsNomeServ_(atual);
+      if (norm && norm !== atual) {
+        var rel = d.path.split('/documents/')[1];          // unidades/<u>/cargas/<id>
+        if (rel.indexOf(pref) === 0) rel = rel.slice(pref.length);  // cargas/<id>
+        _fsUpdate_(rel, { servidor: norm });
+        out.corrigidas++;
+      }
+    });
+    return out;
+  } finally {
+    _FS_UNIDADE_REQ = ''; // restaura o escopo padrão
   }
 }
 
