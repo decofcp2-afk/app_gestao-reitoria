@@ -98,9 +98,24 @@ URL `/exec`) e verificado ao vivo. Os call sites antigos seguem válidos.
 - [ ] Verificar que nenhuma rota sensível responde sem token válido.
 
 ### Fase 3 — Camada de Sanitização/Renderização (anti-XSS)
+**Iniciada em 2026-06-24.** Existe o helper `esc()` (~L3734; escapa `&<>"` — **não** escapa
+aspas simples `'`). São ~70 `innerHTML`. Auditoria parcial feita; corrigidos os pontos
+óbvios que injetavam dado do backend cru:
+- [x] Seletores de unidade (`abrirTrocaUnidadeApp` ~L4632, `popularUnidadesLogin` ~L4675,
+  `popularExcluirUnidade` ~L4721): `u.id`/`u.nome` no `<option>` → agora com `esc()`.
+- [x] `submeterCadastroUnidade` (~L4658): `email` no `innerHTML` → agora `esc(email)`.
+- [ ] **PENDENTE — vetores de `s.nome` (nome do servidor, dado do backend) em múltiplos contextos**,
+  exigem escape por contexto (HTML/JS-string/CSS), pois `esc()` não cobre aspas simples:
+  - `renderPillsServ_` (~L1407): `s.nome` dentro de `onclick="setFServ(this,'…')"` **e** como texto.
+  - `aplicarServidores_` (~L1389): `s.nome` dentro de um seletor CSS `.st-NAME{…}` (injeção de CSS).
+  - avatar (~L1461): `s.nome.substring(0,2)` no `innerHTML`.
+  Melhor tratar junto com a migração `onclick→addEventListener` (abaixo). Risco real baixo
+  (nomes são de servidores cadastrados por admin), mas é stored-XSS legítimo no multiunidade.
+- [ ] Varrer os ~70 `innerHTML` restantes (builders de processos/etapas/histórico/capacidade)
+  confirmando que todo campo do backend passa por `esc()`.
 - [ ] Helpers `dom.text(el, valor)` e `dom.html(el, fragmentoConfiável)` substituindo os `innerHTML`.
-- [ ] Regra: dado vindo do backend nunca entra via `innerHTML` cru — sempre `textContent` ou template escapado.
-- [ ] Migrar handlers `inline` (`onclick=`) para `addEventListener` e ativar a **CSP em modo enforce**.
+- [ ] Migrar handlers `inline` (`onclick=`) para `addEventListener` e ativar a **CSP em modo enforce**
+  (o painel já fez isso — usar como referência).
 
 ### Fase 4 — Camada de Validação de Entrada (`validators.js`)
 - [ ] Regras de validação compartilhadas (matrícula, datas, status, etc.).

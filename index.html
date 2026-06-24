@@ -4629,7 +4629,7 @@ function abrirTrocaUnidadeApp(){
   window.AppselFirestore.listarUnidades().then(function(us){
     if(!us.length){ sel.innerHTML='<option value="reitoria-sel">Reitoria / SEL (atual)</option>'; return; }
     sel.innerHTML = us.map(function(u){
-      return '<option value="'+u.id+'"'+(u.id===atual?' selected':'')+'>'+(u.nome||u.id)+(u.id===atual?' (atual)':'')+(u.ativo===false?' [inativa]':'')+'</option>';
+      return '<option value="'+esc(u.id)+'"'+(u.id===atual?' selected':'')+'>'+esc(u.nome||u.id)+(u.id===atual?' (atual)':'')+(u.ativo===false?' [inativa]':'')+'</option>';
     }).join('');
   }).catch(function(){ sel.innerHTML='<option value="reitoria-sel">Reitoria / SEL (atual)</option>'; });
 }
@@ -4655,7 +4655,7 @@ function submeterCadastroUnidade(ev){
     .withSuccessHandler(function(r){
       if(r&&r.ok){
         msg.style.color='#1e7a45';
-        msg.innerHTML='Unidade criada! Enviamos o <b>login</b> e a <b>senha temporária</b> para <b>'+email+'</b>. Verifique a caixa de entrada (e o spam).';
+        msg.innerHTML='Unidade criada! Enviamos o <b>login</b> e a <b>senha temporária</b> para <b>'+esc(email)+'</b>. Verifique a caixa de entrada (e o spam).';
         if(typeof popularUnidadesLogin==='function') popularUnidadesLogin();
         setTimeout(fecharCadastroUnidade, 4000);
       } else { msg.style.color='#b02035'; msg.textContent='Erro: '+((r&&r.erro)||'falhou'); }
@@ -4672,7 +4672,7 @@ function popularUnidadesLogin(){
   window.AppselFirestore.listarUnidades().then(function(us){
     if(!us.length){ sel.innerHTML='<option style="color:#0b1d33" value="reitoria-sel">Reitoria / SEL</option>'; return; }
     sel.innerHTML = us.map(function(u){
-      return '<option style="color:#0b1d33" value="'+u.id+'"'+(u.id===atual?' selected':'')+'>'+(u.nome||u.id)+(u.ativo===false?' [inativa]':'')+'</option>';
+      return '<option style="color:#0b1d33" value="'+esc(u.id)+'"'+(u.id===atual?' selected':'')+'>'+esc(u.nome||u.id)+(u.ativo===false?' [inativa]':'')+'</option>';
     }).join('');
   }).catch(function(){ sel.innerHTML='<option style="color:#0b1d33" value="reitoria-sel">Reitoria / SEL</option>'; });
 }
@@ -4718,7 +4718,7 @@ function popularExcluirUnidade(){
   window.AppselFirestore.listarUnidades().then(function(us){
     var outras=(us||[]).filter(function(u){return u.id!=='reitoria-sel';});
     sel.innerHTML = outras.length
-      ? outras.map(function(u){return '<option value="'+u.id+'">'+(u.nome||u.id)+'</option>';}).join('')
+      ? outras.map(function(u){return '<option value="'+esc(u.id)+'">'+esc(u.nome||u.id)+'</option>';}).join('')
       : '<option value="">(nenhuma unidade de teste)</option>';
   }).catch(function(){ sel.innerHTML='<option value="">erro ao listar</option>'; });
 }
