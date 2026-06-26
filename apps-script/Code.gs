@@ -120,12 +120,43 @@ function _authHash_(senha, salt) {
 
 // Conta ADMIN global (não pertence a nenhuma unidade; não aparece nas equipes).
 // Acesso global (isChefe) para configurações específicas e exclusão de unidades.
-// Senha 1234 TEMPORÁRIA — trocar depois. E-mail p/ redefinição: decof.cp2@gmail.com.
-var ADMIN_SALT = 'cpii-decof-admin-salt-v1';
+//
+// SEGURANÇA (Fase 2 do PLANO_SEGURANCA): a senha do admin NÃO fica mais no
+// código-fonte. Vem da Script Property SEL_ADMIN_CRED_JSON ({salt, hash,
+// mustChange}). Defina/redefina uma vez rodando no editor:
+//     definirSenhaAdmin('umaSenhaTemporaria')
+// O admin entra com ela e é FORÇADO a trocar por uma definitiva (mustChange:true).
+// Enquanto a Property não existir, o login do admin fica indisponível (sem
+// credencial fraca padrão). E-mail p/ redefinição: decof.cp2@gmail.com.
+var ADMIN_CRED_KEY = 'SEL_ADMIN_CRED_JSON';
 function _isAdminMat_(mat) { return _authNorm_(mat) === 'admin'; }
+
+function _adminCred_() {
+  var raw = PropertiesService.getScriptProperties().getProperty(ADMIN_CRED_KEY);
+  if (!raw) return null;
+  try { var c = JSON.parse(raw); return (c && c.salt && c.hash) ? c : null; } catch (e) { return null; }
+}
+
+// Define (ou redefine) a senha do administrador geral. RODAR MANUALMENTE no
+// editor do Apps Script: definirSenhaAdmin('suaSenhaTemporaria'). Marca
+// mustChange:true para exigir a troca por uma senha definitiva no 1º login.
+function definirSenhaAdmin(senha) {
+  senha = String(senha || '').trim();
+  if (senha.length < 4) {
+    throw new Error('Informe uma senha temporária (mín. 4 caracteres): definirSenhaAdmin("suaSenha").');
+  }
+  var salt = _authSalt_();
+  PropertiesService.getScriptProperties().setProperty(ADMIN_CRED_KEY, JSON.stringify({
+    salt: salt, hash: _authHash_(senha, salt), mustChange: true
+  }));
+  return 'Senha do admin definida. Faça login como "admin" com essa senha; o sistema exigirá a troca por uma definitiva.';
+}
+
 function _adminUser_() {
-  return { nome: 'Administrador Geral', matricula: 'admin', salt: ADMIN_SALT,
-           hash: _authHash_('1234', ADMIN_SALT), isChefe: true, mustChange: false,
+  var cred = _adminCred_();
+  if (!cred) return null; // admin não configurado → rodar definirSenhaAdmin no editor
+  return { nome: 'Administrador Geral', matricula: 'admin', salt: cred.salt,
+           hash: cred.hash, isChefe: true, mustChange: !!cred.mustChange,
            isAdmin: true, email: 'decof.cp2@gmail.com' };
 }
 
@@ -1071,13 +1102,25 @@ function loginProofApp(matricula, challengeId, proof) {
 function trocarSenhaHashApp(token, novaSalt, novoHash) {
   return _withAppLockResult_('trocar senha via GitHub Pages', function() {
     var sess = _authRequire_(token, false, true);
+    if (!/^[a-fA-F0-9]{32,128}$/.test(String(novaSalt || ''))) throw new Error('Salt de senha invalido.');
+    if (!/^[A-Za-z0-9+/=]{40,80}$/.test(String(novoHash || ''))) throw new Error('Hash de senha invalido.');
+
+    // Admin global: credencial fica na Script Property dedicada (não no mapa de
+    // usuários por unidade). Persiste a nova senha e zera o mustChange.
+    if (_isAdminMat_(sess.matricula)) {
+      var cred = _adminCred_();
+      if (!cred) throw new Error('Admin nao configurado.');
+      if (!cred.mustChange) throw new Error('Troca de senha disponivel apenas para senha temporaria.');
+      PropertiesService.getScriptProperties().setProperty(ADMIN_CRED_KEY, JSON.stringify({
+        salt: String(novaSalt), hash: String(novoHash), mustChange: false
+      }));
+      return { ok: true };
+    }
+
     var users = _authSyncServidores_(_getServidoresApp_());
     var user = users[_authNorm_(sess.matricula)];
     if (!user) throw new Error('Usuario nao encontrado.');
     if (!user.mustChange) throw new Error('Troca de senha disponivel apenas para senha temporaria.');
-    if (!/^[a-fA-F0-9]{32,128}$/.test(String(novaSalt || ''))) throw new Error('Salt de senha invalido.');
-    if (!/^[A-Za-z0-9+/=]{40,80}$/.test(String(novoHash || ''))) throw new Error('Hash de senha invalido.');
-
     user.salt = String(novaSalt);
     user.hash = String(novoHash);
     user.mustChange = false;

@@ -92,8 +92,15 @@ URL `/exec`) e verificado ao vivo. Os call sites antigos seguem válidos.
    que o painel já fez (ver repo do painel).
 
 ### Fase 2 — Camada de Autenticação/Sessão (`auth.js` + endurecimento no `Code.gs`)
+- [x] **Servidor: credencial fraca do admin removida do código (2026-06-24).** A senha
+  `admin/1234` estava **hardcoded** em `_adminUser_()` com `mustChange:false` (e o repo é
+  versionado → exposição). Agora a credencial vem da Script Property `SEL_ADMIN_CRED_JSON`
+  (`{salt,hash,mustChange}`); `_adminUser_()` retorna `null` se não configurada (sem senha
+  padrão fraca). Nova função `definirSenhaAdmin('senha')` (rodar 1x no editor) seta a senha
+  com `mustChange:true` → **força a troca** no 1º login. `trocarSenhaHashApp` ganhou ramo
+  para o admin (persiste a troca na Property). **Requer deploy + rodar `definirSenhaAdmin`.**
+- [x] Servidores comuns: senha inicial `123456` já vinha com `mustChange:true` (troca forçada) — OK.
 - [ ] Cliente: guardião de sessão (armazenamento, expiração, renovação, logout automático em 401).
-- [ ] Servidor: **remover credenciais padrão fracas** (`admin/1234`, `123456`); forçar troca no primeiro acesso.
 - [ ] Expiração/rotação de token; `_authRequire_` aplicado de forma consistente em **todos** os endpoints de escrita.
 - [ ] Verificar que nenhuma rota sensível responde sem token válido.
 
