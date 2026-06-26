@@ -107,8 +107,12 @@ URL `/exec`) e verificado ao vivo. Os call sites antigos seguem válidos.
   que estava **sem autenticação** (qualquer um via `/exec` público criava unidade + usuário-chefe
   + disparava e-mail). **Corrigido:** agora exige `_authRequire_(token,true)` + `sess.isAdmin`
   (espelha `fs_excluirUnidade`). **Requer deploy.**
-- [ ] Expiração/rotação de token (hoje `exp:0` — sessão não expira).
-- [ ] Cliente: guardião de sessão (logout automático em 401/sessão expirada).
+- [x] **Expiração de token — 24h absoluto (2026-06-24).** `_authCreateSession_` agora define
+  `exp = agora + 24h` (era `0`). `_authGetSession_` já rejeita e apaga sessões expiradas; o
+  cliente guarda o token só em `sessionStorage` (morre ao fechar aba/PWA) e checa `exp` na
+  restauração. Token vazado/restaurado deixa de valer para sempre. **Requer deploy.**
+- [ ] (Opcional) Rotação/sliding window (renovar `exp` a cada atividade) — hoje é absoluto.
+- [ ] Cliente: guardião de sessão (logout automático ao receber "Sessão expirada" numa ação).
 
 ### Fase 3 — Camada de Sanitização/Renderização (anti-XSS)
 **Iniciada em 2026-06-24.** Existe o helper `esc()` (~L3734; escapa `&<>"` — **não** escapa
