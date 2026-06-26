@@ -232,7 +232,11 @@ function _authSessionKey_(token) {
 
 function _authCreateSession_(user) {
   var token = Utilities.getUuid();
-  var exp = 0;
+  // Fase 2: expiração absoluta de 24h. Antes era 0 (sessão nunca expirava no
+  // servidor — token vazado/restaurado valia para sempre). _authGetSession_ já
+  // rejeita e apaga a sessão quando Date.now() > exp; o cliente também checa exp
+  // na restauração (sessionStorage), então a sessão morre por inatividade/24h.
+  var exp = Date.now() + 24 * 60 * 60 * 1000;
   PropertiesService.getScriptProperties().setProperty(_authSessionKey_(token), JSON.stringify({
     nome: user.nome,
     matricula: user.matricula,
