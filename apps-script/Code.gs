@@ -142,14 +142,22 @@ function _adminCred_() {
 // mustChange:true para exigir a troca por uma senha definitiva no 1º login.
 function definirSenhaAdmin(senha) {
   senha = String(senha || '').trim();
+  if (!senha) {
+    // Sem argumento (o botão ▶ Executar não passa parâmetros): gera uma senha
+    // temporária aleatória, define-a e MOSTRA no log de execução para você usar
+    // no 1º login do admin (o sistema exigirá a troca por uma definitiva).
+    senha = Utilities.getUuid().replace(/-/g, '').slice(0, 10);
+    Logger.log('Senha temporária do admin: ' + senha);
+    Logger.log('Faça login com "admin" + essa senha; o sistema exigirá a troca por uma definitiva.');
+  }
   if (senha.length < 4) {
-    throw new Error('Informe uma senha temporária (mín. 4 caracteres): definirSenhaAdmin("suaSenha").');
+    throw new Error('Senha muito curta (mín. 4 caracteres).');
   }
   var salt = _authSalt_();
   PropertiesService.getScriptProperties().setProperty(ADMIN_CRED_KEY, JSON.stringify({
     salt: salt, hash: _authHash_(senha, salt), mustChange: true
   }));
-  return 'Senha do admin definida. Faça login como "admin" com essa senha; o sistema exigirá a troca por uma definitiva.';
+  return 'Senha do admin definida (mustChange). Se foi gerada automaticamente, veja no log acima.';
 }
 
 function _adminUser_() {
