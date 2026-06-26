@@ -289,6 +289,8 @@ function fs_criarUnidade(params) {
   return _withAppLockResult_('criar unidade (fs)', function() {
     try {
       params = params || {};
+      var sess = _authRequire_(params.authToken, true);
+      if (!sess.isAdmin) throw new Error('Ação restrita ao administrador geral.'); // só admin global cria unidades
       var nome = String(params.nome || '').trim();
       var sigla = String(params.sigla || '').trim();
       var email = String(params.email || '').trim().toLowerCase();
