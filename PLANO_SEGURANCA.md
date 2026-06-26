@@ -112,8 +112,13 @@ aspas simples `'`). São ~70 `innerHTML`. Auditoria parcial feita; corrigidos os
     CSS `.st-NAME{…}`. Corrigir exige *slugificar* o nome igual onde a classe é aplicada
     (`SERV_CLS[s.nome]`) — mudança em vários pontos; deixado p/ depois. Nome é admin-entered e
     precisaria de `{}`/`<` p/ injetar, então risco prático é mínimo.
-- [ ] Varrer os ~70 `innerHTML` restantes (builders de processos/etapas/histórico/capacidade)
-  confirmando que todo campo do backend passa por `esc()`.
+- [x] **Varredura dos ~70 `innerHTML` concluída (2026-06-24):** os builders de
+  processos/etapas/histórico/notificações/capacidade já passam todo campo do backend por
+  `esc()` (ex.: `esc(proc)`, `esc(respAtual)`, `esc(it.num…)`); diálogos usam `textContent`
+  (seguro). Único resíduo encontrado e corrigido: `onclick="toggleNotifPilha_('…')"` (~L2024/2039)
+  usava `esc(chave)` — e `chave` pode conter nome de processo — trocado para `escJsAttr(chave)`.
+  Nenhum onclick com dado do backend **cru** (sem escape). Resta só o seletor CSS `s.nome`
+  (~L1389/1403, baixo risco, acima) e a migração de handlers (abaixo).
 - [ ] Helpers `dom.text(el, valor)` e `dom.html(el, fragmentoConfiável)` substituindo os `innerHTML`.
 - [ ] Migrar handlers `inline` (`onclick=`) para `addEventListener` e ativar a **CSP em modo enforce**
   (o painel já fez isso — usar como referência).

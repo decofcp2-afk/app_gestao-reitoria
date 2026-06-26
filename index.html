@@ -2021,7 +2021,7 @@ function renderNotif_() {
         ? ('Etapa mais crítica vencida há ' + g.itens[0].diasAtraso + ' dia' + (g.itens[0].diasAtraso > 1 ? 's' : ''))
         : (g.itens[0].dias === 0 ? 'Etapa mais próxima vence hoje'
             : 'Etapa mais próxima vence em ' + g.itens[0].dias + ' dia' + (g.itens[0].dias > 1 ? 's' : ''));
-      html += '<div class="notif-stack" onclick="toggleNotifPilha_(\'' + esc(chave) + '\')">'
+      html += '<div class="notif-stack" onclick="toggleNotifPilha_(\'' + escJsAttr(chave) + '\')">'
         + '<div class="notif-stack-l2"></div>'
         + '<div class="notif-stack-l1"></div>'
         + '<div class="notif-item notif-stack-top" style="border-left-color:' + corGrupo + ';">'
@@ -2036,7 +2036,7 @@ function renderNotif_() {
     } else {
       // Pilha expandida: cabeçalho + as etapas. Clicar em QUALQUER etapa abre o detalhe.
       html += '<div class="notif-stack-open" style="border-left-color:' + corGrupo + '">'
-        + '<div class="notif-stack-hdr" onclick="toggleNotifPilha_(\'' + esc(chave) + '\')">'
+        + '<div class="notif-stack-hdr" onclick="toggleNotifPilha_(\'' + escJsAttr(chave) + '\')">'
         + '<span class="notif-stack-hdr-proc">' + esc(proc) + '</span>'
         + '<span class="notif-stack-hdr-ic">▲</span>'
         + '</div>';
