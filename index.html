@@ -1037,6 +1037,29 @@
     }, success, failure);
   }
 
+  // Guardião de sessão (Fase 2): intercepta "Sessão expirada" em QUALQUER chamada
+  // — tanto no failure handler (funções que lançam) quanto no success com
+  // {ok:false, erro} (funções fs_* que capturam no try/catch) — e desloga.
+  function _ehErroSessao_(msg) {
+    return /sess(ã|a)o expirada|fa(ç|c)a login novamente|usu(á|a)rio removido da equipe/i.test(String(msg == null ? '' : msg));
+  }
+  function _guardSuccess_(success) {
+    return function(payload) {
+      if (payload && payload.ok === false && _ehErroSessao_(payload.erro)) {
+        if (typeof onSessaoExpirada_ === 'function') return onSessaoExpirada_(payload.erro);
+      }
+      if (typeof success === 'function') return success(payload);
+    };
+  }
+  function _guardFailure_(failure) {
+    return function(err) {
+      if (_ehErroSessao_(err && (err.message || err))) {
+        if (typeof onSessaoExpirada_ === 'function') return onSessaoExpirada_(err && (err.message || err));
+      }
+      if (typeof failure === 'function') return failure(err);
+    };
+  }
+
   function makeRunner(success, failure) {
     var runner = {
       withSuccessHandler: function(fn) { return makeRunner(fn, failure); },
@@ -1046,7 +1069,7 @@
       get: function(target, prop) {
         if (prop in target) return target[prop];
         if (typeof prop !== 'string') return target[prop];
-        return function() { invoke(prop, arguments, success, failure); };
+        return function() { invoke(prop, arguments, _guardSuccess_(success), _guardFailure_(failure)); };
       }
     });
   }
@@ -1739,6 +1762,18 @@ function logout() {
   document.getElementById('app').hidden = true;
   document.getElementById('tela-login').hidden = false;
   concluirBoot_();
+}
+
+// Guardião de sessão (Fase 2): chamado pelos guardas de makeRunner quando uma
+// ação detecta sessão expirada no servidor. Desloga e volta ao login uma única
+// vez (o flag evita laço, inclusive com o logoutApp interno do próprio logout).
+var _tratandoSessaoExpirada_ = false;
+function onSessaoExpirada_(msg) {
+  if (_tratandoSessaoExpirada_) return;
+  _tratandoSessaoExpirada_ = true;
+  try { toast('Sessão expirada. Faça login novamente.', 'err'); } catch (e) {}
+  try { logout(); } catch (e) {}
+  setTimeout(function () { _tratandoSessaoExpirada_ = false; }, 2000);
 }
 
 function confirmarTroca() {

@@ -112,7 +112,12 @@ URL `/exec`) e verificado ao vivo. Os call sites antigos seguem válidos.
   cliente guarda o token só em `sessionStorage` (morre ao fechar aba/PWA) e checa `exp` na
   restauração. Token vazado/restaurado deixa de valer para sempre. **Requer deploy.**
 - [ ] (Opcional) Rotação/sliding window (renovar `exp` a cada atividade) — hoje é absoluto.
-- [ ] Cliente: guardião de sessão (logout automático ao receber "Sessão expirada" numa ação).
+- [x] **Cliente: guardião de sessão (2026-06-24).** Guardas em `makeRunner` (`_guardSuccess_`/
+  `_guardFailure_`) interceptam "Sessão expirada"/"Faça login novamente"/"Usuário removido"
+  em **ambos** os caminhos (failure das funções que lançam e success `{ok:false,erro}` das
+  `fs_*`) e chamam `onSessaoExpirada_` → toast + `logout()` (idempotente, sem laço). Cobre
+  todas as ~50 chamadas de uma vez, sem mexer em cada call site. Verificado no preview.
+  Mudança **client-side** (sem deploy).
 
 ### Fase 3 — Camada de Sanitização/Renderização (anti-XSS)
 **Iniciada em 2026-06-24.** Existe o helper `esc()` (~L3734; escapa `&<>"` — **não** escapa
