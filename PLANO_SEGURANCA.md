@@ -101,8 +101,14 @@ URL `/exec`) e verificado ao vivo. Os call sites antigos seguem válidos.
   para o admin (persiste a troca na Property). **Requer deploy + rodar `definirSenhaAdmin`.**
 - [x] Servidores comuns: senha inicial `123456` já vinha com `mustChange:true` (troca forçada) — OK.
 - [ ] Cliente: guardião de sessão (armazenamento, expiração, renovação, logout automático em 401).
-- [ ] Expiração/rotação de token; `_authRequire_` aplicado de forma consistente em **todos** os endpoints de escrita.
-- [ ] Verificar que nenhuma rota sensível responde sem token válido.
+- [x] **`_authRequire_` em todos os endpoints de escrita — auditado (2026-06-24).** Varredura
+  da allowlist de `_apiCallAppSEL_` (rota `appsel.call`): todas as funções de escrita `fs_*`
+  (caminho ativo) e legadas chamam `_authRequire_` como 1ª ação — **exceto `fs_criarUnidade`**,
+  que estava **sem autenticação** (qualquer um via `/exec` público criava unidade + usuário-chefe
+  + disparava e-mail). **Corrigido:** agora exige `_authRequire_(token,true)` + `sess.isAdmin`
+  (espelha `fs_excluirUnidade`). **Requer deploy.**
+- [ ] Expiração/rotação de token (hoje `exp:0` — sessão não expira).
+- [ ] Cliente: guardião de sessão (logout automático em 401/sessão expirada).
 
 ### Fase 3 — Camada de Sanitização/Renderização (anti-XSS)
 **Iniciada em 2026-06-24.** Existe o helper `esc()` (~L3734; escapa `&<>"` — **não** escapa
