@@ -300,7 +300,11 @@ function fs_criarUnidade(params) {
       if (!uid) throw new Error('Nome inválido.');
       var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
       var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
-      var ex; try { ex = _fsReq_('get', projBase + '/unidades/' + uid); } catch (e) { ex = null; }
+      // 404 = não existe ainda (ok criar). Qualquer outro erro (rede/permissão/
+      // 5xx) propaga — sem isso, uma falha transitória na checagem fazia o
+      // código assumir "não existe" e sobrescrever (patch sem updateMask) uma
+      // unidade que já existia, perdendo os campos que não estão no payload.
+      var ex; try { ex = _fsReq_('get', projBase + '/unidades/' + uid); } catch (e) { if (e && e.httpCode === 404) ex = null; else throw e; }
       if (ex && ex.name) throw new Error('Já existe uma unidade com esse nome.');
       _fsReq_('patch', projBase + '/unidades/' + uid, { fields: _fsToFields_({ nome: nome, sigla: sigla, emailInstitucional: email, ativo: true }) });
       ['calendario', 'config'].forEach(function(col) {

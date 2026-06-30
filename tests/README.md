@@ -38,5 +38,18 @@ servidores que saíram da lista, mantém os atuais e — **trava de segurança**
 nunca apaga nada quando a lista atual está vazia (evita perda de dados quando a
 lista não carregou). É um espelho da regra do GS; mantenha em sincronia.
 
+### `criar-unidade.test.js` — cadastro de unidade (`fs_criarUnidade`)
+Espelho das regras puras de `fs_criarUnidade` (`apps-script/FirestoreSync.gs`):
+- **Slug/id:** nomes reais das unidades do CPII (Centro, Humaitá I/II/III,
+  Tijuca I/II, São Cristóvão I/II/III, etc.) geram ids válidos e sem colisão;
+  acento/caixa não mudam o id; nome só com símbolos vira id vazio.
+- **Validação de entrada:** exige admin geral, nome com 3+ caracteres e e-mail
+  institucional (`...g12.br`).
+- **Duplicidade:** cobre a regressão corrigida onde um erro na checagem de
+  duplicidade que NÃO era 404 (5xx/403/rede) era tratado como "unidade não
+  existe" e o `patch` (sem updateMask) sobrescrevia uma unidade já existente.
+- **Login do 1º chefe:** parte local do e-mail → sigla → `gestor-<id>`.
+- **Senha temporária:** 7 caracteres, sem caracteres ambíguos (0/O, 1/I/L).
+
 ### `helpers.js`
 Builders dos dados simulados (cargas, etapas, processos, servidores).
