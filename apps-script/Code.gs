@@ -264,7 +264,18 @@ function _authGetSession_(token) {
     props.deleteProperty(_authSessionKey_(token));
     throw new Error('Sessão expirada. Faça login novamente.');
   }
-  var user = _isAdminMat_(sess.matricula) ? _adminUser_() : _authUsers_()[_authNorm_(sess.matricula)];
+  var isAdminSess = _isAdminMat_(sess.matricula);
+  // Trava multiunidade: a sessão foi criada para a unidade sess.unidade (Parte
+  // 3). A unidade da REQUISIÇÃO ATUAL vem de localStorage no cliente — sem essa
+  // conferência, trocar de unidade sem deslogar reaproveitava o mesmo token
+  // contra a lista de usuários de OUTRA unidade, podendo casar por coincidência
+  // com uma matrícula de outra pessoa (herdando o nível de acesso dela lá). O
+  // admin geral não é afetado: ele resolve fora de _authUsers_() por unidade.
+  if (!isAdminSess && sess.unidade && sess.unidade !== _reqUni_()) {
+    props.deleteProperty(_authSessionKey_(token));
+    throw new Error('Sessão de outra unidade. Faça login novamente.');
+  }
+  var user = isAdminSess ? _adminUser_() : _authUsers_()[_authNorm_(sess.matricula)];
   if (!user) {
     props.deleteProperty(_authSessionKey_(token));
     throw new Error('Usuário removido da equipe. Faça login novamente.');
