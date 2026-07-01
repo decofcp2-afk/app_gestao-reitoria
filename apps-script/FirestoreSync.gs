@@ -289,8 +289,11 @@ function fs_criarUnidade(params) {
   return _withAppLockResult_('criar unidade (fs)', function() {
     try {
       params = params || {};
-      var sess = _authRequire_(params.authToken, true);
-      if (!sess.isAdmin) throw new Error('Ação restrita ao administrador geral.'); // só admin global cria unidades
+      // Autocadastro ABERTO (sem login): a tela de login expõe "Cadastre aqui"
+      // para unidades que ainda não existem — quem cadastra ainda NÃO tem sessão,
+      // então exigir admin aqui derrubava o fluxo com "Sessão expirada". O acesso
+      // fica guardado pelo e-mail institucional (@...g12.br) + a trava
+      // anti-sobrescrita abaixo (só cria se a unidade não existir ainda).
       var nome = String(params.nome || '').trim();
       var sigla = String(params.sigla || '').trim();
       var email = String(params.email || '').trim().toLowerCase();

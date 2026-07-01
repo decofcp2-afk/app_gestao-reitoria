@@ -43,8 +43,11 @@ Espelho das regras puras de `fs_criarUnidade` (`apps-script/FirestoreSync.gs`):
 - **Slug/id:** nomes reais das unidades do CPII (Centro, Humaitá I/II/III,
   Tijuca I/II, São Cristóvão I/II/III, etc.) geram ids válidos e sem colisão;
   acento/caixa não mudam o id; nome só com símbolos vira id vazio.
-- **Validação de entrada:** exige admin geral, nome com 3+ caracteres e e-mail
-  institucional (`...g12.br`).
+- **Autocadastro aberto:** o cadastro sai da tela de login (sem sessão), então
+  `fs_criarUnidade` **não** exige admin — a guarda é o e-mail institucional.
+  Cobre a regressão do "Sessão expirada" ao cadastrar.
+- **Validação de entrada:** nome com 3+ caracteres e e-mail institucional
+  (`...g12.br`).
 - **Duplicidade:** cobre a regressão corrigida onde um erro na checagem de
   duplicidade que NÃO era 404 (5xx/403/rede) era tratado como "unidade não
   existe" e o `patch` (sem updateMask) sobrescrevia uma unidade já existente.
