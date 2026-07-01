@@ -8,6 +8,10 @@
 // checagem de duplicidade e escolha do login do 1º chefe — como guarda de
 // regressão para o cadastro das unidades do CPII. Se mudar a regra lá,
 // atualize aqui também.
+//
+// AUTOCADASTRO ABERTO: o cadastro sai da tela de login ("Cadastre aqui"), onde
+// quem cadastra ainda não tem sessão — por isso fs_criarUnidade NÃO exige admin.
+// A guarda é o e-mail institucional (@...g12.br) + a trava anti-sobrescrita.
 // ════════════════════════════════════════════════════════════════════════
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -27,9 +31,10 @@ function authNorm(s) {
 
 // Espelho das validações no início de fs_criarUnidade (até a checagem de
 // duplicidade, que depende do Firestore e está coberta à parte abaixo).
-function validarCriarUnidade(params, sess) {
+// AUTOCADASTRO ABERTO: nao exige admin — o cadastro sai da tela de login, onde
+// quem cadastra ainda nao tem sessao. A guarda e o e-mail institucional.
+function validarCriarUnidade(params) {
   params = params || {};
-  if (!sess || !sess.isAdmin) return { ok: false, erro: 'Ação restrita ao administrador geral.' };
   var nome = String(params.nome || '').trim();
   var email = String(params.email || '').trim().toLowerCase();
   if (nome.length < 3) return { ok: false, erro: 'Informe o nome da unidade.' };
@@ -85,33 +90,36 @@ test('Slug: nome só com espaços/símbolos gera id vazio (cai na checagem de "N
   assert.equal(slugUnidade('---'), '');
 });
 
-test('Validação: bloqueia quem não é admin geral, mesmo com dados válidos', () => {
-  const r = validarCriarUnidade({ nome: 'Tijuca I', email: 'chefe@cp2.g12.br' }, { isAdmin: false });
-  assert.equal(r.ok, false);
-  assert.match(r.erro, /administrador/i);
+test('Autocadastro aberto: cadastro válido pela tela de login (SEM sessão/admin) é aceito', () => {
+  // Regressão do "Sessão expirada" ao cadastrar: fs_criarUnidade exigia admin,
+  // mas o cadastro sai da tela de login, onde ninguém está logado. Agora passa
+  // só com dados válidos + e-mail institucional, sem token de sessão.
+  const r = validarCriarUnidade({ nome: 'Tijuca I', email: 'chefe@cp2.g12.br' });
+  assert.equal(r.ok, true);
+  assert.equal(r.uid, 'tijuca-i');
 });
 
 test('Validação: exige nome com 3+ caracteres', () => {
-  const r = validarCriarUnidade({ nome: 'CT', email: 'chefe@cp2.g12.br' }, { isAdmin: true });
+  const r = validarCriarUnidade({ nome: 'CT', email: 'chefe@cp2.g12.br' });
   assert.equal(r.ok, false);
   assert.match(r.erro, /nome/i);
 });
 
 test('Validação: exige e-mail institucional (...g12.br)', () => {
-  const r = validarCriarUnidade({ nome: 'Tijuca I', email: 'chefe@gmail.com' }, { isAdmin: true });
+  const r = validarCriarUnidade({ nome: 'Tijuca I', email: 'chefe@gmail.com' });
   assert.equal(r.ok, false);
   assert.match(r.erro, /institucional/i);
 });
 
 test('Validação: aceita e-mail institucional em qualquer caixa/subdomínio g12.br (ex.: cp2.g12.br)', () => {
-  const r = validarCriarUnidade({ nome: 'Tijuca I', email: 'CHEFE@CP2.G12.BR' }, { isAdmin: true });
+  const r = validarCriarUnidade({ nome: 'Tijuca I', email: 'CHEFE@CP2.G12.BR' });
   assert.equal(r.ok, true);
   assert.equal(r.uid, 'tijuca-i');
 });
 
 test('Validação: nome com 3+ caracteres mas só símbolos passa na 1ª checagem e falha no slug', () => {
   // Regressão: "###" tem 3 caracteres (passa em nome.length<3) mas vira id vazio.
-  const r = validarCriarUnidade({ nome: '###', email: 'chefe@cp2.g12.br' }, { isAdmin: true });
+  const r = validarCriarUnidade({ nome: '###', email: 'chefe@cp2.g12.br' });
   assert.equal(r.ok, false);
   assert.match(r.erro, /inválido/i);
 });
