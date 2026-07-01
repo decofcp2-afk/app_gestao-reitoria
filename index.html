@@ -1408,7 +1408,7 @@ function servTagStyle_(sd) {
 
 // Helper: renderiza um span de servidor com estilo dinâmico
 function servTagHtml_(nome) {
-  var sd = SERV_DATA.find(function(s){ return s.nome === nome; });
+  var sd = SERV_DATA.find(function(s){ return _mesmoServ_(s.nome, nome); });
   if (!sd) return '<span style="background:var(--bg);color:var(--muted);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">'+esc(nome)+'</span>';
   return '<span style="'+servTagStyle_(sd)+'">'+esc(nome)+'</span>';
 }
@@ -2305,7 +2305,7 @@ function renderEtapas(filtrado) {
       var extAtiva = p.etapaAtualIdx >= 0 && p.etapas[p.etapaAtualIdx] && (p.etapas[p.etapaAtualIdx].fase||'').toLowerCase().indexOf('ext') >= 0;
       var respAtual = extAtiva ? (p.servidorExt || p.servidor || '') : (p.servidor || p.servidorExt || '');
       var ownerHtml = respAtual
-        ? '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return s.nome===respAtual;})||{cor:'#6b7280'})+';cursor:pointer;" title="Clique para trocar responsável" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">'+esc(respAtual)+'</span>'
+        ? '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return _mesmoServ_(s.nome, respAtual);})||{cor:'#6b7280'})+';cursor:pointer;" title="Clique para trocar responsável" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">'+esc(respAtual)+'</span>'
         : (isChefeAtual_() ? '<span style="background:var(--bg);color:var(--muted);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;cursor:pointer;" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">+ Atribuir</span>' : '');
       out += '<div class="proc-card" onclick="abrirProcesso(' + idx + ')" style="'+(alerta?'border-left:4px solid #f59e0b;':'')+'">'
         + (alerta ? '<div class="proc-warn-badge" title="Prazo vencido — informe o motivo">!</div>' : '')
@@ -2358,7 +2358,7 @@ function abrirProcesso(idx) {
     + '<div class="sheet-title">' + esc(p.nome) + '</div>'
     + '<div class="sheet-sub">' + esc(p.num||p.id) + ' · ' + esc(p.modal||'') + ' · ' + esc(p.req||'') + '</div>'
     + (respAtualModal ? '<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">'
-        + '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return s.nome===respAtualModal;})||{cor:'#6b7280'})+'">'+esc(respAtualModal)+'</span>'
+        + '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return _mesmoServ_(s.nome, respAtualModal);})||{cor:'#6b7280'})+'">'+esc(respAtualModal)+'</span>'
         + '</div>' : '')
     + '</div></div>';
 
@@ -2503,6 +2503,17 @@ function atualizarBotaoSuap_(p) {
 var SERV_IDX_ATI = -1;
 var SERV_SEL = { int: '', ext: '' }; // seleções temporárias
 
+// Compara nome de servidor ignorando caixa e acentos. O responsável do processo
+// (p.servidor) vem em Title Case do construir/_fsNomeServ_ (ex.: "Amanda2"),
+// enquanto a lista de servidores guarda o nome como foi digitado (ex.: "amanda2",
+// "SAMUEL"). Um "===" cru falhava em unidades cujos nomes não estavam em Title
+// Case, deixando o responsável já atribuído SEM aparecer marcado no modal.
+function _mesmoServ_(a, b) {
+  var na = String(a == null ? '' : a).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  var nb = String(b == null ? '' : b).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return na === nb;
+}
+
 function abrirTrocaServ(idx) {
   SERV_IDX_ATI = idx;
   var p = DATA[idx];
@@ -2522,7 +2533,7 @@ function abrirTrocaServ(idx) {
 function capResumoServidor_(nome, fase) {
   if (!CAP_DATA || !nome) return null;
   var lista = fase === 'ext' ? CAP_DATA.resumoExt : CAP_DATA.resumoInt;
-  return (lista || []).find(function(s){ return s.servidor === nome; }) || null;
+  return (lista || []).find(function(s){ return _mesmoServ_(s.servidor, nome); }) || null;
 }
 
 function capAvisoHtml_(nome, fase, acrescimo) {
@@ -2558,10 +2569,10 @@ function _renderTrocaServBody_() {
       + '<div style="display:flex;flex-direction:column;gap:6px;">';
     SERV_DATA.forEach(function(sd) {
       var s = sd.nome;
-      var isSel = sel === s;
+      var isSel = _mesmoServ_(sel, s);
       // Verifica se este servidor já está no outro slot para evitar duplicata
       var outroCh = chave === 'int' ? 'ext' : 'int';
-      var bloqueado = ehPE && SERV_SEL[outroCh] === s;
+      var bloqueado = ehPE && _mesmoServ_(SERV_SEL[outroCh], s);
       h += '<button onclick="toggleServSlot_(\''+chave+'\',\''+s+'\')" '
         + 'style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;border:2px solid '
         + (isSel ? 'var(--navy)' : (bloqueado ? '#e2e8f0' : 'var(--border)'))
@@ -3328,8 +3339,8 @@ function renderFila_() {
         html += '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'
           + '<span style="font-size:11px;color:var(--muted);font-weight:600;">Responsáveis:</span>'
           + '<span style="cursor:pointer;" onclick="abrirFilaServ_('+idx+')">'
-          + (srv.int ? '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return s.nome===srv.int;})||{cor:'#6b7280'})+'">'+esc(srv.int)+'</span>' : '')
-          + (srv.ext && ehPE ? '&nbsp;<span style="'+servTagStyle_(SERV_DATA.find(function(s){return s.nome===srv.ext;})||{cor:'#6b7280'})+'">'+esc(srv.ext)+'</span>' : '')
+          + (srv.int ? '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return _mesmoServ_(s.nome, srv.int);})||{cor:'#6b7280'})+'">'+esc(srv.int)+'</span>' : '')
+          + (srv.ext && ehPE ? '&nbsp;<span style="'+servTagStyle_(SERV_DATA.find(function(s){return _mesmoServ_(s.nome, srv.ext);})||{cor:'#6b7280'})+'">'+esc(srv.ext)+'</span>' : '')
           + (!srv.int ? '<span style="background:var(--bg);color:var(--amber);font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;border:1px dashed var(--amber);">+ Atribuir</span>' : '')
           + '</span></div>';
       }
@@ -3610,8 +3621,8 @@ function _renderFilaServBody_() {
     var sel = FILA_SERV_SEL[chave];
     var h = '<div style="margin-bottom:14px;"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">'+label+'</div><div style="display:flex;flex-direction:column;gap:6px;">';
     SERV_DATA.forEach(function(sd) {
-      var s = sd.nome; var isSel = sel === s;
-      var outro = chave==='int'?'ext':'int'; var bloq = ehPE && FILA_SERV_SEL[outro]===s;
+      var s = sd.nome; var isSel = _mesmoServ_(sel, s);
+      var outro = chave==='int'?'ext':'int'; var bloq = ehPE && _mesmoServ_(FILA_SERV_SEL[outro], s);
       h += '<button onclick="toggleFilaServSlot_(\''+chave+'\',\''+s+'\')" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;border:2px solid '+(isSel?'var(--navy)':'var(--border)')+';background:'+(isSel?'#eff6ff':'var(--bg)')+';cursor:'+(bloq?'default':'pointer')+';font-size:13px;font-weight:600;opacity:'+(bloq?.4:1)+'">'
         + '<span style="'+servTagStyle_(sd)+'">'+s+'</span>'+(isSel?'<span style="color:var(--navy);margin-left:auto;font-size:12px;">✓</span>':'')+'</button>';
     });

@@ -73,6 +73,14 @@ outra pessoa (com o nível de acesso dela) em outra unidade. Corrigido
 comparando `sess.unidade` (já gravada no login, só não era conferida) com a
 unidade da requisição; o admin geral fica de fora dessa trava.
 
+### `atribuir-responsavel.test.js` — servidor marcado no modal de responsável
+Regressão em que o servidor já atribuído não aparecia **selecionado** no modal
+"Responsável pelo processo" nas unidades novas (funcionava nas antigas). O
+responsável vem em Title Case (`p.servidor`), mas a lista de servidores guarda o
+nome como foi digitado (`amanda2`, `SAMUEL`); a marcação usava `===` cru,
+sensível a caixa/acento. Espelha `_mesmoServ_` (index.html), a comparação
+normalizada que corrige a marcação (e a cor do chip) sem depender da caixa.
+
 ### `nome-servidor.test.js` — capitalização do nome do servidor
 Regressão em `construir()` e `construirCapacidade()`: o nome do servidor era
 recapitalizado como "1ª letra maiúscula, resto minúsculo" — certo só para
