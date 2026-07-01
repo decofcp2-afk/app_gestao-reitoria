@@ -60,6 +60,16 @@ Espelho das regras puras de `fs_criarUnidade` (`apps-script/FirestoreSync.gs`):
 - **Travas:** só admin geral exclui; a unidade base `reitoria-sel` nunca pode
   ser excluída.
 
+### `sessao-multiunidade.test.js` — trava de unidade na sessão (`_authGetSession_`)
+Regressão de segurança: a unidade "ativa" numa requisição vem do `localStorage`
+do navegador, não é amarrada ao token. `_authGetSession_` resolvia o usuário
+buscando a matrícula da sessão na lista de usuários da unidade **da
+requisição atual**, não da unidade onde o login aconteceu — trocar de unidade
+sem deslogar podia, por coincidência de matrícula, fazer a sessão "virar"
+outra pessoa (com o nível de acesso dela) em outra unidade. Corrigido
+comparando `sess.unidade` (já gravada no login, só não era conferida) com a
+unidade da requisição; o admin geral fica de fora dessa trava.
+
 ### `nome-servidor.test.js` — capitalização do nome do servidor
 Regressão em `construir()` e `construirCapacidade()`: o nome do servidor era
 recapitalizado como "1ª letra maiúscula, resto minúsculo" — certo só para
