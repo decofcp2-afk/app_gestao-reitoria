@@ -51,5 +51,24 @@ Espelho das regras puras de `fs_criarUnidade` (`apps-script/FirestoreSync.gs`):
 - **Login do 1º chefe:** parte local do e-mail → sigla → `gestor-<id>`.
 - **Senha temporária:** 7 caracteres, sem caracteres ambíguos (0/O, 1/I/L).
 
+### `excluir-unidade.test.js` — exclusão de unidade (`fs_excluirUnidade`)
+- **Paginação:** regressão em que a exclusão só lia a 1ª página (`pageSize=300`)
+  de cada coleção e ignorava o `nextPageToken` — uma unidade com coleções que
+  crescem sem limite (`etapas`, `historico`) passando de 300 docs ficava com
+  sobras órfãs mesmo com a exclusão reportando sucesso. Corrigido para paginar
+  até esgotar.
+- **Travas:** só admin geral exclui; a unidade base `reitoria-sel` nunca pode
+  ser excluída.
+
+### `nome-servidor.test.js` — capitalização do nome do servidor
+Regressão em `construir()` e `construirCapacidade()`: o nome do servidor era
+recapitalizado como "1ª letra maiúscula, resto minúsculo" — certo só para
+nomes de uma palavra. Nomes compostos (a maioria dos nomes reais: "Maria
+Eduarda", "Ana Paula Souza", "João Pedro") apareciam errados nos cards de
+processo e na Capacidade, mesmo já gravados com a capitalização certa no
+Firestore. Corrigido para Title Case por palavra, espelhando `_fsNomeServ_`
+(apps-script/FirestoreSync.gs) — a mesma regra passou a ser usada nos 5 outros
+pontos do código (Code.gs e FirestoreSync.gs) que tinham a mesma conta errada.
+
 ### `helpers.js`
 Builders dos dados simulados (cargas, etapas, processos, servidores).

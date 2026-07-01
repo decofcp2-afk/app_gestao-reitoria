@@ -88,7 +88,7 @@
       var pid = String(c.processoId || '').trim();
       var serv = String(c.servidor || '').trim();
       if (!pid || !serv) return;
-      var nomeNorm = serv.charAt(0).toUpperCase() + serv.slice(1).toLowerCase();
+      var nomeNorm = titleCase(serv);
       var ativo = (c.ativo === true);
       if (!map[pid]) map[pid] = { int: '', ext: '', hasInt: false, hasExt: false };
       if (normText(c.fase).indexOf('ext') >= 0) {
@@ -325,7 +325,17 @@
   // linhaSum/colOutros (a edição de "Outros" passa a ser em servidores.outrosFixo).
   // ════════════════════════════════════════════════════════════════════════
   function round1(n) { return Math.round((n || 0) * 10) / 10; }
-  function titleCase(s) { s = String(s || '').trim(); return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(); }
+  // Espelha _fsNomeServ_ (FirestoreSync.gs): Title Case por palavra (separadores
+  // espaço/hífen/apóstrofo), não só a 1ª letra da string inteira — nomes
+  // compostos ("Maria Eduarda", "Ana Paula Souza", "Jean-Pierre") são a norma,
+  // não a exceção, entre os servidores.
+  function titleCase(s) {
+    s = String(s == null ? '' : s).trim();
+    if (!s) return s;
+    return s.toLowerCase().replace(/(^|[\s'-])([a-zà-ÿ])/g, function (m, sep, ch) {
+      return sep + ch.toUpperCase();
+    });
+  }
   function num(v) { if (typeof v === 'number') return v; return parseFloat(String(v || '0').replace(',', '.')) || 0; }
 
   // procConcluido + faseCorrente por processo, a partir das etapas.
