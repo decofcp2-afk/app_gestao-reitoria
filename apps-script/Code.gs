@@ -1405,7 +1405,7 @@ function _getEtapasParaApp_(sess) {
           var cativo = cr2[3];
           var cfase = String(cr2[5]||'').trim().toLowerCase();
           if (cpid && cserv) {
-            var nomeNorm = cserv.charAt(0).toUpperCase() + cserv.slice(1).toLowerCase();
+            var nomeNorm = _fsNomeServ_(cserv);
             if (!servMap[cpid]) servMap[cpid] = { int: '', ext: '', hasInt: false, hasExt: false };
             if (cfase.indexOf('ext') >= 0) {
               servMap[cpid].hasExt = true;
@@ -1801,7 +1801,7 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
       var cfase = String(capData[r][5] || '').trim().toLowerCase();
       var cserv = String(capData[r][0] || '').trim();
       if (cfase.indexOf('ext') >= 0) {
-        servidorExt = cserv.charAt(0).toUpperCase() + cserv.slice(1).toLowerCase();
+        servidorExt = _fsNomeServ_(cserv);
         shCap.getRange(r + 1, iAtivo + 1).setValue('Sim');
       } else {
         // Fase interna: inativa
@@ -2930,8 +2930,7 @@ function getCapacidadeApp(authToken) {
   var data = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
 
   function titleCase_(s) {
-    s = String(s||'').trim();
-    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+    return _fsNomeServ_(s);
   }
   function parseNum_(v) {
     if (typeof v === 'number') return v;

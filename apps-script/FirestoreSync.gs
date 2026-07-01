@@ -403,11 +403,20 @@ function fs_excluirUnidade(params) {
       var cols = ['processos','etapas','cargas','calendario','config','emails','historico','dispositivos','resumo'];
       var apagados = 0;
       cols.forEach(function(col) {
-        var data; try { data = _fsReq_('get', projBase + '/unidades/' + uid + '/' + col + '?pageSize=300'); } catch(e) { data = {}; }
-        (data.documents || []).forEach(function(d) {
-          var docId = String(d.name || '').split('/').pop();
-          if (docId) { _fsReq_('delete', projBase + '/unidades/' + uid + '/' + col + '/' + docId); apagados++; }
-        });
+        // Pagina até esgotar (nextPageToken): sem isso, uma unidade com mais de
+        // 300 docs numa coleção que cresce sem limite (etapas/historico) ficava
+        // com "sobras" órfãs após uma exclusão reportada como bem-sucedida.
+        var pageToken = '';
+        do {
+          var url = projBase + '/unidades/' + uid + '/' + col + '?pageSize=300' +
+            (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+          var data; try { data = _fsReq_('get', url); } catch(e) { data = {}; }
+          (data.documents || []).forEach(function(d) {
+            var docId = String(d.name || '').split('/').pop();
+            if (docId) { _fsReq_('delete', projBase + '/unidades/' + uid + '/' + col + '/' + docId); apagados++; }
+          });
+          pageToken = data.nextPageToken || '';
+        } while (pageToken);
       });
       _fsReq_('delete', projBase + '/unidades/' + uid);
       return { ok: true, apagados: apagados };
@@ -486,7 +495,7 @@ function _fsTransicaoFase_(pid, docEtapaConcluida) {
     if (ext) { servidorExt = String(c.obj.servidor || ''); _fsUpdate_(c.path, { ativo: true }); }
     else _fsUpdate_(c.path, { ativo: false });
   });
-  if (servidorExt) servidorExt = servidorExt.charAt(0).toUpperCase() + servidorExt.slice(1).toLowerCase();
+  if (servidorExt) servidorExt = _fsNomeServ_(servidorExt);
   return { feita: true, servidorExt: servidorExt };
 }
 
@@ -1108,7 +1117,7 @@ function _fsGetEtapasParaApp_(opts) {
     var pid = String(c.processoId || '').trim();
     var serv = String(c.servidor || '').trim();
     if (!pid || !serv) return;
-    var nomeNorm = serv.charAt(0).toUpperCase() + serv.slice(1).toLowerCase();
+    var nomeNorm = _fsNomeServ_(serv);
     var ativo = (c.ativo === true);
     if (!servMap[pid]) servMap[pid] = { int: '', ext: '', hasInt: false, hasExt: false };
     if (String(c.fase || '').toLowerCase().indexOf('ext') >= 0) {
