@@ -250,7 +250,31 @@ function _authSessionKey_(token) {
   return 'SEL_AUTH_SESSION_' + String(token || '').replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
+// Remove sessões já expiradas do PropertiesService. Uma sessão só era apagada
+// quando alguém tentava usá-la depois de expirar (ou no logout explícito):
+// fechar o navegador (comum no celular/PWA) deixava a property para sempre.
+// Com o crescimento multiunidade isso aproximaria a quota (~500 KB/500 chaves)
+// e um dia impediria novos logins. Chamado no login (melhor esforço, nunca
+// bloqueia). Limita a varredura para não estourar o tempo em bases grandes.
+function _limparSessoesExpiradas_() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var todos = props.getProperties();
+    var agora = Date.now();
+    Object.keys(todos).forEach(function(k) {
+      if (k.indexOf('SEL_AUTH_SESSION_') !== 0) return;
+      try {
+        var s = JSON.parse(todos[k]);
+        if (!s || (s.exp && agora > s.exp)) props.deleteProperty(k);
+      } catch(e) {
+        props.deleteProperty(k); // conteúdo corrompido — remove
+      }
+    });
+  } catch(e) { /* limpeza é melhor esforço; nunca bloqueia o login */ }
+}
+
 function _authCreateSession_(user) {
+  _limparSessoesExpiradas_();
   var token = Utilities.getUuid();
   // Fase 2: expiração absoluta de 24h. Antes era 0 (sessão nunca expirava no
   // servidor — token vazado/restaurado valia para sempre). _authGetSession_ já

@@ -1781,6 +1781,11 @@ function logout() {
     try { google.script.run.logoutApp(AUTH_TOKEN); } catch(e) {}
   }
   setOfflineMode_(false);
+  // Remove o cache offline do usuário que está saindo: em computador
+  // compartilhado, os processos/notificações ficavam legíveis em localStorage
+  // após o logout, sem exigir novo login. (O logout é explícito; quem quiser
+  // manter o modo offline apenas fecha o app sem deslogar.)
+  try { if (SERVIDOR) localStorage.removeItem(offlineCacheKeyFor_(SERVIDOR)); } catch(e) {}
   sessionStorage.removeItem('selSessao');
   localStorage.removeItem('selSessao');
   localStorage.removeItem('selServidor');
@@ -2609,12 +2614,12 @@ function _renderTrocaServBody_() {
       // Verifica se este servidor já está no outro slot para evitar duplicata
       var outroCh = chave === 'int' ? 'ext' : 'int';
       var bloqueado = ehPE && _mesmoServ_(SERV_SEL[outroCh], s);
-      h += '<button onclick="toggleServSlot_(\''+chave+'\',\''+s+'\')" '
+      h += '<button onclick="toggleServSlot_(\''+chave+'\',\''+escJsAttr(s)+'\')" '
         + 'style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;border:2px solid '
         + (isSel ? 'var(--navy)' : (bloqueado ? '#e2e8f0' : 'var(--border)'))
         + ';background:' + (isSel ? '#eff6ff' : 'var(--bg)')
         + ';cursor:'+(bloqueado?'default':'pointer')+';font-size:13px;font-weight:600;opacity:'+(bloqueado?.4:1)+'">'
-        + '<span style="'+servTagStyle_(sd)+'">'+s+'</span>'
+        + '<span style="'+servTagStyle_(sd)+'">'+esc(s)+'</span>'
         + (isSel ? '<span style="color:var(--navy);margin-left:auto;font-size:12px;">✓</span>' : '')
         + '</button>';
     });
@@ -3164,6 +3169,7 @@ function renderHistorico() {
 // FILA DE PRIORIDADES
 // ══════════════════════════════════════════════════════════════════════
 var FILA_ORDER  = [];  // cópia ordenável
+var _FILA_SIG   = '';  // assinatura do conteúdo da fila (detecta mudança em refresh)
 var FILA_SEL    = {};  // {pid: true}
 var FILA_SERV   = {};  // {pid: {int, ext}}
 var FILA_D0     = {};  // {pid: 'YYYY-MM-DD'} — D0 simulado por processo
@@ -3259,9 +3265,26 @@ function renderFila_() {
       return a.i - b.i;
     })
     .map(function(w){ return w.item; });
-  if (!FILA_ORDER.length || FILA_ORDER.length !== filaTotal.length) {
+  // Reconstrói FILA_ORDER quando o CONTEÚDO muda — não só quando o tamanho muda.
+  // Antes, um carregarDados() em segundo plano (outro chefe editou D0, nome ou
+  // responsável de um processo) não atualizava a Fila enquanto a quantidade de
+  // itens fosse a mesma: a aba seguia mostrando os objetos antigos guardados em
+  // FILA_ORDER. A assinatura abaixo cobre ordem, id, responsáveis, nome e status.
+  // renderFila_ também roda a cada toque (selecionar/expandir); nesses casos os
+  // dados não mudaram, a assinatura é a mesma e nada é resetado.
+  var _filaSig = filaTotal.map(function(p){
+    return [p.id, p.ordemFila, p.servidor || '', p.servidorExt || '', p.nome || '', p.status || ''].join('|');
+  }).join('¬');
+  if (!FILA_ORDER.length || _filaSig !== _FILA_SIG) {
     FILA_ORDER = filaTotal.slice();
-    FILA_SEL = {}; FILA_SERV = {}; FILA_D0 = {}; FILA_EXPAND = {};
+    _FILA_SIG = _filaSig;
+    // Preserva seleções/expansões/edições em andamento (mapas por pid); entradas
+    // de processos que saíram da fila ficam órfãs e são simplesmente ignoradas.
+    var _pids = {};
+    filaTotal.forEach(function(p){ _pids[p.id] = true; });
+    [FILA_SEL, FILA_SERV, FILA_D0, FILA_EXPAND].forEach(function(m){
+      Object.keys(m).forEach(function(k){ if (!_pids[k]) delete m[k]; });
+    });
   }
   var isChefe_ = isChefeAtual_();
   if (!FILA_ORDER.length) {
@@ -3659,8 +3682,8 @@ function _renderFilaServBody_() {
     SERV_DATA.forEach(function(sd) {
       var s = sd.nome; var isSel = _mesmoServ_(sel, s);
       var outro = chave==='int'?'ext':'int'; var bloq = ehPE && _mesmoServ_(FILA_SERV_SEL[outro], s);
-      h += '<button onclick="toggleFilaServSlot_(\''+chave+'\',\''+s+'\')" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;border:2px solid '+(isSel?'var(--navy)':'var(--border)')+';background:'+(isSel?'#eff6ff':'var(--bg)')+';cursor:'+(bloq?'default':'pointer')+';font-size:13px;font-weight:600;opacity:'+(bloq?.4:1)+'">'
-        + '<span style="'+servTagStyle_(sd)+'">'+s+'</span>'+(isSel?'<span style="color:var(--navy);margin-left:auto;font-size:12px;">✓</span>':'')+'</button>';
+      h += '<button onclick="toggleFilaServSlot_(\''+chave+'\',\''+escJsAttr(s)+'\')" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;border:2px solid '+(isSel?'var(--navy)':'var(--border)')+';background:'+(isSel?'#eff6ff':'var(--bg)')+';cursor:'+(bloq?'default':'pointer')+';font-size:13px;font-weight:600;opacity:'+(bloq?.4:1)+'">'
+        + '<span style="'+servTagStyle_(sd)+'">'+esc(s)+'</span>'+(isSel?'<span style="color:var(--navy);margin-left:auto;font-size:12px;">✓</span>':'')+'</button>';
     });
     h += '<button onclick="toggleFilaServSlot_(\''+chave+'\',\'\')" style="padding:10px 13px;border-radius:10px;border:2px solid '+(sel===''?'#dc2626':'var(--border)')+';background:var(--bg);cursor:pointer;font-size:12px;color:var(--muted);font-weight:600;">'+(sel===''?'✓ Nenhum':'Nenhum')+'</button>';
     return h + '</div></div>';
@@ -3974,10 +3997,10 @@ function renderNovoStep() {
 
     var nomeServ = getNomesServ_();
     var gridInt = nomeServ.map(function(s) {
-      return '<button class="serv-btn' + (NOVO.respInterno===s?' selected':'') + '" onclick="selecionarResp(\'int\',\''+s+'\')">' + s + '</button>';
+      return '<button class="serv-btn' + (NOVO.respInterno===s?' selected':'') + '" onclick="selecionarResp(\'int\',\''+escJsAttr(s)+'\')">' + esc(s) + '</button>';
     }).join('');
     var gridExt = ehPE ? nomeServ.map(function(s) {
-      return '<button class="serv-btn' + (NOVO.respExterno===s?' selected':'') + '" onclick="selecionarResp(\'ext\',\''+s+'\')">' + s + '</button>';
+      return '<button class="serv-btn' + (NOVO.respExterno===s?' selected':'') + '" onclick="selecionarResp(\'ext\',\''+escJsAttr(s)+'\')">' + esc(s) + '</button>';
     }).join('') : '';
 
     body.innerHTML =
@@ -4770,7 +4793,7 @@ function submeterCadastroUnidade(ev){
   var email=(document.getElementById('uc-email').value||'').trim();
   var msg=document.getElementById('uc-msg');
   if(nome.length<3){ msg.style.color='#b02035'; msg.textContent='Informe o nome da unidade.'; return; }
-  if(!/@.*g12\.br$/i.test(email)){ msg.style.color='#b02035'; msg.textContent='Use um e-mail institucional (@...g12.br).'; return; }
+  if(!/^[^@\s]+@([a-z0-9-]+\.)+g12\.br$/i.test(email)){ msg.style.color='#b02035'; msg.textContent='Use um e-mail institucional (ex.: nome@cp2.g12.br).'; return; }
   msg.style.color='inherit'; msg.textContent='Cadastrando…';
   google.script.run
     .withSuccessHandler(function(r){
