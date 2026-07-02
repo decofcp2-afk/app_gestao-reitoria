@@ -1005,18 +1005,21 @@
       trocarSenhaSegura(args[0], args[2], success, failure);
       return;
     }
-    // Fase 3: leituras direto do Firestore (rápido). Fallback ao Apps Script.
+    // Fase 3: leituras direto do Firestore (rápido). Pós-corte, SEM fallback ao
+    // Apps Script: a planilha ficou congelada na migração, então cair para ela
+    // mostrava dados antigos sem aviso (e a Capacidade vinha no shape errado,
+    // com `linha` em vez de `docId`, quebrando o "Pontuar"). Em falha, o erro
+    // vai ao failure handler — carregarDados() já cai no cache offline.
     var _temFs = window.AppselFirestore && window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo
       && window.APPSEL_CONFIG.firebase && window.firebase;
     if (_temFs && (method === 'getEtapasParaApp' || method === 'getCapacidadeApp')) {
-      var _fb = function() {
-        if (window.console) console.warn('Firestore falhou; usando Apps Script.', method);
-        callApi('appsel.call', { method: method, args: JSON.stringify(args) }, success, failure);
-      };
       var prom = (method === 'getEtapasParaApp')
         ? window.AppselFirestore.carregar({ isChefe: (typeof isChefeAtual_ === 'function') ? isChefeAtual_() : false })
         : window.AppselFirestore.carregarCapacidade();
-      prom.then(success || function() {}).catch(_fb);
+      prom.then(success || function() {}).catch(function(err) {
+        if (window.console) console.warn('Leitura do Firestore falhou.', method, err);
+        (failure || function(e) { console.error(e); })(err);
+      });
       return;
     }
     // Escritas (e getHistorico, coleção privada) com args 1:1 → roteia para fs_*.
@@ -1575,6 +1578,7 @@ function salvarEditServ() {
         CAP_CARREGADO = false;
         if (!document.getElementById('tab-capacidade').hidden) carregarCapacidade_();
         toast('✓ Servidor salvo!', 'ok');
+        mostrarNovosAcessos_(res.novosAcessos);
       } else { toast('Erro: '+(res.erro||''), 'err'); }
     })
     .withFailureHandler(function(e){ toast('Erro: '+(e.message||e), 'err'); })
@@ -1608,13 +1612,45 @@ function removerServConfirm_(idx) {
   );
 }
 
+// Informa a chefia como o novo servidor recebe o 1º acesso. A senha inicial é
+// ALEATÓRIA: vai por e-mail quando há e-mail cadastrado; senão é exibida aqui
+// UMA vez para repasse manual (o backend não a devolve quando o e-mail foi enviado).
+function mostrarNovosAcessos_(novos) {
+  if (!novos || !novos.length) return;
+  var linhas = novos.map(function(n) {
+    if (n.emailEnviado) {
+      return '• ' + n.nome + ' (matrícula ' + n.matricula + '): senha temporária enviada para ' + (n.email || 'o e-mail cadastrado') + '. Peça para conferir a caixa de entrada (e o spam).';
+    }
+    return '• ' + n.nome + ' (matrícula ' + n.matricula + '): SEM e-mail cadastrado — anote e repasse a senha temporária: ' + (n.senhaTemp || '') + ' (não será exibida novamente). Dica: cadastre o e-mail na aba Config → E-mails.';
+  });
+  abrirDialogo_({
+    titulo: 'Acesso do novo servidor',
+    mensagem: linhas.join('\n\n') + '\n\nNo primeiro acesso o sistema exigirá a troca da senha temporária por uma definitiva.',
+    ok: 'Entendi', cancelar: 'Fechar'
+  }, function(){});
+}
+
 function resetarSenhaEditServ() {
   var s = EDIT_SERV_IDX >= 0 ? SERV_DATA[EDIT_SERV_IDX] : null;
   if (!s || !s.matricula) { toast('Servidor sem matrícula.', 'err'); return; }
-  dialogoConfirmar_('Resetar senha', 'A senha de ' + s.nome + ' voltará para 123456 e deverá ser trocada no próximo acesso.', function() {
+  dialogoConfirmar_('Resetar senha', 'Uma nova senha temporária ALEATÓRIA será gerada para ' + s.nome + '. Se houver e-mail cadastrado, ela será enviada por e-mail; caso contrário, aparecerá aqui para você repassar. No próximo acesso o sistema exigirá a troca por uma senha definitiva.', function() {
     google.script.run
       .withSuccessHandler(function(res) {
-        if (res && res.ok) toast('Senha temporária: 123456', 'ok');
+        if (res && res.ok) {
+          if (res.emailEnviado) {
+            abrirDialogo_({
+              titulo: 'Senha resetada',
+              mensagem: 'A nova senha temporária de ' + s.nome + ' foi enviada para ' + (res.email || 'o e-mail cadastrado') + '.\n\nPeça para conferir a caixa de entrada (e o spam). No primeiro acesso o sistema pedirá a criação de uma senha definitiva.',
+              ok: 'Entendi', cancelar: 'Fechar'
+            }, function(){});
+          } else {
+            abrirDialogo_({
+              titulo: 'Senha resetada — anote agora',
+              mensagem: s.nome + ' não tem e-mail cadastrado, então a senha temporária NÃO foi enviada automaticamente.\n\nSenha temporária: ' + (res.senhaTemporaria || '') + '\n\nAnote e repasse com segurança: ela não será exibida novamente. No primeiro acesso o sistema pedirá a criação de uma senha definitiva.',
+              ok: 'Anotei', cancelar: 'Fechar'
+            }, function(){});
+          }
+        }
         else toast('Erro: ' + (res && res.erro ? res.erro : 'Falha ao resetar senha.'), 'err');
       })
       .withFailureHandler(function(e){ toast('Erro: ' + (e.message || e), 'err'); })
@@ -4004,7 +4040,7 @@ function selecionarResp(tipo, nome) {
 function renderNovoCapAvisos_() {
   var el = document.getElementById('novo-cap-aviso');
   if (!el) return;
-  var ehPE = (NOVO.modalidade === 'PregÃ£o EletrÃ´nico' || NOVO.modalidade === 'ConcorrÃªncia');
+  var ehPE = (NOVO.modalidade === 'Pregão Eletrônico' || NOVO.modalidade === 'Concorrência');
   var h = '';
   if (NOVO.respInterno) h += capAvisoHtml_(NOVO.respInterno, 'int', 0);
   if (ehPE && NOVO.respExterno) h += capAvisoHtml_(NOVO.respExterno, 'ext', 0);
@@ -4632,7 +4668,7 @@ if ('serviceWorker' in navigator) {
 var TOUR_STEPS = [
   { e:'👋', t:'Bem-vindo(a)!', h:'Este é o <b>Sistema de Gestão de Etapas</b> das contratações da sua unidade. Ele organiza cada processo, seus prazos e responsáveis — e publica o andamento no Painel público (transparência).' },
   { e:'⚙️', t:'1º passo: Configurações iniciais', h:'Comece pelo menu <b>⚙️ Configurações</b> (canto superior direito):<br>• <b>Equipe</b> — cadastre os servidores e marque quem é <b>chefe</b>.<br>• <b>E-mails</b> — cada servidor recebe os avisos de prazo.<br>• <b>Dados da unidade</b> — informe o <b>endereço</b> e o <b>e-mail do setor</b> (aparecem no rodapé do Painel público).<br>Os <b>prazos das etapas são contados em dias corridos</b> (conforme a portaria vigente), incluindo fins de semana e feriados.<br>Faça isso antes de tudo para o sistema funcionar como planejado.' },
-  { e:'🔑', t:'Troque a senha temporária', h:'Se você entrou com a senha temporária do e-mail, o sistema pede para criar uma senha sua. Cada servidor cadastrado entra com a própria matrícula (senha inicial <b>123456</b>, trocada no 1º acesso).' },
+  { e:'🔑', t:'Troque a senha temporária', h:'Se você entrou com a senha temporária do e-mail, o sistema pede para criar uma senha sua. Cada servidor cadastrado entra com a própria matrícula e uma <b>senha temporária aleatória</b>, enviada por e-mail no cadastro (ou repassada pela chefia, se não houver e-mail). No 1º acesso a troca por uma senha definitiva é obrigatória. Quem esquecer pode usar <b>“Esqueci minha senha”</b> na tela de login.' },
   { e:'➕', t:'Criar um processo', h:'Use o botão <b>+</b> (novo processo) para iniciar uma contratação: informe o objeto, o <b>D0</b> (data inicial) e os <b>responsáveis da fase interna e externa</b>. As 9 etapas são geradas automaticamente. Você pode <b>trocar os responsáveis depois</b> — veja o próximo passo.' },
   { e:'📋', t:'Acompanhar etapas e prazos', h:'Em <b>Etapas</b>, conclua ou regrida cada etapa conforme o andamento. Atrasos aparecem destacados; o sistema recalcula as datas em cascata.' },
   { e:'⚖️', t:'Capacidade e responsáveis', h:'Na aba <b>Capacidade</b> você acompanha a <b>carga de trabalho</b> de cada servidor e a <b>ocupação do setor</b> (🟢 disponível / 🟡 limitada / 🔴 máxima), que também aparece no Painel. Para <b>trocar o responsável</b> por um processo, clique no nome do responsável (ou em <b>+ Atribuir</b>) dentro do processo, em Etapas — a pontuação é ajustada automaticamente na Capacidade.' },

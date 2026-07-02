@@ -109,6 +109,17 @@ function _authSalt_() {
   return Utilities.getUuid().replace(/-/g, '');
 }
 
+// Senha temporária aleatória e legível (sem caracteres ambíguos como 0/O, 1/I).
+// Substitui a antiga senha padrão fixa "123456": como as matrículas são
+// visíveis publicamente (coleção `servidores` do Firestore), uma senha padrão
+// conhecida permitia que qualquer pessoa entrasse antes do titular.
+function _senhaTempAleatoria_() {
+  var c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var s = '';
+  for (var i = 0; i < 8; i++) s += c.charAt(Math.floor(Math.random() * c.length));
+  return s;
+}
+
 function _authHash_(senha, salt) {
   var bytes = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
@@ -192,7 +203,14 @@ function _authSaveUsers_(users) {
     .setProperty(_usersKey_(), JSON.stringify(users || {}));
 }
 
-function _authSyncServidores_(lista) {
+// Sincroniza a lista de servidores com o mapa de usuários (auth).
+// criadosOut (opcional): array que recebe {nome, matricula, senhaTemp} de cada
+// usuário NOVO criado nesta chamada — usado por salvarServidoresApp para
+// enviar a senha temporária por e-mail e informar a chefia. Nos demais pontos
+// de chamada (login/challenge) o parâmetro é omitido e a senha aleatória fica
+// desconhecida de propósito: o titular usa "Esqueci minha senha" para receber
+// uma temporária por e-mail.
+function _authSyncServidores_(lista, criadosOut) {
   var users = _authUsers_();
   var changed = false;
   var validos = {};
@@ -202,14 +220,16 @@ function _authSyncServidores_(lista) {
     validos[matricula] = true;
     if (!users[matricula]) {
       var salt = _authSalt_();
+      var senhaTemp = _senhaTempAleatoria_();
       users[matricula] = {
         nome: s.nome,
         matricula: matricula,
         salt: salt,
-        hash: _authHash_('123456', salt),
+        hash: _authHash_(senhaTemp, salt),
         isChefe: !!s.isChefe,
         mustChange: true
       };
+      if (criadosOut) criadosOut.push({ nome: s.nome, matricula: matricula, senhaTemp: senhaTemp });
       changed = true;
     } else {
       if (users[matricula].nome !== s.nome) { users[matricula].nome = s.nome; changed = true; }
@@ -1237,16 +1257,59 @@ function trocarSenhaApp(token, senhaAtual, novaSenha) {
 function resetarSenhaServidorApp(token, matricula) {
   return _withAppLockResult_('resetar senha', function() {
     _authRequire_(token, true);
-    var users = _authSyncServidores_(_getServidoresApp_());
+    var lista = _getServidoresApp_();
+    var users = _authSyncServidores_(lista);
     var mat = _authNorm_(matricula);
     if (!mat || !users[mat]) throw new Error('Usuário não encontrado.');
+    // Senha aleatória (não mais a padrão fixa "123456"): enviada por e-mail ao
+    // titular quando houver e-mail cadastrado; sempre retornada à chefia para
+    // repasse manual quando não houver.
+    var senhaTemp = _senhaTempAleatoria_();
     var salt = _authSalt_();
     users[mat].salt = salt;
-    users[mat].hash = _authHash_('123456', salt);
+    users[mat].hash = _authHash_(senhaTemp, salt);
     users[mat].mustChange = true;
     _authSaveUsers_(users);
-    return { ok: true, senhaTemporaria: '123456' };
+    var emailEnviado = false;
+    var emailDest = '';
+    try {
+      var servidor = lista.find(function(s) { return _authNorm_(s.matricula) === mat; });
+      var nome = (servidor && servidor.nome) || users[mat].nome || '';
+      emailDest = _emailServidorPorNome_(nome);
+      if (emailDest) {
+        _enviarEmailSenhaTemp_(emailDest, nome, mat, senhaTemp,
+          'Sua senha do AppSEL foi resetada pela chefia.');
+        emailEnviado = true;
+      }
+    } catch(e) { /* e-mail é best-effort; a senha volta na resposta */ }
+    return { ok: true, senhaTemporaria: senhaTemp, emailEnviado: emailEnviado,
+             email: emailEnviado ? emailDest : '' };
   });
+}
+
+// E-mail cadastrado de um servidor (PropertiesService, com fallback legado).
+function _emailServidorPorNome_(nome) {
+  if (!nome) return '';
+  var props = PropertiesService.getScriptProperties();
+  var email = props.getProperty(_emailKey_(nome)) || '';
+  if (!email && _ehReitoria_()) email = props.getProperty('email_' + nome) || _emailServidorFallback_(nome) || '';
+  if (!email || email.indexOf('@') < 0 || email.indexOf('COLE_') === 0) return '';
+  return email;
+}
+
+// Envia a senha temporária por e-mail com instruções claras de primeiro acesso.
+function _enviarEmailSenhaTemp_(email, nome, matricula, senhaTemp, contexto) {
+  var appUrl = 'https://decofcp2-afk.github.io/app_gestao-reitoria/';
+  var html = '<div style="font-family:Arial,sans-serif;max-width:560px;color:#1e293b;">'
+    + '<h2 style="font-size:18px;color:#1a3a5c;">Acesso ao AppSEL — Sistema de Gestão de Etapas</h2>'
+    + '<p>Olá, <b>' + nome + '</b>. ' + (contexto || 'Seu acesso ao AppSEL foi criado.') + '</p>'
+    + '<p><b>Acesse:</b> <a href="' + appUrl + '">' + appUrl + '</a></p>'
+    + '<p><b>Matrícula (login):</b> ' + matricula + '<br><b>Senha temporária:</b></p>'
+    + '<div style="font-size:24px;font-weight:800;letter-spacing:3px;background:#f1f5f9;border-radius:8px;padding:12px 16px;display:inline-block;">' + senhaTemp + '</div>'
+    + '<p>No primeiro acesso o sistema pedirá que você crie uma senha definitiva.</p>'
+    + '<p style="font-size:12px;color:#64748b;">Se você não esperava este e-mail, avise a chefia do seu setor. Mensagem automática — não responda.</p>'
+    + '</div>';
+  MailApp.sendEmail(email, 'Acesso ao AppSEL — senha temporária', '', { htmlBody: html });
 }
 
 // ── Recuperação de senha ──────────────────────────────────────────────────
@@ -3941,16 +4004,26 @@ function salvarServidoresApp(lista, authToken) {
     var novos = {};
     limpa.forEach(function(s) { novos[_normServidorNome_(s.nome)] = true; });
 
+    // Renomeação detectada pela MATRÍCULA (estável), nunca pela posição na
+    // lista: parear por índice fazia a remoção de um servidor do meio da lista
+    // ser lida como uma cadeia de renomeações (ex.: remover a 1ª pessoa virava
+    // "Amanda"→"Beatriz"), reatribuindo os processos dela a outra pessoa e
+    // pulando a trava de vínculos ativos abaixo.
     var renomes = [];
     var antigosRenomeados = {};
-    for (var i = 0; i < Math.min(antiga.length, limpa.length); i++) {
-      var oldN = _normServidorNome_(antiga[i].nome);
-      var newN = _normServidorNome_(limpa[i].nome);
+    var novaPorMat = {};
+    limpa.forEach(function(s) { novaPorMat[_authNorm_(s.matricula)] = s; });
+    antiga.forEach(function(s) {
+      var mat = _authNorm_(s.matricula);
+      var novo = mat ? novaPorMat[mat] : null;
+      if (!novo) return;
+      var oldN = _normServidorNome_(s.nome);
+      var newN = _normServidorNome_(novo.nome);
       if (oldN && newN && oldN !== newN && !novos[oldN]) {
-        renomes.push({ antigo: antiga[i].nome, novo: limpa[i].nome });
+        renomes.push({ antigo: s.nome, novo: novo.nome });
         antigosRenomeados[oldN] = true;
       }
-    }
+    });
 
     var bloqueados = [];
     antiga.forEach(function(s) {
@@ -3965,7 +4038,25 @@ function salvarServidoresApp(lista, authToken) {
 
     props.setProperty(_servKey_(), JSON.stringify(limpa));
     if (_ehReitoria_()) _salvarServidoresConfigSheet_(limpa); // planilha é só da Reitoria
-    _authSyncServidores_(limpa);
+    // Usuários NOVOS nascem com senha temporária ALEATÓRIA (não mais "123456").
+    // Enviamos por e-mail quando o servidor tem e-mail cadastrado; quando não
+    // tem, a senha volta em `novosAcessos` para a chefia repassar manualmente.
+    var criados = [];
+    _authSyncServidores_(limpa, criados);
+    var novosAcessos = criados.map(function(c) {
+      var emailDest = _emailServidorPorNome_(c.nome);
+      var enviado = false;
+      if (emailDest) {
+        try {
+          _enviarEmailSenhaTemp_(emailDest, c.nome, c.matricula, c.senhaTemp,
+            'Você foi cadastrado(a) na equipe do AppSEL.');
+          enviado = true;
+        } catch(e) { enviado = false; }
+      }
+      return { nome: c.nome, matricula: c.matricula,
+               senhaTemp: enviado ? '' : c.senhaTemp,   // só expõe se não foi possível enviar
+               emailEnviado: enviado, email: enviado ? emailDest : '' };
+    });
 
     // Limpa o e-mail dos servidores REMOVIDOS (não estão na nova lista e não foram
     // renomeados). Sem isso, o e-mail antigo permanecia no PropertiesService e o
@@ -3997,7 +4088,8 @@ function salvarServidoresApp(lista, authToken) {
       }
     } catch(eMirror) { /* espelho é best-effort; não bloqueia o salvar */ }
 
-    return { ok: true, renomes: renomes.length, alterados: alterados, servidores: _getServidoresApp_() };
+    return { ok: true, renomes: renomes.length, alterados: alterados,
+             servidores: _getServidoresApp_(), novosAcessos: novosAcessos };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
 }
