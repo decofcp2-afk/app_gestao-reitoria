@@ -298,9 +298,20 @@ function fs_criarUnidade(params) {
       var sigla = String(params.sigla || '').trim();
       var email = String(params.email || '').trim().toLowerCase();
       if (nome.length < 3) throw new Error('Informe o nome da unidade.');
-      if (!/@.*g12\.br$/.test(email)) throw new Error('Use um e-mail institucional (@...g12.br).');
+      // Exige um subdomínio institucional real terminando em .g12.br (ex.:
+      // nome@cp2.g12.br). O regex antigo (/@.*g12\.br$/) aceitava domínios
+      // forjados como "fulano@fakeg12.br" — sem o ponto separador.
+      if (!/^[^@\s]+@([a-z0-9-]+\.)+g12\.br$/.test(email)) throw new Error('Use um e-mail institucional (ex.: nome@cp2.g12.br).');
       var uid = _slugUnidade_(nome);
       if (!uid) throw new Error('Nome inválido.');
+
+      // Rate-limit simples do autocadastro (endpoint aberto, sem login): no
+      // máximo 1 criação a cada 60s por e-mail, para conter cadastro em massa.
+      var _rlKey = 'SEL_UNI_CREATE_TS_' + Utilities.base64EncodeWebSafe(email).replace(/[^A-Za-z0-9]/g, '');
+      var _rlProps = PropertiesService.getScriptProperties();
+      var _rlLast = Number(_rlProps.getProperty(_rlKey) || 0);
+      if (Date.now() - _rlLast < 60 * 1000) throw new Error('Aguarde um minuto antes de cadastrar outra unidade com este e-mail.');
+      _rlProps.setProperty(_rlKey, String(Date.now()));
       var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
       var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
       // 404 = não existe ainda (ok criar). Qualquer outro erro (rede/permissão/
@@ -588,9 +599,16 @@ function fs_iniciarProcessos(params, authToken) {
   return _withAppLockResult_('iniciar processos (fs)', function() {
     try {
       _authRequire_(authToken || (params && params.authToken), true);
-      var iniciados = 0;
-      (params || []).forEach(function(item){
-        var pid = String(item.pid || '').trim();
+      var lista = params || [];
+
+      // VALIDAÇÃO PRÉVIA (atômica): confere TODO o lote antes de gravar. Sem
+      // isso, um item inválido no meio do forEach lançava depois de já ter
+      // iniciado os anteriores; o chefe reenviava e reprocessava os já
+      // iniciados (D0 sobrescrito, 1ª etapa resetada). Agora, ou o lote inteiro
+      // passa e é gravado, ou nada é tocado.
+      var validados = [];
+      lista.forEach(function(item){
+        var pid = String((item && item.pid) || '').trim();
         if (!pid) return;
         var proc = _fsGet_('processos/' + pid) || {};
         var modalidade = proc.modalidade || item.modal || '';
@@ -598,6 +616,12 @@ function fs_iniciarProcessos(params, authToken) {
         if (extSeg && item.servidor && item.servidorExt && item.servidor === item.servidorExt) {
           throw new Error('Fase interna e fase externa precisam ter responsáveis diferentes em Pregão/Concorrência.');
         }
+        validados.push({ item: item, pid: pid, extSeg: extSeg });
+      });
+
+      var iniciados = 0;
+      validados.forEach(function(v){
+        var item = v.item, pid = v.pid, extSeg = v.extSeg;
         var upd = { status: 'Em andamento' };
         if (item.d0) upd.d0 = new Date(item.d0 + 'T12:00:00');
         _fsUpdate_('processos/' + pid, upd);
