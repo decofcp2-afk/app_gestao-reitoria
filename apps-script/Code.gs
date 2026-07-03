@@ -2048,8 +2048,12 @@ function _appendHist_(e) {
 
 // ── enviarAvisosPrazo ─────────────────────────────────────────────────────
 // Triggers de segunda a sexta: prazos proximos as 10h30 e vencidos as 14h.
-//   1. Prazo próximo  — etapa vence em até DIAS_AVISO dias
-//   2. Prazo vencido  — etapa deveria ter sido concluída mas não foi
+// REGRA: no máximo 2 e-mails por etapa/prazo (cota do Gmail ~100/dia):
+//   1. Aviso antecipado — quando a etapa entra na janela de DIAS_AVISO dias
+//   2. Aviso do vencimento — no dia D ("Vence hoje", 10h30); se o dia D cair
+//      em fim de semana ou a execução falhar, sai no primeiro dia útil
+//      seguinte pela rotina das 14h como "vencida há X dias" (recuperação,
+//      debita a mesma cota — nunca há um 3º e-mail)
 //
 // Destinatários:
 //   Processo suspenso/paralisado:
@@ -2261,17 +2265,30 @@ function enviarAvisosPrazo(modo) {
     });
   });
 
+  // REGRA DE ENVIO (máx. 2 e-mails por etapa, para poupar a cota diária do
+  // Gmail): 1º aviso com DIAS_AVISO dias de antecedência ('proximo') e 2º
+  // aviso no dia do VENCIMENTO ('vencimento'). Sem terceiro e-mail de
+  // "vencida": o aviso de vencida só existe como RECUPERAÇÃO do 2º — quando o
+  // dia D caiu em fim de semana (a rotina roda seg–sex) ou a execução falhou,
+  // ele sai no primeiro dia útil seguinte como "vencida há X dias", debitando
+  // a MESMA chave 'vencimento'. Uma etapa nunca recebe os dois.
+  function _tipoDedupProximo_(av) { return av.dias === 0 ? 'vencimento' : 'proximo'; }
+
   // Deduplicação: remove avisos cuja etapa já foi notificada para este fim_iso
-  // (com o tipo correspondente). Garante 1 e-mail de "próximo" + 1 de "vencido"
-  // por etapa, em vez de reenvio diário. Se o prazo mudou, o fim_iso difere e o
-  // aviso volta a ser permitido.
+  // (com o tipo correspondente), em vez de reenvio diário. Se o prazo mudou, o
+  // fim_iso difere e o aviso volta a ser permitido.
   var jaEnviado = _avisosCarregarEstado_();
   function _naoAvisado_(av, tipo) {
     var ch = _chaveAvisoEtapa_(av.p, av.etIdx, tipo);
     return jaEnviado[ch] !== String(av.et.fim_iso || '');
   }
-  avisosProximos = avisosProximos.filter(function(av) { return _naoAvisado_(av, 'proximo'); });
-  avisosVencidos = avisosVencidos.filter(function(av) { return _naoAvisado_(av, 'vencido'); });
+  avisosProximos = avisosProximos.filter(function(av) { return _naoAvisado_(av, _tipoDedupProximo_(av)); });
+  // Vencidos = só recuperação do aviso de vencimento perdido. Também respeita
+  // a chave legada 'vencido' (enviada por versões anteriores), para não
+  // reenviar em massa para etapas antigas já notificadas.
+  avisosVencidos = avisosVencidos.filter(function(av) {
+    return _naoAvisado_(av, 'vencimento') && _naoAvisado_(av, 'vencido');
+  });
 
   var total = (enviarProximos ? avisosProximos.length : 0) + (enviarVencidos ? avisosVencidos.length : 0);
   if (!total) return 'Nenhum aviso para enviar hoje.';
@@ -2382,9 +2399,18 @@ function enviarAvisosPrazo(modo) {
         + '<a href="' + htmlEsc_(_painelUrl_()) + '" style="color:#1d4ed8;font-weight:700;">Painel de Contratações — Reitoria / SEL</a>.'
         + '</p>'
       : '';
+    // Nota de recálculo: os prazos deste aviso são dinâmicos (cada etapa conta
+    // a partir da conclusão REAL da anterior) e podem diferir do cronograma
+    // emitido na abertura do processo — sem esta explicação, setores comparavam
+    // com o PDF original e entendiam a diferença como erro do sistema.
+    var notaRecalculo = '<p style="margin:12px 0 0;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:10px;">'
+      + 'ℹ️ Os prazos deste aviso são <b>recalculados automaticamente</b>: cada etapa é contada, em dias corridos, '
+      + 'a partir da conclusão efetiva da etapa anterior. Por isso, as datas podem diferir do cronograma emitido na abertura do processo — '
+      + 'atrasos em etapas anteriores deslocam os prazos das etapas seguintes.'
+      + '</p>';
     var subt = (tipo === 'vencido' ? '⚠️ Etapas vencidas' : '⏰ Prazos próximos') + (subtituloExtra ? ' · ' + subtituloExtra : '') + ' · Colégio Pedro II';
     return htmlHeader_('Gestão de Etapas - SEL', subt)
-      + intro + tabela + painelHtml + appAssinatura;
+      + intro + tabela + painelHtml + notaRecalculo + appAssinatura;
   }
 
   // ── Processa um PROCESSO com todas as suas etapas de um tipo ───────────
@@ -2451,7 +2477,11 @@ function enviarAvisosPrazo(modo) {
       // falha de cota/configuração permite reenviar na próxima execução.
       if (enviadosProc > 0) {
         grupo.avisos.forEach(function(av) {
-          _avisoMarcar_(_chaveAvisoEtapa_(av.p, av.etIdx, tipo), av.et.fim_iso);
+          // 'proximo' com dias===0 e 'vencido' (recuperação de fim de semana)
+          // debitam a MESMA chave 'vencimento' — é o 2º e último e-mail da
+          // etapa (regra: máx. 2 envios por etapa/prazo).
+          var tipoDedup = tipo === 'proximo' ? _tipoDedupProximo_(av) : 'vencimento';
+          _avisoMarcar_(_chaveAvisoEtapa_(av.p, av.etIdx, tipoDedup), av.et.fim_iso);
         });
       }
     });
