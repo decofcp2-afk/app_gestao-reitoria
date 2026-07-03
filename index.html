@@ -3452,10 +3452,21 @@ function _initFilaDrag_(cont, isChefe_) {
   });
 }
 
-// Salva a ordem atual da fila na planilha (só chefia). Degrada com aviso claro
-// se a coluna OrdemFila ainda não existir.
+// Salva a ordem atual da fila (só chefia), com DEBOUNCE de 1,2s: cada arrasto
+// ou clique nas setas ▲▼ disparava uma gravação por processo no backend; ao
+// reordenar vários itens em sequência, isso virava dezenas de escritas e um
+// toast por movimento. Agora só a ordem final da sequência é persistida.
+var _persistirOrdemFilaTimer_ = null;
 function _persistirOrdemFila_() {
   if (!isChefeAtual_()) return;
+  if (_persistirOrdemFilaTimer_) clearTimeout(_persistirOrdemFilaTimer_);
+  _persistirOrdemFilaTimer_ = setTimeout(_persistirOrdemFilaAgora_, 1200);
+}
+
+// Degrada com aviso claro se a coluna OrdemFila ainda não existir.
+function _persistirOrdemFilaAgora_() {
+  _persistirOrdemFilaTimer_ = null;
+  if (!isChefeAtual_() || !FILA_ORDER.length) return; // fila esvaziada (logout/refresh) — nada a salvar
   var ordem = FILA_ORDER.map(function(p){ return p.id; });
   google.script.run
     .withSuccessHandler(function(res) {

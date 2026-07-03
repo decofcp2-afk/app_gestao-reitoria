@@ -1092,10 +1092,25 @@ function loginChallengeApp(matricula) {
       var lista = _getServidoresApp_();
       users = _authSyncServidores_(lista);
     }
-    if (!mat || !users[mat]) return { ok: false, erro: 'Matricula ou senha invalida.' };
-
     var challengeId = Utilities.getUuid();
     var nonce = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+
+    // Anti-enumeração de matrículas: para matrícula INEXISTENTE devolvemos um
+    // challenge FALSO (salt determinístico, não armazenado) em vez de erro.
+    // Antes, a resposta diferente aqui confirmava quais matrículas existiam —
+    // dado que combinava mal com o login público. A prova desse challenge
+    // falha no loginProofApp (não há registro) com a MESMA mensagem genérica.
+    // O salt falso é derivado por HMAC-like da matrícula + segredo persistente,
+    // para ser estável entre chamadas (um salt aleatório a cada chamada também
+    // denunciaria a inexistência).
+    if (!mat || !users[mat]) {
+      var props = PropertiesService.getScriptProperties();
+      var segredo = props.getProperty('SEL_FAKE_SALT_SECRET');
+      if (!segredo) { segredo = Utilities.getUuid().replace(/-/g, ''); props.setProperty('SEL_FAKE_SALT_SECRET', segredo); }
+      var fakeSalt = _sha256Base64_(segredo + '::' + mat).replace(/[^a-f0-9]/gi, '0').toLowerCase().slice(0, 32);
+      return { ok: true, challengeId: challengeId, nonce: nonce, salt: fakeSalt };
+    }
+
     PropertiesService.getScriptProperties().setProperty(_loginChallengeKey_(challengeId), JSON.stringify({
       matricula: mat,
       nonce: nonce,
@@ -1342,10 +1357,12 @@ function solicitarResetSenhaApp(matricula) {
     var lista = _getServidoresApp_();
     var users = _authSyncServidores_(lista);
     var mat = _authNorm_(matricula);
-    if (!mat || !users[mat]) throw new Error('Matrícula não cadastrada.');
-
-    var servidor = lista.find(function(s) { return _authNorm_(s.matricula) === mat; });
-    if (!servidor) throw new Error('Matrícula não cadastrada.');
+    // Anti-enumeração: matrícula inexistente recebe a MESMA resposta de
+    // sucesso (nada é enviado). Antes, "Matrícula não cadastrada" confirmava
+    // publicamente quais matrículas existem. O caso "existe mas sem e-mail"
+    // continua orientando o usuário real (ele conhece a própria matrícula).
+    var servidor = (mat && users[mat]) ? lista.find(function(s) { return _authNorm_(s.matricula) === mat; }) : null;
+    if (!servidor) return { ok: true, email: 'o e-mail cadastrado (se houver)' };
 
     var email = servidor.email || _emailServidorFallback_(servidor.nome) || '';
     if (!email || email.indexOf('@') < 0 || email.indexOf('COLE_') === 0) {
