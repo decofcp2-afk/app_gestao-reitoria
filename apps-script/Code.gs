@@ -2261,16 +2261,23 @@ function enviarAvisosPrazo(modo) {
     });
   });
 
+  // Tipo de deduplicação de um aviso "próximo": o dia do VENCIMENTO (dias===0)
+  // tem tipo próprio ('vencehoje'), separado do aviso antecipado ('proximo').
+  // Sem isso, o e-mail de 3 dias antes "consumia" a deduplicação e NINGUÉM
+  // recebia aviso no dia D — o vencimento só era comunicado no dia seguinte,
+  // como "vencida há 1 dia". Regra pretendida: 1 aviso com DIAS_AVISO dias de
+  // antecedência + 1 aviso no dia do vencimento + 1 aviso de vencida.
+  function _tipoDedupProximo_(av) { return av.dias === 0 ? 'vencehoje' : 'proximo'; }
+
   // Deduplicação: remove avisos cuja etapa já foi notificada para este fim_iso
-  // (com o tipo correspondente). Garante 1 e-mail de "próximo" + 1 de "vencido"
-  // por etapa, em vez de reenvio diário. Se o prazo mudou, o fim_iso difere e o
-  // aviso volta a ser permitido.
+  // (com o tipo correspondente), em vez de reenvio diário. Se o prazo mudou, o
+  // fim_iso difere e o aviso volta a ser permitido.
   var jaEnviado = _avisosCarregarEstado_();
   function _naoAvisado_(av, tipo) {
     var ch = _chaveAvisoEtapa_(av.p, av.etIdx, tipo);
     return jaEnviado[ch] !== String(av.et.fim_iso || '');
   }
-  avisosProximos = avisosProximos.filter(function(av) { return _naoAvisado_(av, 'proximo'); });
+  avisosProximos = avisosProximos.filter(function(av) { return _naoAvisado_(av, _tipoDedupProximo_(av)); });
   avisosVencidos = avisosVencidos.filter(function(av) { return _naoAvisado_(av, 'vencido'); });
 
   var total = (enviarProximos ? avisosProximos.length : 0) + (enviarVencidos ? avisosVencidos.length : 0);
@@ -2382,9 +2389,18 @@ function enviarAvisosPrazo(modo) {
         + '<a href="' + htmlEsc_(_painelUrl_()) + '" style="color:#1d4ed8;font-weight:700;">Painel de Contratações — Reitoria / SEL</a>.'
         + '</p>'
       : '';
+    // Nota de recálculo: os prazos deste aviso são dinâmicos (cada etapa conta
+    // a partir da conclusão REAL da anterior) e podem diferir do cronograma
+    // emitido na abertura do processo — sem esta explicação, setores comparavam
+    // com o PDF original e entendiam a diferença como erro do sistema.
+    var notaRecalculo = '<p style="margin:12px 0 0;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:10px;">'
+      + 'ℹ️ Os prazos deste aviso são <b>recalculados automaticamente</b>: cada etapa é contada, em dias corridos, '
+      + 'a partir da conclusão efetiva da etapa anterior. Por isso, as datas podem diferir do cronograma emitido na abertura do processo — '
+      + 'atrasos em etapas anteriores deslocam os prazos das etapas seguintes.'
+      + '</p>';
     var subt = (tipo === 'vencido' ? '⚠️ Etapas vencidas' : '⏰ Prazos próximos') + (subtituloExtra ? ' · ' + subtituloExtra : '') + ' · Colégio Pedro II';
     return htmlHeader_('Gestão de Etapas - SEL', subt)
-      + intro + tabela + painelHtml + appAssinatura;
+      + intro + tabela + painelHtml + notaRecalculo + appAssinatura;
   }
 
   // ── Processa um PROCESSO com todas as suas etapas de um tipo ───────────
@@ -2451,7 +2467,10 @@ function enviarAvisosPrazo(modo) {
       // falha de cota/configuração permite reenviar na próxima execução.
       if (enviadosProc > 0) {
         grupo.avisos.forEach(function(av) {
-          _avisoMarcar_(_chaveAvisoEtapa_(av.p, av.etIdx, tipo), av.et.fim_iso);
+          // Para "próximos", a chave de dedupe distingue o aviso antecipado do
+          // aviso do dia do vencimento (ver _tipoDedupProximo_).
+          var tipoDedup = tipo === 'proximo' ? _tipoDedupProximo_(av) : tipo;
+          _avisoMarcar_(_chaveAvisoEtapa_(av.p, av.etIdx, tipoDedup), av.et.fim_iso);
         });
       }
     });
