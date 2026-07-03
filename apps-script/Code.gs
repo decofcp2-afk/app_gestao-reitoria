@@ -2048,8 +2048,12 @@ function _appendHist_(e) {
 
 // ── enviarAvisosPrazo ─────────────────────────────────────────────────────
 // Triggers de segunda a sexta: prazos proximos as 10h30 e vencidos as 14h.
-//   1. Prazo próximo  — etapa vence em até DIAS_AVISO dias
-//   2. Prazo vencido  — etapa deveria ter sido concluída mas não foi
+// REGRA: no máximo 2 e-mails por etapa/prazo (cota do Gmail ~100/dia):
+//   1. Aviso antecipado — quando a etapa entra na janela de DIAS_AVISO dias
+//   2. Aviso do vencimento — no dia D ("Vence hoje", 10h30); se o dia D cair
+//      em fim de semana ou a execução falhar, sai no primeiro dia útil
+//      seguinte pela rotina das 14h como "vencida há X dias" (recuperação,
+//      debita a mesma cota — nunca há um 3º e-mail)
 //
 // Destinatários:
 //   Processo suspenso/paralisado:
@@ -2261,13 +2265,14 @@ function enviarAvisosPrazo(modo) {
     });
   });
 
-  // Tipo de deduplicação de um aviso "próximo": o dia do VENCIMENTO (dias===0)
-  // tem tipo próprio ('vencehoje'), separado do aviso antecipado ('proximo').
-  // Sem isso, o e-mail de 3 dias antes "consumia" a deduplicação e NINGUÉM
-  // recebia aviso no dia D — o vencimento só era comunicado no dia seguinte,
-  // como "vencida há 1 dia". Regra pretendida: 1 aviso com DIAS_AVISO dias de
-  // antecedência + 1 aviso no dia do vencimento + 1 aviso de vencida.
-  function _tipoDedupProximo_(av) { return av.dias === 0 ? 'vencehoje' : 'proximo'; }
+  // REGRA DE ENVIO (máx. 2 e-mails por etapa, para poupar a cota diária do
+  // Gmail): 1º aviso com DIAS_AVISO dias de antecedência ('proximo') e 2º
+  // aviso no dia do VENCIMENTO ('vencimento'). Sem terceiro e-mail de
+  // "vencida": o aviso de vencida só existe como RECUPERAÇÃO do 2º — quando o
+  // dia D caiu em fim de semana (a rotina roda seg–sex) ou a execução falhou,
+  // ele sai no primeiro dia útil seguinte como "vencida há X dias", debitando
+  // a MESMA chave 'vencimento'. Uma etapa nunca recebe os dois.
+  function _tipoDedupProximo_(av) { return av.dias === 0 ? 'vencimento' : 'proximo'; }
 
   // Deduplicação: remove avisos cuja etapa já foi notificada para este fim_iso
   // (com o tipo correspondente), em vez de reenvio diário. Se o prazo mudou, o
@@ -2278,7 +2283,12 @@ function enviarAvisosPrazo(modo) {
     return jaEnviado[ch] !== String(av.et.fim_iso || '');
   }
   avisosProximos = avisosProximos.filter(function(av) { return _naoAvisado_(av, _tipoDedupProximo_(av)); });
-  avisosVencidos = avisosVencidos.filter(function(av) { return _naoAvisado_(av, 'vencido'); });
+  // Vencidos = só recuperação do aviso de vencimento perdido. Também respeita
+  // a chave legada 'vencido' (enviada por versões anteriores), para não
+  // reenviar em massa para etapas antigas já notificadas.
+  avisosVencidos = avisosVencidos.filter(function(av) {
+    return _naoAvisado_(av, 'vencimento') && _naoAvisado_(av, 'vencido');
+  });
 
   var total = (enviarProximos ? avisosProximos.length : 0) + (enviarVencidos ? avisosVencidos.length : 0);
   if (!total) return 'Nenhum aviso para enviar hoje.';
@@ -2467,9 +2477,10 @@ function enviarAvisosPrazo(modo) {
       // falha de cota/configuração permite reenviar na próxima execução.
       if (enviadosProc > 0) {
         grupo.avisos.forEach(function(av) {
-          // Para "próximos", a chave de dedupe distingue o aviso antecipado do
-          // aviso do dia do vencimento (ver _tipoDedupProximo_).
-          var tipoDedup = tipo === 'proximo' ? _tipoDedupProximo_(av) : tipo;
+          // 'proximo' com dias===0 e 'vencido' (recuperação de fim de semana)
+          // debitam a MESMA chave 'vencimento' — é o 2º e último e-mail da
+          // etapa (regra: máx. 2 envios por etapa/prazo).
+          var tipoDedup = tipo === 'proximo' ? _tipoDedupProximo_(av) : 'vencimento';
           _avisoMarcar_(_chaveAvisoEtapa_(av.p, av.etIdx, tipoDedup), av.et.fim_iso);
         });
       }
