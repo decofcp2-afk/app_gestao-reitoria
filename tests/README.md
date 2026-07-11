@@ -67,6 +67,22 @@ o mesmo código que o navegador roda para desenhar o relatório de prazos do Adm
   de outlier, sem caixa quando n<4), robustez a série/lista vazia, escape do rótulo
   (sem injeção de HTML) e saída determinística.
 
+### `relatorio-agregacao.test.js` — pipeline de prazo real (`agregarPrazos`/`mesclarGeral`)
+Fase 2 do plano: transforma processos+etapas (forma do Firestore) nos prazos reais
+agrupados por etapa × unidade × ano, prontos para o boxplot:
+- **Início real:** 1ª etapa mede a partir do **D0**; as seguintes, a partir da
+  **conclusão real da etapa anterior** (o cursor). Etapa não concluída no meio não
+  avança o cursor.
+- **Exclusões:** etapas `na`/contratuais, não concluídas, processo **sem D0**;
+  conclusão sem data válida (`descartados.semData`) e fim < início
+  (`descartados.inconsistentes`, mas o cursor ainda avança para a conclusão real).
+- **D1:** agrupa e filtra pelo **ano da conclusão**; `anosDisponiveis` não depende
+  do filtro de ano. **D2:** dias corridos. **D3:** sem desconto de fila.
+- **Normalização** de nome de etapa (acento/caixa) cai no mesmo grupo.
+- **`mesclarGeral`:** soma as unidades por etapa×ano e preserva a unidade de origem
+  em cada item (base do ranking de melhores/piores). Aceita `Timestamp` do Firestore
+  (`{seconds}`) além de ISO.
+
 ### `excluir-unidade.test.js` — exclusão de unidade (`fs_excluirUnidade`)
 - **Paginação:** regressão em que a exclusão só lia a 1ª página (`pageSize=300`)
   de cada coleção e ignorava o `nextPageToken` — uma unidade com coleções que

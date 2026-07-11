@@ -2,19 +2,21 @@
  * relatorio-prazos.js — Núcleo estatístico da aba "Visão Geral" (perfil Admin)
  *
  * Funções PURAS (sem DOM, sem Firestore) que sustentam o relatório de prazos
- * por etapa pedido pelo Felipe: quartis, cerca de outliers e desenho do
- * boxplot. Ficam isoladas aqui para serem testadas no Node (pasta tests/) com
- * o MESMO código que o navegador roda — o padrão de export dual (browser +
- * CommonJS) espelha appsel-firestore.js.
+ * por etapa pedido pelo Felipe. Ficam isoladas aqui para serem testadas no Node
+ * (pasta tests/) com o MESMO código que o navegador roda — o padrão de export
+ * dual (browser + CommonJS) espelha appsel-firestore.js.
  *
- * Definições (ver PLANO_RELATORIO_PRAZOS_ADMIN.md, §2):
- *   Q1/Q2/Q3 = percentis 25/50/75 por interpolação linear tipo 7
- *              (bate com QUARTILE.INC/PERCENTIL.INC do Excel e Google Sheets).
- *   DIQ = Q3 − Q1 ; LS = Q3 + 1,5·DIQ ; LI = Q1 − 1,5·DIQ.
- *   outlier = valor > LS ou < LI ; bigodes = extremos DENTRO de [LI, LS].
+ * Conteúdo (ver PLANO_RELATORIO_PRAZOS_ADMIN.md):
+ *   Fase 1 — estatística: quartil(), estatEtapa(), boxplotSVG().
+ *     Q1/Q2/Q3 = percentis 25/50/75 por interpolação linear tipo 7 (bate com
+ *     QUARTILE.INC do Excel/Sheets). DIQ = Q3−Q1 ; LS = Q3+1,5·DIQ ;
+ *     LI = Q1−1,5·DIQ ; outlier = >LS ou <LI ; bigodes = extremos em [LI, LS].
+ *   Fase 2 — pipeline: agregarPrazos(), mesclarGeral().
+ *     Prazo real = início real (conclusão da etapa anterior, ou D0 na 1ª) até a
+ *     conclusão real (DataRealizacao). D1: ano da conclusão. D2: dias corridos.
+ *     D3: sem descontar fila/paralisação.
  *
- * Fase 1 do plano: só o núcleo estatístico. A pipeline início→conclusão real
- * (Fase 2) e a aba/UI (Fase 3) entram em mudanças seguintes.
+ * A aba/UI "Visão Geral" (só Admin), que consome estas funções, entra na Fase 3.
  * ════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -218,11 +220,177 @@
     return parts.join('');
   }
 
+  // ── Pipeline: prazo REAL de cada etapa (início real → conclusão real) ──
+  // Decisões do PLANO_RELATORIO_PRAZOS_ADMIN.md:
+  //   D1 — o "ano" é o ano da CONCLUSÃO real da etapa (DataRealizacao).
+  //   D2 — dias CORRIDOS (tempo de calendário), independentemente do modo das telas.
+  //   D3 — NÃO se desconta tempo em fila/paralisação: mede-se o literal
+  //        início→conclusão (é o que revela os outliers/piores prazos).
+  // Início real de uma etapa concluída = conclusão real da etapa concluída
+  // anterior do mesmo processo (o "cursor"); na 1ª etapa, é o D0 do processo.
+  function _normText(s) {
+    return String(s == null ? '' : s)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().trim().replace(/\s+/g, ' ');
+  }
+  // Só precisamos distinguir concluída ('ok') e não-se-aplica ('na'); o resto
+  // é "ainda não concluída" e não entra no cálculo.
+  function _statusEtapa(s) {
+    var n = _normText(s);
+    if (!n) return 'pendente';
+    if (n.indexOf('conclu') >= 0) return 'ok';
+    if (n === 'nao se aplica' || n === 'n/a') return 'na';
+    return 'pendente';
+  }
+  // Espelha isEtapaContratual de appsel-firestore.js/Code.gs.
+  function _ehContratual(fase, nome) {
+    var f = _normText(fase), n = _normText(nome);
+    return f.indexOf('contrat') >= 0 || n.indexOf('assinatura contrato') >= 0 ||
+      n.indexOf('ata (arp)') >= 0 || n.indexOf('gestao contratual') >= 0;
+  }
+  // Aceita Date, Timestamp do Firestore ({toDate}/{seconds}), ISO ou 'YYYY-MM-DD'.
+  // Normaliza para a data de calendário (meia-noite local), como parseTs().
+  function _parseData(v) {
+    if (!v) return null;
+    var d = null;
+    if (v instanceof Date) d = v;
+    else if (typeof v.toDate === 'function') d = v.toDate();
+    else if (typeof v === 'object' && (typeof v.seconds === 'number' || typeof v._seconds === 'number')) {
+      d = new Date((typeof v.seconds === 'number' ? v.seconds : v._seconds) * 1000);
+    } else {
+      d = new Date(String(v));
+    }
+    if (!d || isNaN(d.getTime())) return null;
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  function _diasCorridos(ini, fim) {
+    if (!ini || !fim) return null;
+    var a = new Date(ini.getTime()); a.setHours(0, 0, 0, 0);
+    var b = new Date(fim.getTime()); b.setHours(0, 0, 0, 0);
+    return Math.round((b.getTime() - a.getTime()) / 86400000);
+  }
+  function _toIsoLocal(d) {
+    if (!d) return null;
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+      + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function _ordenarGrupos(map) {
+    return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) {
+      if (a.etapaChave !== b.etapaChave) return a.etapaChave < b.etapaChave ? -1 : 1;
+      return a.ano - b.ano;
+    });
+  }
+
+  // processos: [{ id (ou _id), d0 }]  — d0 em Date/Timestamp/ISO.
+  // etapas:    [{ processoId, etapa, fase, status, dataRealizacao, ordem }].
+  // opts:      { unidade, ano } — ano (opcional) filtra pela conclusão.
+  // Retorna { unidade, grupos:[{etapa, etapaChave, unidade, ano, dias:[], itens:[]}],
+  //           anosDisponiveis:[], descartados:{ semData, inconsistentes } }.
+  function agregarPrazos(processos, etapas, opts) {
+    opts = opts || {};
+    var unidade = opts.unidade || '';
+    var anoFiltro = (opts.ano != null && opts.ano !== '') ? Number(opts.ano) : null;
+
+    var d0Por = {};
+    (processos || []).forEach(function (p) {
+      var pid = String((p && (p.id || p._id)) || '').trim();
+      if (pid) d0Por[pid] = _parseData(p.d0);
+    });
+
+    var etpPor = {};
+    (etapas || []).forEach(function (e) {
+      var pid = String((e && e.processoId) || '').trim();
+      var nome = String((e && e.etapa) || '').trim();
+      if (!pid || !nome) return;
+      (etpPor[pid] = etpPor[pid] || []).push(e);
+    });
+    Object.keys(etpPor).forEach(function (pid) {
+      etpPor[pid].sort(function (a, b) { return Number(a.ordem || 0) - Number(b.ordem || 0); });
+    });
+
+    var gruposMap = {};
+    var descartados = { semData: 0, inconsistentes: 0 };
+    var anosSet = {};
+
+    Object.keys(etpPor).forEach(function (pid) {
+      var d0 = d0Por[pid];
+      if (!d0) return;                       // sem D0: processo ainda na fila
+      var cursor = d0;                       // última conclusão real (começa no D0)
+      etpPor[pid].forEach(function (e) {
+        var nome = String(e.etapa || '').trim();
+        if (_ehContratual(e.fase, nome)) return;     // contratual: responsabilidade de Contratos
+        var st = _statusEtapa(e.status);
+        if (st === 'na') return;                     // não se aplica
+        if (st !== 'ok') return;                     // ainda não concluída
+        var fim = _parseData(e.dataRealizacao);
+        if (!fim) { descartados.semData++; return; } // concluída sem data válida
+        var ini = cursor;
+        var dias = _diasCorridos(ini, fim);
+        if (dias == null || dias < 0) {              // fim antes do início: inconsistente
+          descartados.inconsistentes++;
+          cursor = fim;                              // ainda assim é uma conclusão real
+          return;
+        }
+        var ano = fim.getFullYear();
+        anosSet[ano] = true;
+        cursor = fim;                                // avança para a conclusão real
+        if (anoFiltro != null && ano !== anoFiltro) return;
+        var chave = _normText(nome) + '¬' + ano;
+        var g = gruposMap[chave] || (gruposMap[chave] = {
+          etapa: nome, etapaChave: _normText(nome), unidade: unidade, ano: ano, dias: [], itens: []
+        });
+        g.dias.push(dias);
+        g.itens.push({ processoId: pid, ini: _toIsoLocal(ini), fim: _toIsoLocal(fim), dias: dias });
+      });
+    });
+
+    return {
+      unidade: unidade,
+      grupos: _ordenarGrupos(gruposMap),
+      anosDisponiveis: Object.keys(anosSet).map(Number).sort(function (a, b) { return a - b; }),
+      descartados: descartados
+    };
+  }
+
+  // Mescla vários resultados de agregarPrazos (um por unidade) na visão "Geral",
+  // agrupando por etapa × ano. Cada item guarda a unidade de origem (p/ ranking).
+  function mesclarGeral(resultados) {
+    var gruposMap = {};
+    var anosSet = {};
+    var descartados = { semData: 0, inconsistentes: 0 };
+    (resultados || []).forEach(function (r) {
+      if (!r) return;
+      (r.anosDisponiveis || []).forEach(function (a) { anosSet[a] = true; });
+      if (r.descartados) {
+        descartados.semData += r.descartados.semData || 0;
+        descartados.inconsistentes += r.descartados.inconsistentes || 0;
+      }
+      (r.grupos || []).forEach(function (g) {
+        var chave = g.etapaChave + '¬' + g.ano;
+        var m = gruposMap[chave] || (gruposMap[chave] = {
+          etapa: g.etapa, etapaChave: g.etapaChave, unidade: '(geral)', ano: g.ano, dias: [], itens: []
+        });
+        g.dias.forEach(function (d) { m.dias.push(d); });
+        (g.itens || []).forEach(function (it) {
+          m.itens.push({ processoId: it.processoId, ini: it.ini, fim: it.fim, dias: it.dias, unidade: r.unidade || g.unidade });
+        });
+      });
+    });
+    return {
+      unidade: '(geral)',
+      grupos: _ordenarGrupos(gruposMap),
+      anosDisponiveis: Object.keys(anosSet).map(Number).sort(function (a, b) { return a - b; }),
+      descartados: descartados
+    };
+  }
+
   root.RelatorioPrazos = {
     quartil: quartil,
     media: media,
     estatEtapa: estatEtapa,
-    boxplotSVG: boxplotSVG
+    boxplotSVG: boxplotSVG,
+    agregarPrazos: agregarPrazos,
+    mesclarGeral: mesclarGeral
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.RelatorioPrazos;
 })(typeof window !== 'undefined' ? window : globalThis);
