@@ -54,6 +54,19 @@ Espelho das regras puras de `fs_criarUnidade` (`apps-script/FirestoreSync.gs`):
 - **Login do 1º chefe:** parte local do e-mail → sigla → `gestor-<id>`.
 - **Senha temporária:** 7 caracteres, sem caracteres ambíguos (0/O, 1/I/L).
 
+### `relatorio-quartil.test.js` / `relatorio-estatistica.test.js` / `relatorio-boxplot.test.js` — núcleo da aba "Visão Geral"
+Funções puras de `relatorio-prazos.js` (Fase 1 do `PLANO_RELATORIO_PRAZOS_ADMIN.md`),
+o mesmo código que o navegador roda para desenhar o relatório de prazos do Admin:
+- **`quartil` (tipo 7):** Q1/Q2/Q3 por interpolação linear, batendo com
+  `QUARTILE.INC`/`PERCENTIL.INC` do Excel e do Sheets (valores conferidos na
+  planilha); trata amostra unitária, valores repetidos, vazio e não-números.
+- **`estatEtapa`:** DIQ, cerca de outliers (`LS = Q3+1,5·DIQ` / `LI = Q1−1,5·DIQ`),
+  bigodes (extremos DENTRO da cerca) e classificação de outliers (alto e baixo);
+  sinaliza amostra pequena (n<4) e devolve formato estável mesmo com amostra vazia.
+- **`boxplotSVG`:** estrutura do SVG inline (um box e uma mediana por série, pontos
+  de outlier, sem caixa quando n<4), robustez a série/lista vazia, escape do rótulo
+  (sem injeção de HTML) e saída determinística.
+
 ### `excluir-unidade.test.js` — exclusão de unidade (`fs_excluirUnidade`)
 - **Paginação:** regressão em que a exclusão só lia a 1ª página (`pageSize=300`)
   de cada coleção e ignorava o `nextPageToken` — uma unidade com coleções que
