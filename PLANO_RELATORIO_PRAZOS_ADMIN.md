@@ -22,8 +22,8 @@ unidades)** — com consulta **por ano**, quartis (Q1, Q2, Q3), limites de outli
 
 ## 1. Visão geral (o que será entregue)
 
-Uma nova área **"Relatórios"** no App de Gestão, visível **apenas para o Admin**,
-que responde a três perguntas:
+Uma nova aba **"Visão Geral"** no App de Gestão, que **só aparece quando o Admin
+entra** (invisível para os demais perfis), respondendo a três perguntas:
 
 1. **Qual é o prazo real de cada etapa?** — distribuição (não só a média): mediana,
    quartis e dispersão, para cada etapa do fluxo.
@@ -118,15 +118,21 @@ tempo de fila descontado fica como melhoria futura.
 
 ---
 
-## 4. Onde vive — acesso só do Admin
+## 4. Onde vive — nova aba "Visão Geral", só do Admin
+
+**Decidido (D5):** a função vive **dentro do próprio App de Gestão**, como uma
+**nova aba chamada "Visão Geral"** que **só aparece quando o Admin entra**.
+**Somente o Admin vê** — nem chefe nem equipe, e (por ora) nem o Diretor.
 
 O app já distingue papéis: `SESSAO_ADMIN` (admin global) e `isChefe`. A função
 `aplicarPerfilUI_()` (no `index.html`) já mostra/esconde a seção "Excluir unidade"
-**só para `SESSAO_ADMIN`** — o Relatório segue exatamente o mesmo padrão:
+**só para `SESSAO_ADMIN`** — a "Visão Geral" segue exatamente o mesmo padrão:
 
-- Nova aba **"Relatórios"** (`nav-relatorios` / `tab-relatorios`), incluída na
+- Nova aba **"Visão Geral"** (`nav-visao-geral` / `tab-visao-geral`), incluída na
   barra de navegação e na lista de `switchTab`, **oculta por padrão** e revelada
-  em `aplicarPerfilUI_()` **apenas quando `SESSAO_ADMIN === true`**.
+  em `aplicarPerfilUI_()` **apenas quando `SESSAO_ADMIN === true`**. Como as abas
+  restritas (`fila`/`historico`/`config`), se um não-admin tentar cair nela o
+  `switchTab` a redireciona para `etapas`.
 - **Segurança real no backend:** a UI é só o controle remoto. O endpoint novo
   (`getRelatorioPrazosApp`) valida a sessão e **exige admin** no servidor
   (`_authRequire_(token, true)` + checagem de admin), como as demais funções
@@ -134,9 +140,8 @@ O app já distingue papéis: `SESSAO_ADMIN` (admin global) e `isChefe`. A funç�
 
 > Nota de papel: hoje "Admin" = admin global (`SESSAO_ADMIN`). No desenho
 > multiunidade (`PLANO_MULTIUNIDADE.md`) esse é o papel que enxerga **todas as
-> unidades** — coerente com "por unidade e geral". Se no futuro o Diretor Geral
-> (só leitura) também precisar ver o relatório, basta liberar a mesma aba para o
-> papel `diretor` (decisão D5).
+> unidades** — coerente com "por unidade e geral". Liberar a aba ao Diretor Geral
+> (só leitura) fica como opção **futura, hoje descartada** (D5).
 
 ---
 
@@ -205,7 +210,7 @@ o volume crescer muito, dá para mover o cálculo para o backend sem mudar a UI.
 
 ---
 
-## 7. Frontend — a aba "Relatórios"
+## 7. Frontend — a aba "Visão Geral"
 
 Layout (mobile-first, no mesmo estilo do app):
 
@@ -258,13 +263,16 @@ Na pasta `tests/` (já há suíte Node no projeto):
 
 | # | Decisão | Recomendação (v1) |
 |---|---|---|
-| D1 | Qual "ano" da consulta? | **Ano da conclusão real da etapa** (`DataRealizacao`). Alternativa: ano do D0 do processo. |
+| D1 | Qual "ano" da consulta? | ✅ **DECIDIDO: ano da conclusão real da etapa** (`DataRealizacao`). |
 | D2 | Dias corridos ou úteis no relatório? | **Corridos** (tempo real de calendário), mesmo que as telas usem outro modo. |
-| D3 | Descontar tempo em fila/paralisado do prazo? | **Não** no v1 (medir o literal início→conclusão; é o que revela outliers/piores prazos). Desconto = melhoria futura. |
+| D3 | Descontar tempo em fila/paralisado do prazo? | ✅ **DECIDIDO: não** — medir o literal início→conclusão, justamente para não esconder os outliers/piores prazos. |
 | D4 | Média ou mediana como "prazo médio"? | Mostrar **as duas**; destacar a **mediana** (robusta a outlier) como número principal do boxplot. |
-| D5 | Quem enxerga a aba? | Só **Admin** (`SESSAO_ADMIN`), como pediu o Felipe. Liberar ao Diretor (só leitura) fica como opção. |
+| D5 | Quem enxerga e onde? | ✅ **DECIDIDO: só o Admin**, numa **nova aba "Visão Geral" dentro do App de Gestão**, que aparece apenas quando o Admin entra. Diretor não vê (opção futura descartada por ora). |
 | D6 | Método de quartil | **Interpolação linear tipo 7** (bate com Excel/Sheets `QUARTILE.INC`). |
 | D7 | n mínimo para caixa/cerca | Abaixo de **n<4**, mostrar pontos + mediana e marcar "amostra pequena" (sem caixa). |
+
+> D1, D3 e D5 confirmados pelo solicitante em 2026-07-11. D2, D4, D6 e D7 seguem a
+> recomendação salvo objeção.
 
 ---
 
@@ -274,7 +282,7 @@ Na pasta `tests/` (já há suíte Node no projeto):
   `_boxplotSVG_` + testes. Sem tocar em backend nem em UI. *Baixo risco.*
 - **Fase 2 — Endpoint de dados.** `getRelatorioPrazosApp` (+ `fs_*`) com o cálculo
   início→conclusão e o gating de admin; testes de cálculo de prazo. *Médio.*
-- **Fase 3 — Aba "Relatórios" (Admin only).** Nav/tab + gating em
+- **Fase 3 — Aba "Visão Geral" (Admin only).** Nav/tab + gating em
   `aplicarPerfilUI_`/`switchTab`; filtros; boxplots; tabela; ranking. *Médio.*
 - **Fase 4 — Exportação.** CSV + CSS de impressão/PDF. *Baixo.*
 - **Fase 5 — Multiunidade.** Iterar unidades ativas / usar `resumo/atual`;
