@@ -451,6 +451,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="appsel-firestore.js"></script>
+  <script src="relatorio-prazos.js"></script>
   <!-- SortableJS: drag-and-drop da fila (degrada para as setas ▲▼ se não carregar) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
@@ -504,6 +505,8 @@
           <button type="button" class="hdr-menu-item" onclick="abrirPainel_(event);toggleHdrMenu_();return false;"><img src="painel-icon.svg" alt="" class="hdr-menu-icon">Painel de Contratações</button>
           <div class="hdr-menu-sep"></div>
           <button class="hdr-menu-item" onclick="confirmarTroca();toggleHdrMenu_()">🔄 Trocar usuário</button>
+          <div class="hdr-menu-sep" id="hdr-visaogeral-sep" hidden></div>
+          <button class="hdr-menu-item" id="hdr-visaogeral-item" hidden onclick="switchTab('visaogeral');toggleHdrMenu_()">📊 Visão Geral</button>
           <div class="hdr-menu-sep" id="hdr-config-sep"></div>
           <button class="hdr-menu-item" id="hdr-config-item" onclick="switchTab('config');toggleHdrMenu_()">⚙️ Configurações</button>
           <div class="hdr-menu-sep"></div>
@@ -549,6 +552,7 @@
   <div id="tab-etapas"   class="tab-content"></div>
   <div id="tab-fila"     class="tab-content" hidden></div>
   <div id="tab-historico" class="tab-content" hidden></div>
+  <div id="tab-visaogeral" class="tab-content" hidden></div>
   <div id="tab-capacidade" class="tab-content" hidden>
     <div class="cap-toggle" style="margin-bottom:0;">
       <button id="cap-btn-int" class="cap-phase-btn active" onclick="switchCapPhase(this)">📊 Fase Interna</button>
@@ -1370,16 +1374,193 @@ function aplicarPerfilUI_() {
     if (SESSAO_ADMIN) popularExcluirUnidade();
   }
 
+  // "Visão Geral" (relatório de prazos multiunidade): só o administrador geral.
+  ['hdr-visaogeral-item', 'hdr-visaogeral-sep'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.hidden = !SESSAO_ADMIN;
+  });
+
   var tabAbertaRestrita = ['tab-fila', 'tab-historico', 'tab-config'].some(function(id) {
     var el = document.getElementById(id);
     return el && !el.hidden;
   });
   if (!isChefe && tabAbertaRestrita) switchTab('etapas');
+  var elVG = document.getElementById('tab-visaogeral');
+  if (!SESSAO_ADMIN && elVG && !elVG.hidden) switchTab('etapas');
 
   var fab = document.getElementById('fab-novo');
   var tabEtapas = document.getElementById('tab-etapas');
   if (fab && tabEtapas) fab.hidden = !isChefe || tabEtapas.hidden;
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// VISÃO GERAL — relatório de prazos por etapa (só Admin)
+// Lê processos+etapas de todas as unidades, calcula o prazo real
+// (início→conclusão) com RelatorioPrazos e desenha boxplots + tabela + ranking.
+// ══════════════════════════════════════════════════════════════════════
+var VG_CACHE = null;       // [{unidade, nome, processos, etapas}]
+var VG_CARREGANDO = false;
+var VG_ERRO = '';
+var VG_ANO = null;         // null = ainda não definido; '' = todos os anos
+var VG_UNIDADE = '(geral)';
+var VG_ETAPA = '';         // '' = todas as etapas
+
+function vgFmt_(v) {
+  if (v == null || (typeof v === 'number' && isNaN(v))) return '—';
+  var r = Math.round(v * 10) / 10;
+  return (r === Math.floor(r) ? String(r) : r.toFixed(1));
+}
+function vgMsg_(txt) {
+  return '<div class="empty" style="padding:40px 16px;"><p style="color:var(--muted);">' + txt + '</p></div>';
+}
+
+function renderVisaoGeral_() {
+  var cont = document.getElementById('tab-visaogeral');
+  if (!cont) return;
+  if (!SESSAO_ADMIN) { cont.innerHTML = ''; return; }
+  var RP = window.RelatorioPrazos;
+  if (!RP) { cont.innerHTML = vgMsg_('Módulo de relatório não carregado.'); return; }
+
+  // 1) Carregamento (uma vez; botão "Atualizar" força recarga).
+  if (!VG_CACHE && !VG_CARREGANDO) {
+    var api = window.AppselFirestore;
+    if (!api || !api.carregarPrazosTodasUnidades) { cont.innerHTML = vgMsg_('Leitura multiunidade indisponível neste ambiente.'); return; }
+    VG_CARREGANDO = true; VG_ERRO = '';
+    cont.innerHTML = vgMsg_('Carregando dados de todas as unidades…');
+    api.carregarPrazosTodasUnidades().then(function(cache){
+      VG_CACHE = cache || []; VG_CARREGANDO = false; renderVisaoGeral_();
+    }).catch(function(err){
+      VG_CARREGANDO = false; VG_ERRO = (err && err.message) || 'Falha ao carregar.';
+      cont.innerHTML = vgMsg_('Não foi possível carregar: ' + esc(VG_ERRO));
+    });
+    return;
+  }
+  if (VG_CARREGANDO) { cont.innerHTML = vgMsg_('Carregando dados de todas as unidades…'); return; }
+
+  var cache = VG_CACHE || [];
+  var nomesUnidade = {};
+  cache.forEach(function(c){ nomesUnidade[c.unidade] = c.nome || c.unidade; });
+
+  // 2) Descobre os anos (passada sem filtro) e aplica o filtro de ano.
+  var anosSet = {};
+  cache.forEach(function(c){
+    RP.agregarPrazos(c.processos, c.etapas, { unidade: c.unidade }).anosDisponiveis
+      .forEach(function(a){ anosSet[a] = true; });
+  });
+  var anos = Object.keys(anosSet).map(Number).sort(function(a,b){ return b-a; });
+  if (VG_ANO === null) VG_ANO = anos.length ? anos[0] : '';   // padrão: ano mais recente
+  var anoFiltro = (VG_ANO === '' ? null : Number(VG_ANO));
+
+  var porUnidade = cache.map(function(c){ return RP.agregarPrazos(c.processos, c.etapas, { unidade: c.unidade, ano: anoFiltro }); });
+  var rel = RP.montarRelatorio(porUnidade, { unidadeSel: VG_UNIDADE, nomesUnidade: nomesUnidade });
+  var multiUni = cache.length > 1;
+
+  var html = '';
+  html += '<div style="margin-bottom:12px;background:#fff;border:1px solid var(--border);border-left:4px solid var(--navy);border-radius:10px;padding:12px 13px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">'
+    + '<div><div style="font-size:15px;font-weight:800;color:var(--navy);">📊 Visão Geral — prazos por etapa</div>'
+    + '<div style="font-size:12px;color:var(--text2);line-height:1.45;margin-top:4px;">Prazo real de cada etapa, do início (conclusão da etapa anterior, ou D0) até a conclusão real. Quartis, limites de outlier (LS=Q3+1,5·DIQ / LI=Q1−1,5·DIQ) e boxplots. Consulta pelo ano da conclusão.</div></div>'
+    + '<button onclick="VG_CACHE=null;renderVisaoGeral_()" title="Recarregar" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;">🔄</button>'
+    + '</div>';
+
+  // Filtros
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">';
+  html += vgSelect_('vg-ano', 'Ano', [{v:'',t:'Todos os anos'}].concat(anos.map(function(a){ return {v:String(a), t:String(a)}; })), String(VG_ANO), 'onVGAno_(this.value)');
+  if (multiUni) {
+    var optsUni = [{v:'(geral)', t:'Geral (todas)'}].concat(cache.map(function(c){ return {v:c.unidade, t:c.nome||c.unidade}; }));
+    html += vgSelect_('vg-uni', 'Unidade', optsUni, VG_UNIDADE, 'onVGUnidade_(this.value)');
+  }
+  var optsEt = [{v:'', t:'Todas as etapas'}].concat(rel.etapas.map(function(e){ return {v:e.etapaChave, t:e.etapa}; }));
+  html += vgSelect_('vg-etapa', 'Etapa', optsEt, VG_ETAPA, 'onVGEtapa_(this.value)');
+  html += '</div>';
+
+  if (!rel.etapas.length) {
+    html += '<div class="empty"><div class="ei">📭</div><p>Nenhuma etapa concluída no período selecionado.</p></div>' + vgDescartados_(rel.descartados);
+    cont.innerHTML = html; return;
+  }
+
+  // KPIs
+  var k = rel.kpis;
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px;">';
+  html += vgKpi_('Etapas concluídas', vgFmt_(k.nAmostra), 'prazos na amostra');
+  html += vgKpi_('Mediana geral', vgFmt_(k.mediana) + ' d', 'prazo mediano');
+  html += vgKpi_('Outliers', vgFmt_(k.nOutliers), 'prazos atípicos');
+  if (rel.ranking.melhorUnidade) html += vgKpi_('Melhor prazo', esc(rel.ranking.melhorUnidade.nome), 'mediana ' + vgFmt_(rel.ranking.melhorUnidade.mediana) + ' d');
+  if (rel.ranking.piorUnidade) html += vgKpi_('Pior prazo', esc(rel.ranking.piorUnidade.nome), 'mediana ' + vgFmt_(rel.ranking.piorUnidade.mediana) + ' d');
+  html += '</div>';
+
+  // Boxplot (por etapa; se uma etapa for escolhida, compara unidades)
+  var etapaSel = VG_ETAPA ? rel.etapas.filter(function(e){ return e.etapaChave === VG_ETAPA; })[0] : null;
+  var series, tituloBox;
+  if (etapaSel && etapaSel.porUnidade.length > 1) {
+    series = etapaSel.porUnidade.map(function(u){ return { rotulo: u.nome, estat: u.estat }; });
+    tituloBox = 'Prazos de "' + esc(etapaSel.etapa) + '" por unidade';
+  } else if (etapaSel) {
+    series = [{ rotulo: etapaSel.etapa, estat: etapaSel.estat }];
+    tituloBox = 'Prazos de "' + esc(etapaSel.etapa) + '"';
+  } else {
+    series = rel.etapas.map(function(e){ return { rotulo: e.etapa, estat: e.estat }; });
+    tituloBox = 'Prazo por etapa' + (VG_UNIDADE !== '(geral)' ? ' — ' + esc(nomesUnidade[VG_UNIDADE]||VG_UNIDADE) : '');
+  }
+  var largura = Math.max(320, series.length * 92 + 60);
+  html += '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;overflow-x:auto;">'
+    + '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px;">' + tituloBox + '</div>'
+    + '<div style="min-width:'+largura+'px;">' + RP.boxplotSVG(series, { largura: largura, altura: 300 }) + '</div></div>';
+
+  html += vgTabela_(rel);
+  if (VG_UNIDADE === '(geral)' && multiUni) html += vgRanking_(rel);
+  html += vgDescartados_(rel.descartados);
+  cont.innerHTML = html;
+}
+
+function vgSelect_(id, label, opts, val, onchange) {
+  var h = '<label style="font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:3px;">'+esc(label)
+    + '<select id="'+id+'" onchange="'+onchange+'" style="padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;min-width:130px;">';
+  opts.forEach(function(o){ h += '<option value="'+escJsAttr(o.v)+'"'+(String(o.v)===String(val)?' selected':'')+'>'+esc(o.t)+'</option>'; });
+  return h + '</select></label>';
+}
+function vgKpi_(label, valor, sub) {
+  return '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;">'
+    + '<div style="font-size:11px;color:var(--muted);">'+esc(label)+'</div>'
+    + '<div style="font-size:18px;font-weight:800;color:var(--navy);margin:2px 0;">'+valor+'</div>'
+    + '<div style="font-size:10px;color:var(--muted);">'+esc(sub||'')+'</div></div>';
+}
+function vgTabela_(rel) {
+  var h = '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;overflow-x:auto;">'
+    + '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px;">Resumo por etapa (dias)</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+    + '<thead><tr style="text-align:right;color:var(--muted);border-bottom:1px solid var(--border);">'
+    + '<th style="text-align:left;padding:4px 6px;">Etapa</th><th>n</th><th>Q1</th><th>Mediana</th><th>Q3</th><th>DIQ</th><th>LS</th><th>LI</th><th>Média</th><th>Mín</th><th>Máx</th><th>Outliers</th></tr></thead><tbody>';
+  rel.etapas.forEach(function(el){
+    var e = el.estat;
+    h += '<tr style="text-align:right;border-bottom:1px solid #f1f5f9;">'
+      + '<td style="text-align:left;padding:4px 6px;font-weight:600;">'+esc(el.etapa)+(e.amostraPequena?' <span style="color:var(--amber);font-size:10px;">(n&lt;4)</span>':'')+'</td>'
+      + '<td>'+e.n+'</td><td>'+vgFmt_(e.q1)+'</td><td style="font-weight:700;">'+vgFmt_(e.mediana)+'</td><td>'+vgFmt_(e.q3)+'</td>'
+      + '<td>'+vgFmt_(e.diq)+'</td><td>'+vgFmt_(e.ls)+'</td><td>'+vgFmt_(e.li)+'</td><td>'+vgFmt_(e.media)+'</td>'
+      + '<td>'+vgFmt_(e.min)+'</td><td>'+vgFmt_(e.max)+'</td><td>'+(e.outliers?e.outliers.length:0)+'</td></tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+function vgRanking_(rel) {
+  var linhas = rel.etapas.filter(function(e){ return e.porUnidade.length >= 2; });
+  if (!linhas.length) return '';
+  var h = '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;">'
+    + '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px;">Melhores e piores prazos por etapa</div>';
+  linhas.forEach(function(e){
+    var melhor = e.porUnidade[0], pior = e.porUnidade[e.porUnidade.length-1];
+    h += '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid #f1f5f9;flex-wrap:wrap;">'
+      + '<span style="font-weight:600;">'+esc(e.etapa)+'</span>'
+      + '<span style="color:var(--muted);">🟢 '+esc(melhor.nome)+' ('+vgFmt_(melhor.estat.mediana)+'d) &nbsp;·&nbsp; 🔴 '+esc(pior.nome)+' ('+vgFmt_(pior.estat.mediana)+'d)</span></div>';
+  });
+  return h + '</div>';
+}
+function vgDescartados_(d) {
+  if (!d || (!d.semData && !d.inconsistentes)) return '';
+  return '<div style="font-size:11px;color:var(--muted);margin-bottom:16px;">Ignorados: '
+    + d.semData + ' etapa(s) concluída(s) sem data e ' + d.inconsistentes + ' com data inconsistente (fim antes do início).</div>';
+}
+function onVGAno_(v){ VG_ANO = v; renderVisaoGeral_(); }
+function onVGUnidade_(v){ VG_UNIDADE = v; VG_ETAPA = ''; renderVisaoGeral_(); }
+function onVGEtapa_(v){ VG_ETAPA = v; renderVisaoGeral_(); }
 
 function aplicarFiltroInicialUsuario_() {
   if (FILTRO_INICIAL_APLICADO || !SERVIDOR || !SERV_DATA.length) return false;
@@ -1839,7 +2020,9 @@ function switchTab(tab) {
   if (!isChefeAtual_() && ['fila', 'historico', 'config'].indexOf(tab) >= 0) {
     tab = 'etapas';
   }
-  ['etapas','fila','historico','capacidade','config'].forEach(function(t) {
+  // "Visão Geral" é exclusiva do Admin geral (relatório multiunidade).
+  if (tab === 'visaogeral' && !SESSAO_ADMIN) tab = 'etapas';
+  ['etapas','fila','historico','capacidade','config','visaogeral'].forEach(function(t) {
     document.getElementById('tab-'+t).hidden = t !== tab;
     var navEl = document.getElementById('nav-'+t);
     if (navEl) navEl.classList.toggle('active', t === tab);
@@ -1848,6 +2031,7 @@ function switchTab(tab) {
   document.getElementById('fbar').hidden = (tab !== 'etapas');
   if (tab === 'historico'  && !HIST_CARREGADO) carregarHistorico();
   if (tab === 'config') { renderEquipeConfig_(); carregarEmails_(); verificarTriggerConfig_(); carregarDadosUnidade_(); }
+  if (tab === 'visaogeral') renderVisaoGeral_();
   if (tab === 'capacidade') {
     if (CAP_CARREGADO && CAP_DATA) renderCapacidade_();
     else carregarCapacidade_();

@@ -317,6 +317,29 @@
     });
   }
 
+  // Lê processos+etapas de TODAS as unidades ativas — insumo da aba "Visão Geral"
+  // (relatório de prazos do Admin). Retorna [{ unidade, nome, processos, etapas }].
+  // Uso pontual (só quando o Admin abre a aba); as coleções têm leitura pública.
+  function carregarPrazosTodasUnidades() {
+    var cfg = (root.APPSEL_CONFIG && root.APPSEL_CONFIG.firebase) || null;
+    if (!cfg || !root.firebase) return Promise.reject(new Error('Firebase nao configurado.'));
+    if (!root.firebase.apps || !root.firebase.apps.length) root.firebase.initializeApp(cfg);
+    var db = root.firebase.firestore();
+    var map = function (snap) { return snap.docs.map(function (d) { var o = d.data(); o._id = d.id; return o; }); };
+    return listarUnidades().then(function (unis) {
+      var ativas = unis.filter(function (u) { return u.ativo !== false; });
+      return Promise.all(ativas.map(function (u) {
+        var base = db.collection('unidades').doc(u.id);
+        return Promise.all([
+          base.collection('processos').get(),
+          base.collection('etapas').get()
+        ]).then(function (s) {
+          return { unidade: u.id, nome: u.nome, processos: map(s[0]), etapas: map(s[1]) };
+        });
+      }));
+    });
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   // CAPACIDADE — espelha getCapacidadeApp() do Code.gs, calculando de `cargas`.
   // Retorno: { resumoInt, resumoExt, registrosInt, registrosExt } (mesma forma).
@@ -475,7 +498,8 @@
   root.AppselFirestore = {
     construir: construir, carregar: carregar, montarCalendario: montarCalendario,
     construirCapacidade: construirCapacidade, carregarCapacidade: carregarCapacidade,
-    listarUnidades: listarUnidades, unidadeAtual: _unidadeId
+    listarUnidades: listarUnidades, unidadeAtual: _unidadeId,
+    carregarPrazosTodasUnidades: carregarPrazosTodasUnidades
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.AppselFirestore;
 })(typeof window !== 'undefined' ? window : globalThis);

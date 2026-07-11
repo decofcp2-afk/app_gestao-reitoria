@@ -384,13 +384,94 @@
     };
   }
 
+  // ── Modelo do relatório (o que a aba "Visão Geral" desenha) ────────────
+  // porUnidade: [ resultado de agregarPrazos, ... ] (um por unidade).
+  // opts: { unidadeSel, nomesUnidade } — unidadeSel '' ou '(geral)' = todas.
+  // Retorna { unidadeSel, etapas:[{etapa, ano, estat, porUnidade:[{unidade,nome,estat}]}],
+  //   ranking:{melhorUnidade, piorUnidade, unidades:[...]}, kpis:{...}, descartados }.
+  function montarRelatorio(porUnidade, opts) {
+    opts = opts || {};
+    var nomes = opts.nomesUnidade || {};
+    var unidadeSel = opts.unidadeSel || '';
+    var ehGeral = !unidadeSel || unidadeSel === '(geral)';
+    porUnidade = (porUnidade || []).filter(Boolean);
+
+    var descartados = { semData: 0, inconsistentes: 0 };
+    porUnidade.forEach(function (r) {
+      if (r.descartados) {
+        descartados.semData += r.descartados.semData || 0;
+        descartados.inconsistentes += r.descartados.inconsistentes || 0;
+      }
+    });
+
+    var fonte = ehGeral ? porUnidade : porUnidade.filter(function (r) { return r.unidade === unidadeSel; });
+
+    // Agrupa por etapa: dias combinados + dias por unidade (p/ comparação e ranking).
+    var etapasMap = {};
+    fonte.forEach(function (r) {
+      (r.grupos || []).forEach(function (g) {
+        var m = etapasMap[g.etapaChave] || (etapasMap[g.etapaChave] = {
+          etapa: g.etapa, etapaChave: g.etapaChave, ano: g.ano, diasTodos: [], porUni: {}
+        });
+        var alvo = (m.porUni[r.unidade] = m.porUni[r.unidade] || []);
+        g.dias.forEach(function (d) { m.diasTodos.push(d); alvo.push(d); });
+      });
+    });
+
+    var etapas = Object.keys(etapasMap).sort().map(function (k) {
+      var m = etapasMap[k];
+      var porUni = Object.keys(m.porUni).map(function (uni) {
+        return { unidade: uni, nome: nomes[uni] || uni, estat: estatEtapa(m.porUni[uni]) };
+      }).sort(function (a, b) { return (a.estat.mediana || 0) - (b.estat.mediana || 0); });
+      return { etapa: m.etapa, etapaChave: k, ano: m.ano, estat: estatEtapa(m.diasTodos), porUnidade: porUni };
+    });
+
+    // Ranking geral de unidades (mediana de todos os prazos da unidade no escopo).
+    var uniDias = {};
+    fonte.forEach(function (r) {
+      (r.grupos || []).forEach(function (g) {
+        var alvo = (uniDias[r.unidade] = uniDias[r.unidade] || []);
+        g.dias.forEach(function (d) { alvo.push(d); });
+      });
+    });
+    var unidades = Object.keys(uniDias).map(function (uni) {
+      var e = estatEtapa(uniDias[uni]);
+      return { unidade: uni, nome: nomes[uni] || uni, mediana: e.mediana, n: e.n };
+    }).filter(function (u) { return u.n > 0; })
+      .sort(function (a, b) { return a.mediana - b.mediana; });
+
+    // KPIs sobre todo o escopo.
+    var todosDias = [];
+    Object.keys(uniDias).forEach(function (uni) { todosDias.push.apply(todosDias, uniDias[uni]); });
+    var estGeral = estatEtapa(todosDias);
+    var nOutliers = etapas.reduce(function (acc, e) { return acc + (e.estat.outliers ? e.estat.outliers.length : 0); }, 0);
+
+    return {
+      unidadeSel: ehGeral ? '(geral)' : unidadeSel,
+      etapas: etapas,
+      ranking: {
+        unidades: unidades,
+        melhorUnidade: unidades.length ? unidades[0] : null,
+        piorUnidade: unidades.length > 1 ? unidades[unidades.length - 1] : null
+      },
+      kpis: {
+        nAmostra: estGeral.n,
+        mediana: estGeral.mediana,
+        nOutliers: nOutliers,
+        nEtapas: etapas.length
+      },
+      descartados: descartados
+    };
+  }
+
   root.RelatorioPrazos = {
     quartil: quartil,
     media: media,
     estatEtapa: estatEtapa,
     boxplotSVG: boxplotSVG,
     agregarPrazos: agregarPrazos,
-    mesclarGeral: mesclarGeral
+    mesclarGeral: mesclarGeral,
+    montarRelatorio: montarRelatorio
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.RelatorioPrazos;
 })(typeof window !== 'undefined' ? window : globalThis);
