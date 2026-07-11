@@ -1404,6 +1404,11 @@ var VG_ERRO = '';
 var VG_ANO = null;         // null = ainda não definido; '' = todos os anos
 var VG_UNIDADE = '(geral)';
 var VG_ETAPA = '';         // '' = todas as etapas
+var VG_LAST_REL = null;    // último relatório calculado (p/ exportar CSV/PDF)
+var VG_LAST_META = null;   // metadados do último render (escopo, série, geração)
+// Logo do documento exportado (papel timbrado). Brasão oficial do CPII, com
+// fundo branco. Ponto único de troca caso a marca seja atualizada.
+var VG_LOGO_SRC = 'cpii-logo.png';
 
 function vgFmt_(v) {
   if (v == null || (typeof v === 'number' && isNaN(v))) return '—';
@@ -1488,6 +1493,12 @@ function renderVisaoGeral_() {
   if (rel.ranking.piorUnidade) html += vgKpi_('Pior prazo', esc(rel.ranking.piorUnidade.nome), 'mediana ' + vgFmt_(rel.ranking.piorUnidade.mediana) + ' d');
   html += '</div>';
 
+  // Exportação
+  html += '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'
+    + '<button onclick="onVGExportCSV_()" style="flex:1;min-width:130px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;">⬇️ Exportar CSV</button>'
+    + '<button onclick="onVGExportPDF_()" style="flex:1;min-width:130px;background:var(--navy);border:1px solid var(--navy);border-radius:8px;padding:9px 12px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;">🖨️ Gerar PDF</button>'
+    + '</div>';
+
   // Boxplot (por etapa; se uma etapa for escolhida, compara unidades)
   var etapaSel = VG_ETAPA ? rel.etapas.filter(function(e){ return e.etapaChave === VG_ETAPA; })[0] : null;
   var series, tituloBox;
@@ -1510,6 +1521,16 @@ function renderVisaoGeral_() {
   if (VG_UNIDADE === '(geral)' && multiUni) html += vgRanking_(rel);
   html += vgDescartados_(rel.descartados);
   cont.innerHTML = html;
+
+  // Guarda o estado atual para as exportações (CSV/PDF).
+  VG_LAST_REL = rel;
+  VG_LAST_META = {
+    anoLabel: (VG_ANO === '' ? 'Todos os anos' : String(VG_ANO)),
+    unidadeLabel: (VG_UNIDADE === '(geral)' ? 'Geral — todas as unidades' : (nomesUnidade[VG_UNIDADE] || VG_UNIDADE)),
+    geradoEm: new Date(),
+    series: series,
+    tituloBox: tituloBox
+  };
 }
 
 function vgSelect_(id, label, opts, val, onchange) {
@@ -1561,6 +1582,98 @@ function vgDescartados_(d) {
 function onVGAno_(v){ VG_ANO = v; renderVisaoGeral_(); }
 function onVGUnidade_(v){ VG_UNIDADE = v; VG_ETAPA = ''; renderVisaoGeral_(); }
 function onVGEtapa_(v){ VG_ETAPA = v; renderVisaoGeral_(); }
+
+// ── Exportação: CSV + PDF/impressão (papel timbrado com o brasão do CPII) ──
+function vgSlug_(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+function vgBaixar_(blob, nome) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = nome;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+function onVGExportCSV_() {
+  if (!VG_LAST_REL || !window.RelatorioPrazos) return;
+  var csv = window.RelatorioPrazos.paraCSV(VG_LAST_REL);
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });   // BOM p/ Excel ler acentos
+  var uni = VG_UNIDADE === '(geral)' ? 'geral' : vgSlug_(VG_UNIDADE);
+  vgBaixar_(blob, 'visao-geral-prazos-' + (VG_ANO || 'todos') + '-' + uni + '.csv');
+}
+function onVGExportPDF_() {
+  if (!VG_LAST_REL) return;
+  var w = window.open('', '_blank');
+  if (!w) { alert('Permita janelas pop-up para gerar o PDF.'); return; }
+  w.document.open();
+  w.document.write(vgDocumentoImpressao_(VG_LAST_REL, VG_LAST_META || {}));
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ try { w.print(); } catch(e) {} }, 500);   // espera o SVG/layout assentar
+}
+function vgDocumentoImpressao_(rel, meta) {
+  var RP = window.RelatorioPrazos;
+  var d = meta.geradoEm ? new Date(meta.geradoEm) : new Date();
+  var quando = d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  var k = rel.kpis || {};
+  var series = meta.series || rel.etapas.map(function(e){ return { rotulo: e.etapa, estat: e.estat }; });
+  var largura = Math.max(520, series.length * 90 + 60);
+  var boxplot = RP ? RP.boxplotSVG(series, { largura: largura, altura: 300 }) : '';
+
+  var linhasTab = rel.etapas.map(function(el){
+    var e = el.estat;
+    return '<tr><td class="l">'+esc(el.etapa)+(e.amostraPequena?' <span class="sm">(n&lt;4)</span>':'')+'</td>'
+      + '<td>'+e.n+'</td><td>'+vgFmt_(e.q1)+'</td><td class="b">'+vgFmt_(e.mediana)+'</td><td>'+vgFmt_(e.q3)+'</td>'
+      + '<td>'+vgFmt_(e.diq)+'</td><td>'+vgFmt_(e.ls)+'</td><td>'+vgFmt_(e.li)+'</td><td>'+vgFmt_(e.media)+'</td>'
+      + '<td>'+vgFmt_(e.min)+'</td><td>'+vgFmt_(e.max)+'</td><td>'+(e.outliers?e.outliers.length:0)+'</td></tr>';
+  }).join('');
+
+  var rankHtml = '';
+  var comRank = rel.etapas.filter(function(e){ return e.porUnidade && e.porUnidade.length >= 2; });
+  if (comRank.length) {
+    rankHtml = '<h2>Melhores e piores prazos por etapa</h2><ul class="rank">'
+      + comRank.map(function(e){
+          var m = e.porUnidade[0], p = e.porUnidade[e.porUnidade.length-1];
+          return '<li><b>'+esc(e.etapa)+'</b> — melhor: '+esc(m.nome)+' ('+vgFmt_(m.estat.mediana)+'d) · pior: '+esc(p.nome)+' ('+vgFmt_(p.estat.mediana)+'d)</li>';
+        }).join('') + '</ul>';
+  }
+  var desc = (rel.descartados && (rel.descartados.semData || rel.descartados.inconsistentes))
+    ? '<p class="obs">Ignorados: '+rel.descartados.semData+' etapa(s) concluída(s) sem data e '+rel.descartados.inconsistentes+' com data inconsistente (fim antes do início).</p>' : '';
+
+  var baseHref = (typeof location !== 'undefined') ? location.href : '';
+  return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+    + '<meta name="color-scheme" content="light only">'
+    + (baseHref ? '<base href="'+esc(baseHref)+'">' : '')
+    + '<title>Relatorio de prazos - Visao Geral</title><style>'
+    // Documento SEMPRE claro: nao acompanha o modo escuro do sistema/navegador,
+    // e as cores/bordas saem na impressao (print-color-adjust: exact).
+    + ':root{color-scheme:light;} html,body{background:#fff;}'
+    + '*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+    + '@page{size:A4;margin:14mm;} *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1e293b;margin:0;font-size:12px;}'
+    + '.hd{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0f2f56;padding-bottom:10px;margin-bottom:14px;}'
+    + '.hd img{height:56px;width:auto;} .hd .t1{font-size:16px;font-weight:800;color:#0f2f56;} .hd .t2{font-size:12px;color:#475569;} .hd .t3{font-size:13px;font-weight:700;color:#0f2f56;margin-top:3px;}'
+    + '.meta{font-size:11px;color:#64748b;margin-bottom:12px;} .kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}'
+    + '.kpi{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 12px;min-width:118px;} .kpi .kl{font-size:10px;color:#64748b;} .kpi .kv{font-size:16px;font-weight:800;color:#0f2f56;}'
+    + 'h2{font-size:13px;color:#0f2f56;margin:16px 0 6px;} .box{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin-bottom:8px;}'
+    + 'table{width:100%;border-collapse:collapse;font-size:11px;background:#fff;} th,td{border:1px solid #e2e8f0;padding:4px 6px;text-align:right;color:#1e293b;background:#fff;} th{background:#f1f5f9;color:#334155;} td.l,th.l{text-align:left;} td.b{font-weight:700;} .sm{color:#d97706;font-size:9px;}'
+    + 'ul.rank{margin:4px 0;padding-left:18px;} ul.rank li{margin:2px 0;} .obs{font-size:10px;color:#64748b;margin-top:10px;} .ft{margin-top:16px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:10px;color:#94a3b8;}'
+    + '</style></head><body>'
+    + '<div class="hd"><img src="'+esc(VG_LOGO_SRC)+'" alt="Colegio Pedro II" onerror="this.style.display=\'none\'">'
+    + '<div><div class="t1">Colégio Pedro II</div><div class="t2">Reitoria · SEL/SEPMA</div><div class="t3">Relatório de prazos por etapa — Visão Geral</div></div></div>'
+    + '<div class="meta">Ano: <b>'+esc(meta.anoLabel||'—')+'</b> · Escopo: <b>'+esc(meta.unidadeLabel||'—')+'</b> · Gerado em '+esc(quando)+'</div>'
+    + '<div class="kpis">'
+    +   '<div class="kpi"><div class="kl">Etapas concluídas</div><div class="kv">'+vgFmt_(k.nAmostra)+'</div></div>'
+    +   '<div class="kpi"><div class="kl">Mediana geral</div><div class="kv">'+vgFmt_(k.mediana)+' d</div></div>'
+    +   '<div class="kpi"><div class="kl">Outliers</div><div class="kv">'+vgFmt_(k.nOutliers)+'</div></div>'
+    +   '<div class="kpi"><div class="kl">Etapas</div><div class="kv">'+vgFmt_(k.nEtapas)+'</div></div>'
+    + '</div>'
+    + '<h2>'+esc(meta.tituloBox||'Prazo por etapa')+'</h2><div class="box">'+boxplot+'</div>'
+    + '<h2>Resumo por etapa (dias)</h2><table><thead><tr><th class="l">Etapa</th><th>n</th><th>Q1</th><th>Mediana</th><th>Q3</th><th>DIQ</th><th>LS</th><th>LI</th><th>Média</th><th>Mín</th><th>Máx</th><th>Outliers</th></tr></thead><tbody>'+linhasTab+'</tbody></table>'
+    + rankHtml + desc
+    + '<div class="ft">Prazo considerado do início real (conclusão da etapa anterior, ou D0) até a conclusão real da etapa. Limites de outlier: LS = Q3 + 1,5·DIQ / LI = Q1 − 1,5·DIQ. App Gestão — Colégio Pedro II.</div>'
+    + '</body></html>';
+}
 
 function aplicarFiltroInicialUsuario_() {
   if (FILTRO_INICIAL_APLICADO || !SERVIDOR || !SERV_DATA.length) return false;
@@ -2734,8 +2847,8 @@ var SERV_SEL = { int: '', ext: '' }; // seleções temporárias
 // "SAMUEL"). Um "===" cru falhava em unidades cujos nomes não estavam em Title
 // Case, deixando o responsável já atribuído SEM aparecer marcado no modal.
 function _mesmoServ_(a, b) {
-  var na = String(a == null ? '' : a).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  var nb = String(b == null ? '' : b).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  var na = String(a == null ? '' : a).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  var nb = String(b == null ? '' : b).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return na === nb;
 }
 

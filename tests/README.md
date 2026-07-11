@@ -93,6 +93,13 @@ unidade — estatística por etapa, comparação por unidade, ranking e KPIs:
 - **KPIs:** conta outliers pela cerca própria de cada etapa; propaga os
   `descartados` somados; escopo vazio não quebra.
 
+### `relatorio-csv.test.js` — exportação CSV (`paraCSV`)
+Fase 4 do plano: gera o CSV da tabela-resumo no formato Excel pt-BR — delimitador
+`;` e decimal `,` (1 casa, como a tabela na tela). Cobre cabeçalho + uma linha por
+etapa, decimal com vírgula (sem ponto), escape de campos com `;`/aspas e relatório
+vazio (só cabeçalho). O botão "Gerar PDF" monta um documento com papel timbrado
+(brasão do CPII) e usa a impressão do navegador — verificado à parte, sem browser.
+
 ### `excluir-unidade.test.js` — exclusão de unidade (`fs_excluirUnidade`)
 - **Paginação:** regressão em que a exclusão só lia a 1ª página (`pageSize=300`)
   de cada coleção e ignorava o `nextPageToken` — uma unidade com coleções que

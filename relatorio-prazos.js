@@ -464,6 +464,26 @@
     };
   }
 
+  // ── Exportação CSV (tabela-resumo por etapa) ───────────────────────────
+  // rel: saída de montarRelatorio(). Delimitador ';' e decimal ',' (Excel pt-BR).
+  // O chamador prefixa BOM (﻿) ao salvar, para o Excel ler os acentos.
+  function paraCSV(rel) {
+    var sep = ';';
+    function cel(v) {
+      if (v == null) return '';
+      var s = (typeof v === 'number') ? String(Math.round(v * 10) / 10).replace('.', ',') : String(v);
+      return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+    var head = ['Etapa', 'Ano', 'n', 'Q1', 'Mediana', 'Q3', 'DIQ', 'LS', 'LI', 'Media', 'Minimo', 'Maximo', 'Outliers'];
+    var linhas = [head.join(sep)];
+    ((rel && rel.etapas) || []).forEach(function (el) {
+      var e = el.estat;
+      linhas.push([el.etapa, el.ano, e.n, e.q1, e.mediana, e.q3, e.diq, e.ls, e.li, e.media, e.min, e.max,
+        (e.outliers ? e.outliers.length : 0)].map(cel).join(sep));
+    });
+    return linhas.join('\r\n');
+  }
+
   root.RelatorioPrazos = {
     quartil: quartil,
     media: media,
@@ -471,7 +491,8 @@
     boxplotSVG: boxplotSVG,
     agregarPrazos: agregarPrazos,
     mesclarGeral: mesclarGeral,
-    montarRelatorio: montarRelatorio
+    montarRelatorio: montarRelatorio,
+    paraCSV: paraCSV
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.RelatorioPrazos;
 })(typeof window !== 'undefined' ? window : globalThis);
