@@ -1222,7 +1222,7 @@ function aplicarCacheOffline_(cache, detalhe) {
   }
   document.getElementById('tela-login').hidden = true;
   document.getElementById('app').hidden = false;
-  document.getElementById('hdr-nome').textContent = SERVIDOR;
+  document.getElementById('hdr-nome').textContent = nomeHeader_(SERVIDOR);
   document.getElementById('cfg-nome').textContent = SERVIDOR;
   rotularUnidadeApp_();
   aplicarFiltroInicialUsuario_();
@@ -1354,6 +1354,12 @@ function motivoRetornoFila_(p) {
 
 function motivoAtrasoExibivel_(et) {
   return !!(et && et.status === 'ok' && et.dias > 0 && et.motivo && !/^RETORNO PARA FILA:/i.test(String(et.motivo).trim()));
+}
+
+// Encurta o nome do administrador global no cabeçalho (a barra do topo fica
+// apertada no celular). Só afeta a exibição no topo, não o nome real da sessão.
+function nomeHeader_(nome) {
+  return /^administrador geral$/i.test(String(nome || '').trim()) ? 'Adm Geral' : nome;
 }
 
 function aplicarPerfilUI_() {
@@ -1972,7 +1978,7 @@ function aplicarSessao_(sess) {
   sessionStorage.setItem('selSessao', JSON.stringify({ token: AUTH_TOKEN, exp: AUTH_EXP, nome: SERVIDOR, isChefe: SESSAO_CHEFE, isAdmin: SESSAO_ADMIN }));
   document.getElementById('tela-login').hidden = true;
   document.getElementById('app').hidden = false;
-  document.getElementById('hdr-nome').textContent = SERVIDOR;
+  document.getElementById('hdr-nome').textContent = nomeHeader_(SERVIDOR);
   document.getElementById('cfg-nome').textContent = SERVIDOR;
   rotularUnidadeApp_();
   if (sess.servidores && sess.servidores.length) {

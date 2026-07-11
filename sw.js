@@ -1,12 +1,15 @@
-var CACHE_NAME = 'app-gestao-reitoria-v4';
+var CACHE_NAME = 'app-gestao-reitoria-v5';
 
 var CORE_ASSETS = [
   './',
   './index.html',
   './config.js',
   './manifest.json',
+  './appsel-firestore.js',
+  './relatorio-prazos.js',
   './icon.svg',
   './painel-icon.svg',
+  './cpii-logo.png',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
