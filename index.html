@@ -1643,15 +1643,20 @@ function vgDocumentoImpressao_(rel, meta) {
 
   var baseHref = (typeof location !== 'undefined') ? location.href : '';
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+    + '<meta name="color-scheme" content="light only">'
     + (baseHref ? '<base href="'+esc(baseHref)+'">' : '')
     + '<title>Relatorio de prazos - Visao Geral</title><style>'
+    // Documento SEMPRE claro: nao acompanha o modo escuro do sistema/navegador,
+    // e as cores/bordas saem na impressao (print-color-adjust: exact).
+    + ':root{color-scheme:light;} html,body{background:#fff;}'
+    + '*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
     + '@page{size:A4;margin:14mm;} *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#1e293b;margin:0;font-size:12px;}'
     + '.hd{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0f2f56;padding-bottom:10px;margin-bottom:14px;}'
     + '.hd img{height:56px;width:auto;} .hd .t1{font-size:16px;font-weight:800;color:#0f2f56;} .hd .t2{font-size:12px;color:#475569;} .hd .t3{font-size:13px;font-weight:700;color:#0f2f56;margin-top:3px;}'
     + '.meta{font-size:11px;color:#64748b;margin-bottom:12px;} .kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}'
-    + '.kpi{border:1px solid #e2e8f0;border-radius:8px;padding:7px 12px;min-width:118px;} .kpi .kl{font-size:10px;color:#64748b;} .kpi .kv{font-size:16px;font-weight:800;color:#0f2f56;}'
-    + 'h2{font-size:13px;color:#0f2f56;margin:16px 0 6px;} .box{border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin-bottom:8px;}'
-    + 'table{width:100%;border-collapse:collapse;font-size:11px;} th,td{border:1px solid #e2e8f0;padding:4px 6px;text-align:right;} th{background:#f1f5f9;color:#334155;} td.l,th.l{text-align:left;} td.b{font-weight:700;} .sm{color:#d97706;font-size:9px;}'
+    + '.kpi{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 12px;min-width:118px;} .kpi .kl{font-size:10px;color:#64748b;} .kpi .kv{font-size:16px;font-weight:800;color:#0f2f56;}'
+    + 'h2{font-size:13px;color:#0f2f56;margin:16px 0 6px;} .box{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin-bottom:8px;}'
+    + 'table{width:100%;border-collapse:collapse;font-size:11px;background:#fff;} th,td{border:1px solid #e2e8f0;padding:4px 6px;text-align:right;color:#1e293b;background:#fff;} th{background:#f1f5f9;color:#334155;} td.l,th.l{text-align:left;} td.b{font-weight:700;} .sm{color:#d97706;font-size:9px;}'
     + 'ul.rank{margin:4px 0;padding-left:18px;} ul.rank li{margin:2px 0;} .obs{font-size:10px;color:#64748b;margin-top:10px;} .ft{margin-top:16px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:10px;color:#94a3b8;}'
     + '</style></head><body>'
     + '<div class="hd"><img src="'+esc(VG_LOGO_SRC)+'" alt="Colegio Pedro II" onerror="this.style.display=\'none\'">'
