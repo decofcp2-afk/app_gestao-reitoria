@@ -83,6 +83,16 @@ agrupados por etapa × unidade × ano, prontos para o boxplot:
   em cada item (base do ranking de melhores/piores). Aceita `Timestamp` do Firestore
   (`{seconds}`) além de ISO.
 
+### `relatorio-modelo.test.js` — modelo da aba "Visão Geral" (`montarRelatorio`)
+Fase 3 do plano: monta o modelo que a UI desenha a partir dos resultados por
+unidade — estatística por etapa, comparação por unidade, ranking e KPIs:
+- **Modo geral** agrega as etapas de todas as unidades; **filtro por unidade**
+  isola os dados daquela unidade.
+- **Ranking:** melhor unidade = menor mediana, pior = maior; dentro de cada etapa
+  as unidades vêm ordenadas por mediana; usa o nome amigável quando fornecido.
+- **KPIs:** conta outliers pela cerca própria de cada etapa; propaga os
+  `descartados` somados; escopo vazio não quebra.
+
 ### `excluir-unidade.test.js` — exclusão de unidade (`fs_excluirUnidade`)
 - **Paginação:** regressão em que a exclusão só lia a 1ª página (`pageSize=300`)
   de cada coleção e ignorava o `nextPageToken` — uma unidade com coleções que
