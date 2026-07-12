@@ -271,8 +271,14 @@
   }
 
   // Unidade alvo (multiunidade): última escolhida (localStorage) → config → reitoria-sel.
+  // IDs são slugs; sanitizar evita que um valor contaminado (em especial com "/")
+  // faça doc() lançar erro síncrono e quebre o app até limpar o localStorage.
   function _unidadeId() {
-    try { var ls = root.localStorage.getItem('appsel_unidade'); if (ls) return ls; } catch (e) {}
+    try {
+      var ls = String(root.localStorage.getItem('appsel_unidade') || '')
+        .trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+      if (ls) return ls;
+    } catch (e) {}
     return (root.APPSEL_CONFIG && root.APPSEL_CONFIG.unidadeId) || 'reitoria-sel';
   }
 

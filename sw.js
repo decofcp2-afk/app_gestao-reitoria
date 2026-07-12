@@ -1,4 +1,4 @@
-var CACHE_NAME = 'app-gestao-reitoria-v5';
+var CACHE_NAME = 'app-gestao-reitoria-v6';
 
 var CORE_ASSETS = [
   './',
@@ -44,10 +44,15 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
+  // Documentos e TODOS os .js próprios vão network-first: com cache-first, um
+  // deploy de appsel-firestore.js/relatorio-prazos.js exigia lembrar de subir o
+  // CACHE_NAME, senão o app rodava o JS antigo com o index.html novo (foi a
+  // causa do "Leitura multiunidade indisponível" no celular). Offline continua
+  // coberto pelo fallback ao cache dentro de networkFirst.
   if (event.request.mode === 'navigate' ||
       event.request.destination === 'document' ||
       url.pathname.endsWith('/index.html') ||
-      url.pathname.endsWith('/config.js')) {
+      (url.origin === self.location.origin && url.pathname.endsWith('.js'))) {
     event.respondWith(networkFirst(event.request));
     return;
   }
