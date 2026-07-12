@@ -1670,7 +1670,16 @@ function abrirDescartadosVG_() {
     + bloco('Data inconsistente (fim antes do início)', d.inconsistentesItens, function (it) {
         return (it.ini && it.fim) ? ' · ' + esc(isoToDisplay(it.ini)) + ' → ' + esc(isoToDisplay(it.fim)) : '';
       });
-  if (!corpo) corpo = '<div style="color:var(--muted);">Nada ignorado no período selecionado.</div>';
+  var totalIgnorado = (d.semData || 0) + (d.inconsistentes || 0);
+  if (!corpo) {
+    // Se há contagem mas a lista não veio, é versão desatualizada em cache
+    // (index.html novo + relatorio-prazos.js antigo): não dizer "nada".
+    corpo = totalIgnorado > 0
+      ? '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;color:#92400e;">'
+        + 'Há <b>' + totalIgnorado + '</b> etapa(s) ignorada(s), mas o detalhamento não pôde ser carregado. '
+        + 'Feche o app e abra de novo (ou recarregue a página) para atualizar e ver a lista.</div>'
+      : '<div style="color:var(--muted);">Nada ignorado no período selecionado.</div>';
+  }
   corpo = '<div style="color:var(--muted);margin-bottom:4px;">Estas etapas estão fora do relatório. '
     + 'Para entrarem na conta, preencha a data de realização (ou corrija a data) na etapa do processo.</div>' + corpo;
 
