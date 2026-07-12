@@ -346,7 +346,8 @@
     });
 
     var gruposMap = {};
-    var descartados = { semData: 0, inconsistentes: 0 };
+    // Contagens + listas detalhadas (drill-down do Admin para cobrar correção).
+    var descartados = { semData: 0, inconsistentes: 0, semDataItens: [], inconsistentesItens: [] };
     var anosSet = {};
 
     Object.keys(etpPor).forEach(function (pid) {
@@ -360,11 +361,19 @@
         if (st === 'na') return;                     // não se aplica
         if (st !== 'ok') return;                     // ainda não concluída
         var fim = _parseData(e.dataRealizacao);
-        if (!fim) { descartados.semData++; return; } // concluída sem data válida
+        if (!fim) {                                  // concluída sem data válida
+          descartados.semData++;
+          descartados.semDataItens.push({ processoId: pid, etapa: nome, unidade: unidade });
+          return;
+        }
         var ini = cursor;
         var dias = _diasCorridos(ini, fim);
         if (dias == null || dias < 0) {              // fim antes do início: inconsistente
           descartados.inconsistentes++;
+          descartados.inconsistentesItens.push({
+            processoId: pid, etapa: nome, unidade: unidade,
+            ini: _toIsoLocal(ini), fim: _toIsoLocal(fim)
+          });
           cursor = fim;                              // ainda assim é uma conclusão real
           return;
         }
@@ -394,13 +403,15 @@
   function mesclarGeral(resultados) {
     var gruposMap = {};
     var anosSet = {};
-    var descartados = { semData: 0, inconsistentes: 0 };
+    var descartados = { semData: 0, inconsistentes: 0, semDataItens: [], inconsistentesItens: [] };
     (resultados || []).forEach(function (r) {
       if (!r) return;
       (r.anosDisponiveis || []).forEach(function (a) { anosSet[a] = true; });
       if (r.descartados) {
         descartados.semData += r.descartados.semData || 0;
         descartados.inconsistentes += r.descartados.inconsistentes || 0;
+        (r.descartados.semDataItens || []).forEach(function (it) { descartados.semDataItens.push(it); });
+        (r.descartados.inconsistentesItens || []).forEach(function (it) { descartados.inconsistentesItens.push(it); });
       }
       (r.grupos || []).forEach(function (g) {
         var chave = g.etapaChave + '¬' + g.ano;
@@ -433,11 +444,13 @@
     var ehGeral = !unidadeSel || unidadeSel === '(geral)';
     porUnidade = (porUnidade || []).filter(Boolean);
 
-    var descartados = { semData: 0, inconsistentes: 0 };
+    var descartados = { semData: 0, inconsistentes: 0, semDataItens: [], inconsistentesItens: [] };
     porUnidade.forEach(function (r) {
       if (r.descartados) {
         descartados.semData += r.descartados.semData || 0;
         descartados.inconsistentes += r.descartados.inconsistentes || 0;
+        (r.descartados.semDataItens || []).forEach(function (it) { descartados.semDataItens.push(it); });
+        (r.descartados.inconsistentesItens || []).forEach(function (it) { descartados.inconsistentesItens.push(it); });
       }
     });
 
