@@ -122,9 +122,10 @@
     .app-header { background: var(--navy); color: #fff; padding: calc(12px + env(safe-area-inset-top)) 16px 12px; display: flex; flex-direction: column; align-items: stretch; gap: 9px; flex-shrink: 0; transition: gap .22s ease, padding-bottom .22s ease; }
     .app-header-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
     /* Linha 2 (unidade + notificações + perfil): recolhe ao rolar a página para baixo. */
-    .app-header-row2 { max-height: 60px; overflow: hidden; transition: max-height .22s ease, opacity .18s ease; }
+    /* overflow:hidden só quando recolhido — senão corta o menu suspenso do perfil. */
+    .app-header-row2 { max-height: 60px; transition: max-height .22s ease, opacity .18s ease; }
     .app-header.hdr-collapsed { gap: 0; padding-bottom: 8px; }
-    .app-header.hdr-collapsed .app-header-row2 { max-height: 0; opacity: 0; pointer-events: none; }
+    .app-header.hdr-collapsed .app-header-row2 { max-height: 0; opacity: 0; overflow: hidden; pointer-events: none; }
     .app-header-row2 .header-actions { margin-left: auto; }
     .app-header-title { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .app-header-sub { font-size: 11px; opacity: .65; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
