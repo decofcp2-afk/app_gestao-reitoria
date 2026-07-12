@@ -97,18 +97,36 @@
     return (Number.isInteger(r) ? r.toFixed(0) : r.toFixed(1));
   }
 
+  // Quebra um rótulo em até 2 linhas de ~maxLen caracteres (a 2ª com reticências
+  // quando sobra). Mantém a leitura da etapa sem cortar tudo em "...".
+  function _wrap2_(str, maxLen) {
+    str = String(str == null ? '' : str).trim();
+    if (!str) return ['', ''];
+    var words = str.split(/\s+/), l1 = '', l2 = '';
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i];
+      if (!l2 && (!l1 || (l1.length + 1 + w.length) <= maxLen)) l1 = l1 ? l1 + ' ' + w : w;
+      else l2 = l2 ? l2 + ' ' + w : w;
+    }
+    if (!l2 && l1.length > maxLen) { l2 = l1.slice(maxLen); l1 = l1.slice(0, maxLen); }
+    if (l2.length > maxLen) l2 = l2.slice(0, maxLen - 1) + '…';
+    return [l1, l2];
+  }
+
   // series: [{ rotulo, estat }] — estat vindo de estatEtapa().
-  // opts: { largura, altura, cor, corOutlier, unidade } (todos opcionais).
-  // Boxplots verticais lado a lado, com eixo numérico compartilhado.
+  // opts: { largura, altura, cor, corOutlier } (todos opcionais).
+  // Boxplots verticais lado a lado, com eixo numérico compartilhado. A escala
+  // é definida pela CAIXA + BIGODES (ignora os outliers), para as caixas não
+  // ficarem achatadas por um prazo atípico. Outliers que cabem na escala viram
+  // pontos; os que estouram viram ▲/▼ com a contagem, na borda.
   // Retorna uma string SVG (pura — o chamador injeta no DOM).
   function boxplotSVG(series, opts) {
     opts = opts || {};
     series = (series || []).filter(function (s) { return s && s.estat; });
-    var unidade = opts.unidade || 'd';
     var cor = opts.cor || '#2563eb';
     var corBox = opts.corBox || '#dbeafe';
     var corOut = opts.corOutlier || '#dc2626';
-    var padL = 46, padR = 14, padT = 16, padB = 52;
+    var padL = 46, padR = 14, padT = 18, padB = 62;
     var W = opts.largura || Math.max(160, series.length * 96 + padL + padR);
     var H = opts.altura || 320;
     var plotW = W - padL - padR;
@@ -120,26 +138,28 @@
         + 'fill="#94a3b8" font-size="13" font-family="sans-serif">Sem dados no período</text></svg>';
     }
 
-    // Domínio numérico (inclui outliers).
+    // Domínio numérico pela caixa + bigodes (NÃO inclui os outliers).
     var vals = [];
     series.forEach(function (s) {
       var e = s.estat;
       if (!e || !e.n) return;
-      [e.min, e.max, e.whiskerLo, e.whiskerHi, e.q1, e.q3, e.mediana].forEach(function (v) {
-        if (_ehNum(v)) vals.push(v);
-      });
-      (e.outliers || []).forEach(function (o) { if (_ehNum(o)) vals.push(o); });
+      var campos = e.amostraPequena ? [e.min, e.max, e.mediana]
+        : [e.whiskerLo, e.whiskerHi, e.q1, e.q3, e.mediana];
+      campos.forEach(function (v) { if (_ehNum(v)) vals.push(v); });
     });
     var dmin = vals.length ? Math.min.apply(null, vals) : 0;
     var dmax = vals.length ? Math.max.apply(null, vals) : 1;
     if (dmin === dmax) { dmax = dmin + 1; }
     var folga = (dmax - dmin) * 0.08 || 1;
-    dmin -= folga; dmax += folga;
+    dmin = Math.max(0, dmin - folga); dmax += folga;   // prazos não são negativos
     function y(v) { return padT + plotH * (1 - (v - dmin) / (dmax - dmin)); }
 
     var parts = [];
     parts.push('<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" '
       + 'font-family="sans-serif" role="img" aria-label="Boxplot de prazos por etapa">');
+
+    // Rótulo de unidade do eixo.
+    parts.push('<text x="4" y="' + (padT - 6) + '" fill="#94a3b8" font-size="9">dias</text>');
 
     // Eixo Y + grade (5 marcas).
     var nT = 4;
@@ -154,6 +174,7 @@
 
     var band = plotW / series.length;
     var boxW = Math.min(48, band * 0.52);
+    var maxCh = Math.max(7, Math.round(band / 6.2));   // caracteres por linha do rótulo
 
     series.forEach(function (s, i) {
       var e = s.estat;
@@ -164,16 +185,14 @@
         var x0 = _px(cx - boxW / 2), x1 = _px(cx + boxW / 2);
 
         if (e.amostraPequena) {
-          // n<4: sem caixa/cerca — só os pontos e a mediana (evita conclusão frágil).
-          var xs = [e.min].concat(e.outliers).concat([e.max]);
-          parts.push('<line class="bp-mediana" x1="' + x0 + '" y1="' + _px(y(e.mediana))
-            + '" x2="' + x1 + '" y2="' + _px(y(e.mediana)) + '" stroke="' + cor + '" stroke-width="2.5"/>');
+          // n<4: sem caixa/cerca — só a mediana e a faixa mín–máx (evita conclusão frágil).
           parts.push('<line x1="' + cx + '" y1="' + _px(y(e.min)) + '" x2="' + cx + '" y2="'
             + _px(y(e.max)) + '" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3"/>');
+          parts.push('<line class="bp-mediana" x1="' + x0 + '" y1="' + _px(y(e.mediana))
+            + '" x2="' + x1 + '" y2="' + _px(y(e.mediana)) + '" stroke="' + cor + '" stroke-width="2.5"/>');
         } else {
           var yQ1 = _px(y(e.q1)), yQ3 = _px(y(e.q3)), yMed = _px(y(e.mediana));
           var yWlo = _px(y(e.whiskerLo)), yWhi = _px(y(e.whiskerHi));
-          // Haste (bigodes) + caps.
           parts.push('<line x1="' + cx + '" y1="' + yWhi + '" x2="' + cx + '" y2="' + yQ3
             + '" stroke="' + cor + '" stroke-width="1.5"/>');
           parts.push('<line x1="' + cx + '" y1="' + yQ1 + '" x2="' + cx + '" y2="' + yWlo
@@ -182,20 +201,37 @@
             + '" stroke="' + cor + '" stroke-width="1.5"/>');
           parts.push('<line x1="' + x0 + '" y1="' + yWlo + '" x2="' + x1 + '" y2="' + yWlo
             + '" stroke="' + cor + '" stroke-width="1.5"/>');
-          // Caixa Q1–Q3.
           parts.push('<rect x="' + x0 + '" y="' + Math.min(yQ1, yQ3) + '" width="' + _px(boxW)
             + '" height="' + _px(Math.abs(yQ1 - yQ3)) + '" fill="' + corBox + '" stroke="' + cor
             + '" stroke-width="1.5"/>');
-          // Mediana.
           parts.push('<line class="bp-mediana" x1="' + x0 + '" y1="' + yMed + '" x2="' + x1
             + '" y2="' + yMed + '" stroke="' + cor + '" stroke-width="2.5"/>');
         }
 
-        // Outliers (pontos vermelhos).
-        (e.outliers || []).forEach(function (o) {
-          parts.push('<circle class="bp-outlier" cx="' + cx + '" cy="' + _px(y(o))
-            + '" r="3" fill="' + corOut + '"/>');
-        });
+        // Outliers: dentro da escala viram pontos; fora, ▲/▼ na borda com contagem.
+        var acima = 0, abaixo = 0;
+        if (!e.amostraPequena) {
+          (e.outliers || []).forEach(function (o) {
+            if (!_ehNum(o)) return;
+            if (o > dmax) acima++;
+            else if (o < dmin) abaixo++;
+            else parts.push('<circle class="bp-outlier" cx="' + cx + '" cy="' + _px(y(o))
+              + '" r="3" fill="' + corOut + '"/>');
+          });
+        }
+        if (acima) {
+          parts.push('<polygon class="bp-outlier" points="' + cx + ',' + (padT + 1) + ' '
+            + (cx - 5) + ',' + (padT + 8) + ' ' + (cx + 5) + ',' + (padT + 8) + '" fill="' + corOut + '"/>');
+          if (acima > 1) parts.push('<text x="' + (cx + 7) + '" y="' + (padT + 9) + '" fill="' + corOut
+            + '" font-size="9" font-weight="700">' + acima + '</text>');
+        }
+        if (abaixo) {
+          var yb = padT + plotH;
+          parts.push('<polygon class="bp-outlier" points="' + cx + ',' + (yb - 1) + ' '
+            + (cx - 5) + ',' + (yb - 8) + ' ' + (cx + 5) + ',' + (yb - 8) + '" fill="' + corOut + '"/>');
+          if (abaixo > 1) parts.push('<text x="' + (cx + 7) + '" y="' + (yb - 1) + '" fill="' + corOut
+            + '" font-size="9" font-weight="700">' + abaixo + '</text>');
+        }
 
         // Rótulo da mediana.
         parts.push('<text x="' + cx + '" y="' + _px(y(e.mediana) - 6) + '" text-anchor="middle" '
@@ -205,13 +241,14 @@
           + 'fill="#cbd5e1" font-size="10">—</text>');
       }
 
-      // Rótulo da categoria (n embaixo).
-      var rot = String(s.rotulo == null ? '' : s.rotulo);
-      var rotCurto = rot.length > 16 ? rot.slice(0, 15) + '…' : rot;
-      parts.push('<text x="' + cx + '" y="' + (H - padB + 16) + '" text-anchor="middle" '
-        + 'fill="#334155" font-size="10">' + _esc(rotCurto) + '</text>');
-      parts.push('<text x="' + cx + '" y="' + (H - padB + 30) + '" text-anchor="middle" '
-        + 'fill="#94a3b8" font-size="9">n=' + ((e && e.n) || 0) + (unidade ? ' · ' + unidade : '') + '</text>');
+      // Rótulo da categoria em até 2 linhas + n.
+      var lin = _wrap2_(s.rotulo, maxCh);
+      var baseY = H - padB + 15;
+      parts.push('<text x="' + cx + '" y="' + baseY + '" text-anchor="middle" fill="#334155" font-size="10">'
+        + '<tspan x="' + cx + '">' + _esc(lin[0]) + '</tspan>'
+        + (lin[1] ? '<tspan x="' + cx + '" dy="12">' + _esc(lin[1]) + '</tspan>' : '') + '</text>');
+      parts.push('<text x="' + cx + '" y="' + (baseY + (lin[1] ? 26 : 14)) + '" text-anchor="middle" '
+        + 'fill="#94a3b8" font-size="9">n=' + ((e && e.n) || 0) + '</text>');
 
       parts.push('</g>');
     });

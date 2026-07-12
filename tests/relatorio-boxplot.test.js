@@ -31,10 +31,23 @@ test('desenha um box por série', () => {
   assert.equal(conta(svg, 'class="bp-mediana"'), 3, 'uma mediana por série com dados');
 });
 
-test('outliers viram pontos (bp-outlier)', () => {
-  // [1..9,100] tem exatamente 1 outlier (100).
+test('outlier que estoura a escala vira marcador ▲ na borda (não estica o eixo)', () => {
+  // [1..9,100]: a escala vem da caixa+bigodes (1..9); o 100 fica fora e vira ▲.
   const svg = boxplotSVG([{ rotulo: 'X', estat: estatEtapa([1, 2, 3, 4, 5, 6, 7, 8, 9, 100]) }]);
-  assert.equal(conta(svg, 'class="bp-outlier"'), 1, 'um ponto de outlier');
+  assert.equal(conta(svg, 'class="bp-outlier"'), 1, 'um marcador de outlier');
+  assert.ok(/<polygon class="bp-outlier"/.test(svg), 'outlier extremo é um triângulo (polygon), não ponto');
+  // O topo do eixo deve refletir os bigodes (~9+folga), não o 100.
+  const marcas = [];
+  svg.replace(/fill="#64748b" font-size="10">([\d.]+)<\/text>/g, (m, v) => { marcas.push(parseFloat(v)); return m; });
+  assert.ok(marcas.length >= 2 && Math.max.apply(null, marcas) < 30, 'a escala não é dominada pelo outlier (topo < 30): ' + marcas);
+});
+
+test('outlier que cabe na escala compartilhada vira ponto (circle)', () => {
+  const svg = boxplotSVG([
+    { rotulo: 'Grande', estat: estatEtapa([10, 20, 30, 40, 50, 60, 70, 80]) }, // whisker alto → escala grande
+    { rotulo: 'Peq', estat: estatEtapa([1, 2, 3, 4, 5, 6, 7, 8, 40]) }          // 40 é outlier de Peq, mas cabe na escala
+  ]);
+  assert.ok(/<circle class="bp-outlier"/.test(svg), 'outlier dentro da escala é um ponto');
 });
 
 test('amostra pequena (n<4) não desenha caixa (rect), mas mostra mediana', () => {
