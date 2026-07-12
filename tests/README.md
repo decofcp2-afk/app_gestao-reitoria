@@ -63,9 +63,11 @@ o mesmo código que o navegador roda para desenhar o relatório de prazos do Adm
 - **`estatEtapa`:** DIQ, cerca de outliers (`LS = Q3+1,5·DIQ` / `LI = Q1−1,5·DIQ`),
   bigodes (extremos DENTRO da cerca) e classificação de outliers (alto e baixo);
   sinaliza amostra pequena (n<4) e devolve formato estável mesmo com amostra vazia.
-- **`boxplotSVG`:** estrutura do SVG inline (um box e uma mediana por série, pontos
-  de outlier, sem caixa quando n<4), robustez a série/lista vazia, escape do rótulo
-  (sem injeção de HTML) e saída determinística.
+- **`boxplotSVG`:** estrutura do SVG inline (um box e uma mediana por série, sem
+  caixa quando n<4), robustez a série/lista vazia, escape do rótulo (sem injeção de
+  HTML) e saída determinística. A escala vem da **caixa + bigodes** (não dos
+  outliers): outlier que cabe na escala vira ponto (`<circle>`); o que estoura vira
+  marcador **▲/▼** na borda (`<polygon>`), sem esticar o eixo.
 
 ### `relatorio-agregacao.test.js` — pipeline de prazo real (`agregarPrazos`/`mesclarGeral`)
 Fase 2 do plano: transforma processos+etapas (forma do Firestore) nos prazos reais
