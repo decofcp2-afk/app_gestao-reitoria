@@ -1505,19 +1505,9 @@ function renderVisaoGeral_() {
     + '<button onclick="VG_CACHE=null;renderVisaoGeral_()" title="Recarregar" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;">🔄</button>'
     + '</div>';
 
-  // Legenda das siglas (recolhível)
-  html += '<details style="margin-bottom:12px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:0 13px;">'
-    + '<summary style="cursor:pointer;padding:11px 0;font-size:13px;font-weight:600;color:var(--navy);list-style:none;">ℹ️ Como ler os números (legenda)</summary>'
-    + '<div style="font-size:12px;color:var(--text2);line-height:1.65;padding:0 0 12px;border-top:1px solid #f1f5f9;padding-top:8px;">'
-    +   '<div><b>n</b> — quantas etapas concluídas entraram na conta.</div>'
-    +   '<div><b>Mediana</b> — prazo central: metade das etapas ficou abaixo, metade acima (mais fiel que a média).</div>'
-    +   '<div><b>Q1 e Q3</b> — os prazos no 25% e no 75%; formam a “caixa” do gráfico.</div>'
-    +   '<div><b>DIQ</b> — distância interquartílica (Q3 − Q1): o tamanho da caixa.</div>'
-    +   '<div><b>LS / LI</b> — limites de outlier: LS = Q3 + 1,5·DIQ e LI = Q1 − 1,5·DIQ.</div>'
-    +   '<div><b>Outliers</b> — prazos atípicos, fora de LS/LI (os pontos vermelhos no gráfico).</div>'
-    +   '<div><b>Mín / Máx</b> — o menor e o maior prazo observado.</div>'
-    +   '<div style="margin-top:6px;color:var(--muted);">Cada prazo é contado do início real da etapa (conclusão da etapa anterior, ou o D0 do processo) até a conclusão real, em dias corridos.</div>'
-    + '</div></details>';
+  // Legenda das siglas (abre um modal central).
+  html += '<button onclick="abrirLegendaVG_()" style="width:100%;margin-bottom:12px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;">'
+    + '<span style="font-size:15px;">ℹ️</span><span style="flex:1;">Como ler os números (legenda)</span><span style="color:var(--muted);font-size:12px;">abrir ›</span></button>';
 
   // Filtros
   html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">';
@@ -1659,6 +1649,41 @@ function vgDescartados_(d) {
 function onVGAno_(v){ VG_ANO = v; renderVisaoGeral_(); }
 function onVGUnidade_(v){ VG_UNIDADE = v; VG_ETAPA = ''; renderVisaoGeral_(); }
 function onVGEtapa_(v){ VG_ETAPA = v; renderVisaoGeral_(); }
+
+// Legenda em modal central (substitui o expande/recolhe).
+function _legendaVGConteudo_() {
+  return '<div style="margin-bottom:9px;"><b>n</b> — quantas etapas concluídas entraram na conta.</div>'
+    + '<div style="margin-bottom:9px;"><b>Mediana</b> — prazo central: metade das etapas ficou abaixo, metade acima (mais fiel que a média).</div>'
+    + '<div style="margin-bottom:9px;"><b>Q1 e Q3</b> — os prazos no 25% e no 75%; formam a “caixa” do gráfico.</div>'
+    + '<div style="margin-bottom:9px;"><b>DIQ</b> — distância interquartílica (Q3 − Q1): o tamanho da caixa.</div>'
+    + '<div style="margin-bottom:9px;"><b>LS / LI</b> — limites de outlier: LS = Q3 + 1,5·DIQ e LI = Q1 − 1,5·DIQ.</div>'
+    + '<div style="margin-bottom:9px;"><b>Outliers</b> — prazos atípicos, fora de LS/LI. No gráfico aparecem como pontos vermelhos; os que estouram a escala viram ▲ (acima) ou ▼ (abaixo) na borda.</div>'
+    + '<div style="margin-bottom:9px;"><b>Mín / Máx</b> — o menor e o maior prazo observado.</div>'
+    + '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9;color:var(--muted);">Cada prazo é contado do <b>início real</b> da etapa (a conclusão da etapa anterior, ou o D0 do processo na primeira etapa) até a <b>conclusão real</b> (data de realização), em dias corridos. A <b>mediana</b> é o valor típico — um processo isolado pode ficar bem acima dela (vira outlier).</div>';
+}
+function abrirLegendaVG_() {
+  fecharLegendaVG_();
+  var ov = document.createElement('div');
+  ov.id = 'vg-legenda-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.addEventListener('click', function(e){ if (e.target === ov) fecharLegendaVG_(); });
+  ov.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Como ler os números" '
+    + 'style="background:#fff;border-radius:16px;max-width:440px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(15,23,42,.28);overflow:hidden;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">'
+    +   '<div style="font-size:15px;font-weight:800;color:var(--navy);">ℹ️ Como ler os números</div>'
+    +   '<button onclick="fecharLegendaVG_()" aria-label="Fechar" style="background:none;border:none;font-size:24px;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px;">×</button>'
+    + '</div>'
+    + '<div style="padding:14px 16px;font-size:13px;color:var(--text2);line-height:1.6;overflow-y:auto;">' + _legendaVGConteudo_() + '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  document.addEventListener('keydown', _legendaVGEsc_);
+}
+function fecharLegendaVG_() {
+  var ov = document.getElementById('vg-legenda-ov');
+  if (ov) ov.remove();
+  document.removeEventListener('keydown', _legendaVGEsc_);
+}
+function _legendaVGEsc_(e){ if (e.key === 'Escape') fecharLegendaVG_(); }
 
 // ── Exportação: CSV + PDF/impressão (papel timbrado com o brasão do CPII) ──
 function vgSlug_(s) {
