@@ -69,9 +69,12 @@ test('processo sem D0 é ignorado (ainda na fila)', () => {
 test('conclusão sem data válida conta como descartado (semData)', () => {
   const processos = [{ id: 'P1', d0: '2026-01-01' }];
   const etapas = [{ processoId: 'P1', etapa: 'A', ordem: 1, status: 'Concluída', dataRealizacao: '' }];
-  const r = agregarPrazos(processos, etapas, {});
+  const r = agregarPrazos(processos, etapas, { unidade: 'reitoria-sel' });
   assert.equal(r.descartados.semData, 1);
   assert.equal(r.grupos.length, 0);
+  // Drill-down: a lista identifica processo, etapa e unidade.
+  assert.deepEqual(r.descartados.semDataItens,
+    [{ processoId: 'P1', etapa: 'A', unidade: 'reitoria-sel' }]);
 });
 
 test('fim antes do início é inconsistente (descartado), mas o cursor avança', () => {
@@ -84,6 +87,12 @@ test('fim antes do início é inconsistente (descartado), mas o cursor avança',
   assert.equal(r.descartados.inconsistentes, 1, 'A é inconsistente');
   assert.equal(grupo(r, 'A'), undefined);
   assert.deepEqual(grupo(r, 'B').dias, [10], 'B mede da conclusão real de A (05/05→15/05)');
+  // Drill-down: o item traz as datas conflitantes para conferência.
+  const it = r.descartados.inconsistentesItens[0];
+  assert.equal(it.processoId, 'P1');
+  assert.equal(it.etapa, 'A');
+  assert.equal(it.ini, '2026-05-10');
+  assert.equal(it.fim, '2026-05-05');
 });
 
 test('D1: agrupa pelo ANO da conclusão e o filtro de ano respeita isso', () => {

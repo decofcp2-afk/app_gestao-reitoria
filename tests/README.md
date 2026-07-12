@@ -78,6 +78,9 @@ agrupados por etapa × unidade × ano, prontos para o boxplot:
 - **Exclusões:** etapas `na`/contratuais, não concluídas, processo **sem D0**;
   conclusão sem data válida (`descartados.semData`) e fim < início
   (`descartados.inconsistentes`, mas o cursor ainda avança para a conclusão real).
+  Cada descartado também vira item detalhado (`semDataItens`/`inconsistentesItens`,
+  com processo, etapa, unidade e — nas inconsistentes — as datas conflitantes),
+  base do drill-down "Ver quais" da aba Visão Geral.
 - **D1:** agrupa e filtra pelo **ano da conclusão**; `anosDisponiveis` não depende
   do filtro de ano. **D2:** dias corridos. **D3:** sem desconto de fila.
 - **Normalização** de nome de etapa (acento/caixa) cai no mesmo grupo.

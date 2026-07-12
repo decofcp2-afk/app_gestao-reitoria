@@ -1572,7 +1572,8 @@ function renderVisaoGeral_() {
     unidadeLabel: (VG_UNIDADE === '(geral)' ? 'Geral — todas as unidades' : (nomesUnidade[VG_UNIDADE] || VG_UNIDADE)),
     geradoEm: new Date(),
     series: series,
-    tituloBox: tituloBox
+    tituloBox: tituloBox,
+    nomesUnidade: nomesUnidade
   };
 }
 
@@ -1644,7 +1645,50 @@ function vgRanking_(rel) {
 function vgDescartados_(d) {
   if (!d || (!d.semData && !d.inconsistentes)) return '';
   return '<div style="font-size:11px;color:var(--muted);margin-bottom:16px;">Ignorados: '
-    + d.semData + ' etapa(s) concluída(s) sem data e ' + d.inconsistentes + ' com data inconsistente (fim antes do início).</div>';
+    + d.semData + ' etapa(s) concluída(s) sem data e ' + d.inconsistentes + ' com data inconsistente (fim antes do início). '
+    + '<a href="#" onclick="abrirDescartadosVG_();return false;" style="color:var(--blue,#2563eb);font-weight:600;">Ver quais ›</a></div>';
+}
+
+// Drill-down dos descartados: lista processo + etapa (+ unidade) para o Admin
+// cobrar a correção dos dados. Reusa o padrão do modal da legenda.
+function abrirDescartadosVG_() {
+  var d = (VG_LAST_REL && VG_LAST_REL.descartados) || {};
+  var nomes = (VG_LAST_META && VG_LAST_META.nomesUnidade) || {};
+  function bloco(titulo, itens, extra) {
+    if (!itens || !itens.length) return '';
+    var h = '<div style="font-weight:700;color:var(--navy);margin:10px 0 6px;">' + titulo + ' (' + itens.length + ')</div>';
+    itens.forEach(function (it) {
+      h += '<div style="padding:7px 0;border-bottom:1px solid #f1f5f9;">'
+        + '<div style="font-weight:600;">' + esc(it.processoId) + '</div>'
+        + '<div style="color:var(--muted);">' + esc(it.etapa)
+        + (nomes[it.unidade] ? ' · ' + esc(nomes[it.unidade]) : '')
+        + (extra ? extra(it) : '') + '</div></div>';
+    });
+    return h;
+  }
+  var corpo = bloco('Concluídas sem data de realização', d.semDataItens)
+    + bloco('Data inconsistente (fim antes do início)', d.inconsistentesItens, function (it) {
+        return (it.ini && it.fim) ? ' · ' + esc(isoToDisplay(it.ini)) + ' → ' + esc(isoToDisplay(it.fim)) : '';
+      });
+  if (!corpo) corpo = '<div style="color:var(--muted);">Nada ignorado no período selecionado.</div>';
+  corpo = '<div style="color:var(--muted);margin-bottom:4px;">Estas etapas estão fora do relatório. '
+    + 'Para entrarem na conta, preencha a data de realização (ou corrija a data) na etapa do processo.</div>' + corpo;
+
+  fecharLegendaVG_();
+  var ov = document.createElement('div');
+  ov.id = 'vg-legenda-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.addEventListener('click', function(e){ if (e.target === ov) fecharLegendaVG_(); });
+  ov.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Etapas ignoradas" '
+    + 'style="background:#fff;border-radius:16px;max-width:440px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(15,23,42,.28);overflow:hidden;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">'
+    +   '<div style="font-size:15px;font-weight:800;color:var(--navy);">🚫 Etapas ignoradas no relatório</div>'
+    +   '<button onclick="fecharLegendaVG_()" aria-label="Fechar" style="background:none;border:none;font-size:24px;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px;">×</button>'
+    + '</div>'
+    + '<div style="padding:14px 16px;font-size:13px;color:var(--text2);line-height:1.5;overflow-y:auto;">' + corpo + '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  document.addEventListener('keydown', _legendaVGEsc_);
 }
 function onVGAno_(v){ VG_ANO = v; renderVisaoGeral_(); }
 function onVGUnidade_(v){ VG_UNIDADE = v; VG_ETAPA = ''; renderVisaoGeral_(); }
