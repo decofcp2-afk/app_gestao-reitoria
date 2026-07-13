@@ -1554,11 +1554,13 @@ function renderVisaoGeral_() {
     series = rel.etapas.map(function(e){ return { rotulo: e.etapa, estat: e.estat }; });
     tituloBox = 'Prazo por etapa' + (VG_UNIDADE !== '(geral)' ? ' — ' + esc(nomesUnidade[VG_UNIDADE]||VG_UNIDADE) : '');
   }
-  var largura = Math.max(320, series.length * 92 + 60);
+  // Largura própria do gráfico: ~78px por etapa. min-width garante rolagem no
+  // celular; max-width impede que o SVG (width:100%) estique e "dê zoom" no PC.
+  var largura = Math.max(300, series.length * 78 + 56);
   html += '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">'
     + vgTituloSecao_(tituloBox)
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Arraste o gráfico para o lado para ver todas as etapas.</div>'
-    + '<div style="min-width:'+largura+'px;">' + RP.boxplotSVG(series, { largura: largura, altura: 300 }) + '</div></div>';
+    + '<div style="min-width:'+largura+'px;max-width:'+largura+'px;">' + RP.boxplotSVG(series, { largura: largura, altura: 288 }) + '</div></div>';
 
   html += vgTabela_(rel);
   if (VG_UNIDADE === '(geral)' && multiUni) html += vgRanking_(rel);
@@ -1632,13 +1634,23 @@ function vgTabela_(rel) {
 function vgRanking_(rel) {
   var linhas = rel.etapas.filter(function(e){ return e.porUnidade.length >= 2; });
   if (!linhas.length) return '';
+  function linhaRank(cor, rotulo, uni) {
+    return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;">'
+      + '<span style="width:8px;height:8px;border-radius:50%;background:'+cor+';flex-shrink:0;"></span>'
+      + '<span style="color:var(--muted);width:38px;flex-shrink:0;">'+rotulo+'</span>'
+      + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(uni.nome)+'</span>'
+      + '<b style="color:var(--navy);white-space:nowrap;">'+vgFmt_(uni.estat.mediana)+' d</b></div>';
+  }
   var h = '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;">'
     + vgTituloSecao_('Melhores e piores prazos por etapa');
   linhas.forEach(function(e){
     var melhor = e.porUnidade[0], pior = e.porUnidade[e.porUnidade.length-1];
-    h += '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid #f1f5f9;flex-wrap:wrap;">'
-      + '<span style="font-weight:600;">'+esc(e.etapa)+'</span>'
-      + '<span style="color:var(--muted);">🟢 '+esc(melhor.nome)+' ('+vgFmt_(melhor.estat.mediana)+'d) &nbsp;·&nbsp; 🔴 '+esc(pior.nome)+' ('+vgFmt_(pior.estat.mediana)+'d)</span></div>';
+    h += '<div style="padding:9px 0;border-bottom:1px solid #f1f5f9;">'
+      + '<div style="font-weight:700;color:var(--navy);font-size:12.5px;margin-bottom:5px;">'+esc(e.etapa)+'</div>'
+      + '<div style="display:flex;flex-direction:column;gap:4px;">'
+      +   linhaRank('#16a34a', 'Melhor', melhor)
+      +   linhaRank('#dc2626', 'Pior', pior)
+      + '</div></div>';
   });
   return h + '</div>';
 }
@@ -1658,8 +1670,11 @@ function abrirDescartadosVG_() {
     if (!itens || !itens.length) return '';
     var h = '<div style="font-weight:700;color:var(--navy);margin:10px 0 6px;">' + titulo + ' (' + itens.length + ')</div>';
     itens.forEach(function (it) {
+      // Só o nome do processo (o usuário não reconhece o ID interno). O ID entra
+      // apenas como fallback quando o processo estiver sem nome cadastrado.
+      var titulo2 = it.processo ? esc(it.processo) : esc(it.processoId);
       h += '<div style="padding:7px 0;border-bottom:1px solid #f1f5f9;">'
-        + '<div style="font-weight:600;">' + esc(it.processoId) + '</div>'
+        + '<div style="font-weight:600;">' + titulo2 + '</div>'
         + '<div style="color:var(--muted);">' + esc(it.etapa)
         + (nomes[it.unidade] ? ' · ' + esc(nomes[it.unidade]) : '')
         + (extra ? extra(it) : '') + '</div></div>';
