@@ -173,7 +173,7 @@
     }
 
     var band = plotW / series.length;
-    var boxW = Math.min(48, band * 0.52);
+    var boxW = Math.min(38, band * 0.42);              // caixa mais estreita: sobra espaço p/ o rótulo à direita
     var maxCh = Math.max(7, Math.round(band / 6.2));   // caracteres por linha do rótulo
 
     series.forEach(function (s, i) {
@@ -233,9 +233,15 @@
             + '" font-size="9" font-weight="700">' + abaixo + '</text>');
         }
 
-        // Rótulo da mediana.
-        parts.push('<text x="' + cx + '" y="' + _px(y(e.mediana) - 6) + '" text-anchor="middle" '
-          + 'fill="' + cor + '" font-size="10" font-weight="700">' + _fmt(e.mediana) + '</text>');
+        // Rótulo da mediana: à direita da caixa, sobre um fundo branco — assim
+        // não cola na linha/borda e fica legível mesmo com a caixa fina.
+        var mtxt = _fmt(e.mediana);
+        var mx = _px(x1 + 3);
+        var myc = _px(y(e.mediana));
+        var mtw = mtxt.length * 6 + 5;
+        parts.push('<rect x="' + mx + '" y="' + _px(myc - 7) + '" width="' + mtw + '" height="13" fill="#fff" opacity="0.9" rx="2"/>');
+        parts.push('<text class="bp-medlabel" x="' + _px(mx + 2) + '" y="' + _px(myc + 3) + '" text-anchor="start" '
+          + 'fill="' + cor + '" font-size="10" font-weight="700">' + mtxt + '</text>');
       } else {
         parts.push('<text x="' + cx + '" y="' + _px(padT + plotH / 2) + '" text-anchor="middle" '
           + 'fill="#cbd5e1" font-size="10">—</text>');
@@ -329,9 +335,12 @@
     var anoFiltro = (opts.ano != null && opts.ano !== '') ? Number(opts.ano) : null;
 
     var d0Por = {};
+    var nomePor = {};   // pid → nome/objeto do processo (para o drill-down do Admin)
     (processos || []).forEach(function (p) {
       var pid = String((p && (p.id || p._id)) || '').trim();
-      if (pid) d0Por[pid] = _parseData(p.d0);
+      if (!pid) return;
+      d0Por[pid] = _parseData(p.d0);
+      nomePor[pid] = String((p && (p.objeto || p.nome)) || '').trim();
     });
 
     var etpPor = {};
@@ -363,7 +372,7 @@
         var fim = _parseData(e.dataRealizacao);
         if (!fim) {                                  // concluída sem data válida
           descartados.semData++;
-          descartados.semDataItens.push({ processoId: pid, etapa: nome, unidade: unidade });
+          descartados.semDataItens.push({ processoId: pid, processo: nomePor[pid] || '', etapa: nome, unidade: unidade });
           return;
         }
         var ini = cursor;
@@ -371,7 +380,7 @@
         if (dias == null || dias < 0) {              // fim antes do início: inconsistente
           descartados.inconsistentes++;
           descartados.inconsistentesItens.push({
-            processoId: pid, etapa: nome, unidade: unidade,
+            processoId: pid, processo: nomePor[pid] || '', etapa: nome, unidade: unidade,
             ini: _toIsoLocal(ini), fim: _toIsoLocal(fim)
           });
           cursor = fim;                              // ainda assim é uma conclusão real

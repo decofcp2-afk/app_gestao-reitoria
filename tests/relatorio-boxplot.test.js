@@ -50,10 +50,17 @@ test('outlier que cabe na escala compartilhada vira ponto (circle)', () => {
   assert.ok(/<circle class="bp-outlier"/.test(svg), 'outlier dentro da escala é um ponto');
 });
 
-test('amostra pequena (n<4) não desenha caixa (rect), mas mostra mediana', () => {
+test('amostra pequena (n<4) não desenha a caixa Q1–Q3, mas mostra mediana', () => {
   const svg = boxplotSVG([{ rotulo: 'P', estat: estatEtapa([10, 20, 30]) }]);
-  assert.equal(conta(svg, '<rect'), 0, 'sem caixa quando n<4');
+  // A caixa Q1–Q3 é o rect preenchido com corBox (#dbeafe); o rect de fundo do
+  // rótulo da mediana (#fff) não conta como caixa.
+  assert.equal(conta(svg, 'fill="#dbeafe"'), 0, 'sem caixa Q1–Q3 quando n<4');
   assert.equal(conta(svg, 'class="bp-mediana"'), 1, 'ainda mostra a mediana');
+});
+
+test('amostra normal desenha a caixa Q1–Q3', () => {
+  const svg = boxplotSVG([{ rotulo: 'N', estat: estatEtapa([1, 2, 3, 4, 5, 6, 7, 8]) }]);
+  assert.equal(conta(svg, 'fill="#dbeafe"'), 1, 'uma caixa Q1–Q3');
 });
 
 test('série vazia não quebra e não conta como box com dados', () => {
