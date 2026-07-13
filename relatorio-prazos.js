@@ -126,7 +126,7 @@
     var cor = opts.cor || '#2563eb';
     var corBox = opts.corBox || '#dbeafe';
     var corOut = opts.corOutlier || '#dc2626';
-    var padL = 46, padR = 14, padT = 18, padB = 62;
+    var padL = 46, padR = 14, padT = 30, padB = 62;   // padT com folga: separa "dias" da 1ª marca do eixo
     var W = opts.largura || Math.max(160, series.length * 96 + padL + padR);
     var H = opts.altura || 320;
     var plotW = W - padL - padR;
@@ -158,8 +158,8 @@
     parts.push('<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" '
       + 'font-family="sans-serif" role="img" aria-label="Boxplot de prazos por etapa">');
 
-    // Rótulo de unidade do eixo.
-    parts.push('<text x="4" y="' + (padT - 6) + '" fill="#94a3b8" font-size="9">dias</text>');
+    // Rótulo de unidade do eixo (bem no topo, com folga até a 1ª marca).
+    parts.push('<text x="4" y="12" fill="#94a3b8" font-size="9">dias</text>');
 
     // Eixo Y + grade (5 marcas).
     var nT = 4;

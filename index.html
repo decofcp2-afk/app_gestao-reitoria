@@ -1556,11 +1556,11 @@ function renderVisaoGeral_() {
   }
   // Largura própria do gráfico: ~78px por etapa. min-width garante rolagem no
   // celular; max-width impede que o SVG (width:100%) estique e "dê zoom" no PC.
-  var largura = Math.max(300, series.length * 78 + 56);
+  var largura = Math.max(340, series.length * 106 + 56);
   html += '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">'
     + vgTituloSecao_(tituloBox)
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Arraste o gráfico para o lado para ver todas as etapas.</div>'
-    + '<div style="min-width:'+largura+'px;max-width:'+largura+'px;">' + RP.boxplotSVG(series, { largura: largura, altura: 288 }) + '</div></div>';
+    + '<div style="min-width:'+largura+'px;max-width:'+largura+'px;margin:0 auto;">' + RP.boxplotSVG(series, { largura: largura, altura: 348 }) + '</div></div>';
 
   html += vgTabela_(rel);
   if (VG_UNIDADE === '(geral)' && multiUni) html += vgRanking_(rel);
@@ -1780,7 +1780,16 @@ function onVGExportPDF_() {
   w.document.write(vgDocumentoImpressao_(VG_LAST_REL, VG_LAST_META || {}));
   w.document.close();
   w.focus();
-  setTimeout(function(){ try { w.print(); } catch(e) {} }, 500);   // espera o SVG/layout assentar
+  // Fecha a aba automaticamente após imprimir (ou cancelar), para não ficar uma
+  // aba "about:blank" órfã parecendo bug.
+  var fechou = false;
+  var fechar = function(){ if (fechou) return; fechou = true; try { w.close(); } catch(e) {} };
+  w.onafterprint = fechar;
+  setTimeout(function(){
+    try { w.focus(); w.print(); } catch(e) { fechar(); }
+    // Fallback: navegadores sem onafterprint confiável — fecha um tempo depois.
+    setTimeout(fechar, 60000);
+  }, 500);   // espera o SVG/layout assentar
 }
 function vgDocumentoImpressao_(rel, meta) {
   var RP = window.RelatorioPrazos;
