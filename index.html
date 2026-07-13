@@ -1571,7 +1571,7 @@ function renderVisaoGeral_() {
   var largMax = Math.round(largura * 1.18);
   html += '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">'
     + vgTituloSecao_(tituloBox)
-    + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Arraste o gráfico para o lado para ver todas as etapas.</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Se necessário, arraste o gráfico para o lado para ver todas as etapas e/ou itens.</div>'
     + '<div style="min-width:'+largura+'px;max-width:min(95vw,'+largMax+'px);margin:0 auto;">' + RP.boxplotSVG(series, { largura: largura, altura: 376 }) + '</div></div>';
 
   html += vgTabela_(rel);
