@@ -1670,12 +1670,11 @@ function abrirDescartadosVG_() {
     if (!itens || !itens.length) return '';
     var h = '<div style="font-weight:700;color:var(--navy);margin:10px 0 6px;">' + titulo + ' (' + itens.length + ')</div>';
     itens.forEach(function (it) {
-      // Nome do processo em destaque (o usuário entende); o ID vira referência
-      // discreta (útil para localizar no SUAP).
+      // Só o nome do processo (o usuário não reconhece o ID interno). O ID entra
+      // apenas como fallback quando o processo estiver sem nome cadastrado.
       var titulo2 = it.processo ? esc(it.processo) : esc(it.processoId);
-      var refId = it.processo ? ' <span style="color:var(--muted);font-weight:400;">· '+esc(it.processoId)+'</span>' : '';
       h += '<div style="padding:7px 0;border-bottom:1px solid #f1f5f9;">'
-        + '<div style="font-weight:600;">' + titulo2 + refId + '</div>'
+        + '<div style="font-weight:600;">' + titulo2 + '</div>'
         + '<div style="color:var(--muted);">' + esc(it.etapa)
         + (nomes[it.unidade] ? ' · ' + esc(nomes[it.unidade]) : '')
         + (extra ? extra(it) : '') + '</div></div>';
