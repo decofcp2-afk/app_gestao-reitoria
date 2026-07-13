@@ -127,14 +127,13 @@
     .app-header.hdr-collapsed { gap: 0; padding-bottom: 8px; }
     .app-header.hdr-collapsed .app-header-row2 { max-height: 0; opacity: 0; overflow: hidden; pointer-events: none; }
     .app-header-row2 .header-actions { margin-left: auto; }
-    /* PC (tela larga): há espaço — cabeçalho em UMA linha; identidade à esquerda,
-       unidade + notificações + perfil à direita. Sem recolher (sobra espaço).
-       Em telas estreitas, mantém as 2 linhas como no celular. */
+    /* PC (tela larga): há espaço — cabeçalho em UMA linha. Identidade à esquerda
+       e a UNIDADE logo ao lado do título; notificações + perfil à direita.
+       Sem recolher (sobra espaço). Em telas estreitas, mantém as 2 linhas. */
     @media (min-width: 700px) {
-      .app-header { flex-direction: row; align-items: center; gap: 14px; }
-      .app-header-row { flex: 1; min-width: 0; }
-      .app-header-row2 { max-height: none; flex-shrink: 0; }
-      .app-header.hdr-collapsed { gap: 14px; padding-bottom: 12px; }
+      .app-header { flex-direction: row; align-items: center; gap: 12px; }
+      .app-header-row2 { max-height: none; flex: 1; }   /* preenche o resto: unidade fica junto ao título */
+      .app-header.hdr-collapsed { gap: 12px; padding-bottom: 12px; }
       .app-header.hdr-collapsed .app-header-row2 { max-height: none; opacity: 1; overflow: visible; pointer-events: auto; }
     }
     .app-header-title { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1668,9 +1667,14 @@ function vgRanking_(rel) {
   return h + '</div>';
 }
 function vgDescartados_(d) {
-  if (!d || (!d.semData && !d.inconsistentes)) return '';
+  // "Concluída sem data" é herança da planilha antiga — o app já exige a data na
+  // conclusão, então esses são só migração legada. Como a unidade usa apenas o
+  // app agora, não poluímos o relatório com eles. Mantemos apenas as
+  // inconsistências (fim antes do início), que apontam um erro real de data.
+  var incons = (d && d.inconsistentes) || 0;
+  if (!incons) return '';
   return '<div style="font-size:11px;color:var(--muted);margin-bottom:16px;">Ignorados: '
-    + d.semData + ' etapa(s) concluída(s) sem data e ' + d.inconsistentes + ' com data inconsistente (fim antes do início). '
+    + incons + ' etapa(s) com data inconsistente (fim antes do início). '
     + '<a href="#" onclick="abrirDescartadosVG_();return false;" style="color:var(--blue,#2563eb);font-weight:600;">Ver quais ›</a></div>';
 }
 
@@ -1694,11 +1698,12 @@ function abrirDescartadosVG_() {
     });
     return h;
   }
-  var corpo = bloco('Concluídas sem data de realização', d.semDataItens)
-    + bloco('Data inconsistente (fim antes do início)', d.inconsistentesItens, function (it) {
+  // "Sem data" é legado da planilha antiga e não entra mais no relatório; só
+  // listamos as inconsistências de data (fim antes do início).
+  var corpo = bloco('Data inconsistente (fim antes do início)', d.inconsistentesItens, function (it) {
         return (it.ini && it.fim) ? ' · ' + esc(isoToDisplay(it.ini)) + ' → ' + esc(isoToDisplay(it.fim)) : '';
       });
-  var totalIgnorado = (d.semData || 0) + (d.inconsistentes || 0);
+  var totalIgnorado = (d.inconsistentes || 0);
   if (!corpo) {
     // Se há contagem mas a lista não veio, é versão desatualizada em cache
     // (index.html novo + relatorio-prazos.js antigo): não dizer "nada".
@@ -1708,8 +1713,8 @@ function abrirDescartadosVG_() {
         + 'Feche o app e abra de novo (ou recarregue a página) para atualizar e ver a lista.</div>'
       : '<div style="color:var(--muted);">Nada ignorado no período selecionado.</div>';
   }
-  corpo = '<div style="color:var(--muted);margin-bottom:4px;">Estas etapas estão fora do relatório. '
-    + 'Para entrarem na conta, preencha a data de realização (ou corrija a data) na etapa do processo.</div>' + corpo;
+  corpo = '<div style="color:var(--muted);margin-bottom:4px;">Estas etapas têm a data de conclusão anterior ao início e ficam fora do relatório. '
+    + 'Corrija a data na etapa do processo para incluí-las.</div>' + corpo;
 
   fecharLegendaVG_();
   var ov = document.createElement('div');
@@ -1830,8 +1835,8 @@ function vgDocumentoImpressao_(rel, meta) {
           return '<li><b>'+esc(e.etapa)+'</b> — melhor: '+esc(m.nome)+' ('+vgFmt_(m.estat.mediana)+'d) · pior: '+esc(p.nome)+' ('+vgFmt_(p.estat.mediana)+'d)</li>';
         }).join('') + '</ul>';
   }
-  var desc = (rel.descartados && (rel.descartados.semData || rel.descartados.inconsistentes))
-    ? '<p class="obs">Ignorados: '+rel.descartados.semData+' etapa(s) concluída(s) sem data e '+rel.descartados.inconsistentes+' com data inconsistente (fim antes do início).</p>' : '';
+  var desc = (rel.descartados && rel.descartados.inconsistentes)
+    ? '<p class="obs">Ignorados: '+rel.descartados.inconsistentes+' etapa(s) com data inconsistente (fim antes do início).</p>' : '';
 
   var baseHref = (typeof location !== 'undefined') ? location.href : '';
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
