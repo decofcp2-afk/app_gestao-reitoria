@@ -1556,11 +1556,11 @@ function renderVisaoGeral_() {
   }
   // Largura própria do gráfico: ~78px por etapa. min-width garante rolagem no
   // celular; max-width impede que o SVG (width:100%) estique e "dê zoom" no PC.
-  var largura = Math.max(320, series.length * 96 + 56);
+  var largura = Math.max(340, series.length * 106 + 56);
   html += '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">'
     + vgTituloSecao_(tituloBox)
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Arraste o gráfico para o lado para ver todas as etapas.</div>'
-    + '<div style="min-width:'+largura+'px;max-width:'+largura+'px;margin:0 auto;">' + RP.boxplotSVG(series, { largura: largura, altura: 320 }) + '</div></div>';
+    + '<div style="min-width:'+largura+'px;max-width:'+largura+'px;margin:0 auto;">' + RP.boxplotSVG(series, { largura: largura, altura: 348 }) + '</div></div>';
 
   html += vgTabela_(rel);
   if (VG_UNIDADE === '(geral)' && multiUni) html += vgRanking_(rel);
