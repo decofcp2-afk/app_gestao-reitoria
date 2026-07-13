@@ -127,6 +127,15 @@
     .app-header.hdr-collapsed { gap: 0; padding-bottom: 8px; }
     .app-header.hdr-collapsed .app-header-row2 { max-height: 0; opacity: 0; overflow: hidden; pointer-events: none; }
     .app-header-row2 .header-actions { margin-left: auto; }
+    /* PC (tela larga): há espaço — cabeçalho em UMA linha. Identidade à esquerda
+       e a UNIDADE logo ao lado do título; notificações + perfil à direita.
+       Sem recolher (sobra espaço). Em telas estreitas, mantém as 2 linhas. */
+    @media (min-width: 700px) {
+      .app-header { flex-direction: row; align-items: center; gap: 12px; }
+      .app-header-row2 { max-height: none; flex: 1; }   /* preenche o resto: unidade fica junto ao título */
+      .app-header.hdr-collapsed { gap: 12px; padding-bottom: 12px; }
+      .app-header.hdr-collapsed .app-header-row2 { max-height: none; opacity: 1; overflow: visible; pointer-events: auto; }
+    }
     .app-header-title { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .app-header-sub { font-size: 11px; opacity: .65; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -1556,11 +1565,14 @@ function renderVisaoGeral_() {
   }
   // Largura própria do gráfico: ~78px por etapa. min-width garante rolagem no
   // celular; max-width impede que o SVG (width:100%) estique e "dê zoom" no PC.
-  var largura = Math.max(340, series.length * 106 + 56);
+  var largura = Math.max(340, series.length * 116 + 56);
+  // Teto proporcional: no PC cresce até ~18% além do natural (fica maior sem
+  // esticar demais nem ficar alto demais); no celular o 95vw + min-width rola.
+  var largMax = Math.round(largura * 1.18);
   html += '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">'
     + vgTituloSecao_(tituloBox)
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Arraste o gráfico para o lado para ver todas as etapas.</div>'
-    + '<div style="min-width:'+largura+'px;max-width:'+largura+'px;margin:0 auto;">' + RP.boxplotSVG(series, { largura: largura, altura: 348 }) + '</div></div>';
+    + '<div style="min-width:'+largura+'px;max-width:min(95vw,'+largMax+'px);margin:0 auto;">' + RP.boxplotSVG(series, { largura: largura, altura: 376 }) + '</div></div>';
 
   html += vgTabela_(rel);
   if (VG_UNIDADE === '(geral)' && multiUni) html += vgRanking_(rel);
@@ -1655,9 +1667,14 @@ function vgRanking_(rel) {
   return h + '</div>';
 }
 function vgDescartados_(d) {
-  if (!d || (!d.semData && !d.inconsistentes)) return '';
+  // "Concluída sem data" é herança da planilha antiga — o app já exige a data na
+  // conclusão, então esses são só migração legada. Como a unidade usa apenas o
+  // app agora, não poluímos o relatório com eles. Mantemos apenas as
+  // inconsistências (fim antes do início), que apontam um erro real de data.
+  var incons = (d && d.inconsistentes) || 0;
+  if (!incons) return '';
   return '<div style="font-size:11px;color:var(--muted);margin-bottom:16px;">Ignorados: '
-    + d.semData + ' etapa(s) concluída(s) sem data e ' + d.inconsistentes + ' com data inconsistente (fim antes do início). '
+    + incons + ' etapa(s) com data inconsistente (fim antes do início). '
     + '<a href="#" onclick="abrirDescartadosVG_();return false;" style="color:var(--blue,#2563eb);font-weight:600;">Ver quais ›</a></div>';
 }
 
@@ -1681,11 +1698,12 @@ function abrirDescartadosVG_() {
     });
     return h;
   }
-  var corpo = bloco('Concluídas sem data de realização', d.semDataItens)
-    + bloco('Data inconsistente (fim antes do início)', d.inconsistentesItens, function (it) {
+  // "Sem data" é legado da planilha antiga e não entra mais no relatório; só
+  // listamos as inconsistências de data (fim antes do início).
+  var corpo = bloco('Data inconsistente (fim antes do início)', d.inconsistentesItens, function (it) {
         return (it.ini && it.fim) ? ' · ' + esc(isoToDisplay(it.ini)) + ' → ' + esc(isoToDisplay(it.fim)) : '';
       });
-  var totalIgnorado = (d.semData || 0) + (d.inconsistentes || 0);
+  var totalIgnorado = (d.inconsistentes || 0);
   if (!corpo) {
     // Se há contagem mas a lista não veio, é versão desatualizada em cache
     // (index.html novo + relatorio-prazos.js antigo): não dizer "nada".
@@ -1695,8 +1713,8 @@ function abrirDescartadosVG_() {
         + 'Feche o app e abra de novo (ou recarregue a página) para atualizar e ver a lista.</div>'
       : '<div style="color:var(--muted);">Nada ignorado no período selecionado.</div>';
   }
-  corpo = '<div style="color:var(--muted);margin-bottom:4px;">Estas etapas estão fora do relatório. '
-    + 'Para entrarem na conta, preencha a data de realização (ou corrija a data) na etapa do processo.</div>' + corpo;
+  corpo = '<div style="color:var(--muted);margin-bottom:4px;">Estas etapas têm a data de conclusão anterior ao início e ficam fora do relatório. '
+    + 'Corrija a data na etapa do processo para incluí-las.</div>' + corpo;
 
   fecharLegendaVG_();
   var ov = document.createElement('div');
@@ -1817,8 +1835,8 @@ function vgDocumentoImpressao_(rel, meta) {
           return '<li><b>'+esc(e.etapa)+'</b> — melhor: '+esc(m.nome)+' ('+vgFmt_(m.estat.mediana)+'d) · pior: '+esc(p.nome)+' ('+vgFmt_(p.estat.mediana)+'d)</li>';
         }).join('') + '</ul>';
   }
-  var desc = (rel.descartados && (rel.descartados.semData || rel.descartados.inconsistentes))
-    ? '<p class="obs">Ignorados: '+rel.descartados.semData+' etapa(s) concluída(s) sem data e '+rel.descartados.inconsistentes+' com data inconsistente (fim antes do início).</p>' : '';
+  var desc = (rel.descartados && rel.descartados.inconsistentes)
+    ? '<p class="obs">Ignorados: '+rel.descartados.inconsistentes+' etapa(s) com data inconsistente (fim antes do início).</p>' : '';
 
   var baseHref = (typeof location !== 'undefined') ? location.href : '';
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
@@ -3464,7 +3482,9 @@ function renderStep() {
       + '<div class="info-row"><span>Responsável</span><span>'+esc(et.agente||'—')+'</span></div>'
       + '</div>'
       + '<div class="field-label">Data de conclusão</div>'
-      + '<input type="date" class="field-input" id="inp-data" value="'+hojeFmt+'" max="'+hojeFmt+'">';
+      + '<input type="date" class="field-input" id="inp-data" value="'+hojeFmt+'"'
+      + (et.ini_iso ? ' min="'+et.ini_iso+'"' : '') + ' max="'+hojeFmt+'">'
+      + (et.ini_iso ? '<div class="field-hint" style="font-size:11px;color:var(--muted);margin-top:4px;">Início desta etapa: '+isoToDisplay(et.ini_iso)+'. A conclusão não pode ser anterior a essa data.</div>' : '');
 
     footer.innerHTML =
       '<button class="btn-prim" onclick="avancarStep()">Continuar →</button>'
@@ -3547,6 +3567,13 @@ function avancarStep() {
   if (STEP === 0) {
     var dr = document.getElementById('inp-data').value;
     if (!dr) { toast('Informe a data de conclusão.', 'err'); return; }
+    // Data de conclusão não pode ser anterior ao início real da etapa (o que
+    // geraria um prazo negativo — o caso "inconsistente" do relatório).
+    var etAtual = CONC.et;
+    if (etAtual && etAtual.ini_iso && dr < etAtual.ini_iso) {
+      toast('A conclusão não pode ser anterior ao início da etapa (' + isoToDisplay(etAtual.ini_iso) + '). Corrija a data.', 'err');
+      return;
+    }
     CONC.dataRealiz = dr;
     STEP = 1; renderStep();
 
@@ -4597,6 +4624,14 @@ function salvarNovoProc() {
         fecharNovoProc();
         toast('✓ Processo ' + res.pid + ' cadastrado!', 'ok');
         setTimeout(carregarDados, 1200);
+        // Lembrete: a pontuação de carga não é atribuída no cadastro; sem ela o
+        // processo não conta na Capacidade. Modal central com atalho.
+        abrirDialogo_({
+          titulo: 'Atribua a pontuação',
+          mensagem: 'O processo ' + res.pid + ' foi cadastrado, mas ainda não tem pontuação de carga de trabalho. Sem ela, ele não é computado na Capacidade do setor. Deseja atribuir agora?',
+          ok: 'Ir para a Capacidade',
+          cancelar: 'Depois'
+        }, function(ok){ if (ok) switchTab('capacidade'); });
       } else {
         toast('Erro: ' + (res && res.erro ? res.erro : 'Tente novamente.'), 'err');
         if (btn) { btn.disabled = false; btn.textContent = '✓ Cadastrar processo'; }
