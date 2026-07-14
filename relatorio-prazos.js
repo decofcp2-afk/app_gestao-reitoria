@@ -443,14 +443,20 @@
 
   // ── Modelo do relatório (o que a aba "Visão Geral" desenha) ────────────
   // porUnidade: [ resultado de agregarPrazos, ... ] (um por unidade).
-  // opts: { unidadeSel, nomesUnidade } — unidadeSel '' ou '(geral)' = todas.
+  // opts: { unidadeSel, etapaChave, nomesUnidade }
+  //   unidadeSel '' ou '(geral)' = todas as unidades.
+  //   etapaChave ''/omitido = todas as etapas; caso contrário, TUDO (etapas,
+  //   ranking e KPIs) passa a refletir só aquela etapa — os cards ficam
+  //   dinâmicos conforme o filtro de etapa.
   // Retorna { unidadeSel, etapas:[{etapa, ano, estat, porUnidade:[{unidade,nome,estat}]}],
   //   ranking:{melhorUnidade, piorUnidade, unidades:[...]}, kpis:{...}, descartados }.
   function montarRelatorio(porUnidade, opts) {
     opts = opts || {};
     var nomes = opts.nomesUnidade || {};
     var unidadeSel = opts.unidadeSel || '';
+    var etapaChave = opts.etapaChave || '';
     var ehGeral = !unidadeSel || unidadeSel === '(geral)';
+    var incluiEtapa = function (g) { return !etapaChave || g.etapaChave === etapaChave; };
     porUnidade = (porUnidade || []).filter(Boolean);
 
     var descartados = { semData: 0, inconsistentes: 0, semDataItens: [], inconsistentesItens: [] };
@@ -469,6 +475,7 @@
     var etapasMap = {};
     fonte.forEach(function (r) {
       (r.grupos || []).forEach(function (g) {
+        if (!incluiEtapa(g)) return;
         var m = etapasMap[g.etapaChave] || (etapasMap[g.etapaChave] = {
           etapa: g.etapa, etapaChave: g.etapaChave, ano: g.ano, diasTodos: [], porUni: {}
         });
@@ -489,6 +496,7 @@
     var uniDias = {};
     fonte.forEach(function (r) {
       (r.grupos || []).forEach(function (g) {
+        if (!incluiEtapa(g)) return;
         var alvo = (uniDias[r.unidade] = uniDias[r.unidade] || []);
         g.dias.forEach(function (d) { alvo.push(d); });
       });

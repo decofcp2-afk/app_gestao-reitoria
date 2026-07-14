@@ -92,3 +92,65 @@ test('escopo vazio não quebra (sem unidades / sem dados)', () => {
   assert.equal(rel.ranking.melhorUnidade, null);
   assert.equal(rel.ranking.piorUnidade, null);
 });
+
+// ── Filtro de etapa: KPIs/ranking dinâmicos (o problema relatado) ──────────
+// dias em relação ao D0 fixo (2026-01-01): fim = D0 + dias.
+function fimApos(dias) {
+  var d = new Date(Date.UTC(2026, 0, 1)); d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+function uniDur(id, mapaEtapaDias) {
+  var concl = [];
+  Object.keys(mapaEtapaDias).forEach(function (etapa) {
+    mapaEtapaDias[etapa].forEach(function (dias) { concl.push({ etapa: etapa, fim: fimApos(dias) }); });
+  });
+  return unidade(id, '2026-01-01', concl);
+}
+
+test('sem filtro de etapa: KPIs agregam todas as etapas (soma dos n por etapa)', () => {
+  const A = uniDur('tijuca', { 'Instrução': [5, 7], 'Parecer': [20, 25] });
+  const B = uniDur('reitoria', { 'Instrução': [10, 12], 'Parecer': [30] });
+  const rel = montarRelatorio([A, B], { unidadeSel: '(geral)' });
+  const somaN = rel.etapas.reduce(function (s, e) { return s + e.estat.n; }, 0);
+  assert.equal(rel.kpis.nAmostra, somaN, 'nAmostra = soma dos n por etapa');
+  assert.equal(rel.kpis.nAmostra, 7);            // 2+2 + 2+1
+});
+
+test('com filtro de etapa: KPIs refletem SÓ aquela etapa', () => {
+  const A = uniDur('tijuca', { 'Instrução': [5, 7], 'Parecer': [20, 25] });
+  const B = uniDur('reitoria', { 'Instrução': [10, 12], 'Parecer': [30] });
+  const nomes = { tijuca: 'Tijuca', reitoria: 'Reitoria' };
+  const full = montarRelatorio([A, B], { unidadeSel: '(geral)', nomesUnidade: nomes });
+  const chaveInstr = full.etapas.find(function (e) { return e.etapa === 'Instrução'; }).etapaChave;
+
+  const rel = montarRelatorio([A, B], { unidadeSel: '(geral)', etapaChave: chaveInstr, nomesUnidade: nomes });
+  assert.equal(rel.etapas.length, 1, 'só a etapa filtrada');
+  assert.equal(rel.kpis.nAmostra, 4, 'só as 4 conclusões de Instrução (5,7,10,12)');
+  assert.equal(rel.kpis.mediana, 8.5, 'mediana de [5,7,10,12]');
+  // nAmostra filtrado == n daquela etapa no relatório completo (coerência)
+  const nInstrFull = full.etapas.find(function (e) { return e.etapa === 'Instrução'; }).estat.n;
+  assert.equal(rel.kpis.nAmostra, nInstrFull);
+  // Ranking passa a ser por-etapa: Tijuca (mediana 6) melhor; Reitoria (11) pior.
+  assert.equal(rel.ranking.melhorUnidade.unidade, 'tijuca');
+  assert.equal(rel.ranking.piorUnidade.unidade, 'reitoria');
+});
+
+test('filtro de etapa + unidade específica isola etapa E unidade', () => {
+  const A = uniDur('tijuca', { 'Instrução': [5, 7], 'Parecer': [20, 25] });
+  const B = uniDur('reitoria', { 'Instrução': [10, 12], 'Parecer': [30] });
+  const full = montarRelatorio([A, B], { unidadeSel: '(geral)' });
+  const chaveParecer = full.etapas.find(function (e) { return e.etapa === 'Parecer'; }).etapaChave;
+  const rel = montarRelatorio([A, B], { unidadeSel: 'reitoria', etapaChave: chaveParecer });
+  assert.equal(rel.kpis.nAmostra, 1, 'só o Parecer da Reitoria (30)');
+  assert.equal(rel.kpis.mediana, 30);
+});
+
+test('outliers do KPI seguem a etapa filtrada', () => {
+  // Instrução com um outlier alto; Parecer sem outlier.
+  const A = uniDur('u', { 'Instrução': [10, 11, 12, 9, 300], 'Parecer': [5, 6, 7, 8] });
+  const full = montarRelatorio([A], { unidadeSel: '(geral)' });
+  const chaveInstr = full.etapas.find(function (e) { return e.etapa === 'Instrução'; }).etapaChave;
+  const chaveParecer = full.etapas.find(function (e) { return e.etapa === 'Parecer'; }).etapaChave;
+  assert.equal(montarRelatorio([A], { etapaChave: chaveInstr }).kpis.nOutliers, 1);
+  assert.equal(montarRelatorio([A], { etapaChave: chaveParecer }).kpis.nOutliers, 0);
+});

@@ -1504,7 +1504,14 @@ function renderVisaoGeral_() {
   var anoFiltro = (VG_ANO === '' ? null : Number(VG_ANO));
 
   var porUnidade = cache.map(function(c){ return RP.agregarPrazos(c.processos, c.etapas, { unidade: c.unidade, ano: anoFiltro }); });
-  var rel = RP.montarRelatorio(porUnidade, { unidadeSel: VG_UNIDADE, nomesUnidade: nomesUnidade });
+  // relFull = todas as etapas do escopo (alimenta o seletor de etapa).
+  var relFull = RP.montarRelatorio(porUnidade, { unidadeSel: VG_UNIDADE, nomesUnidade: nomesUnidade });
+  // Se o filtro de etapa aponta para algo que não existe no escopo atual
+  // (mudou unidade/ano), volta para "todas as etapas".
+  if (VG_ETAPA && !relFull.etapas.some(function(e){ return e.etapaChave === VG_ETAPA; })) VG_ETAPA = '';
+  // rel = escopo já filtrado pela etapa → KPIs, tabela, ranking e boxplot ficam
+  // dinâmicos conforme a etapa selecionada.
+  var rel = VG_ETAPA ? RP.montarRelatorio(porUnidade, { unidadeSel: VG_UNIDADE, etapaChave: VG_ETAPA, nomesUnidade: nomesUnidade }) : relFull;
   var multiUni = cache.length > 1;
 
   var html = '';
@@ -1525,7 +1532,7 @@ function renderVisaoGeral_() {
     var optsUni = [{v:'(geral)', t:'Geral (todas)'}].concat(cache.map(function(c){ return {v:c.unidade, t:c.nome||c.unidade}; }));
     html += vgSelect_('vg-uni', 'Unidade', optsUni, VG_UNIDADE, 'onVGUnidade_(this.value)');
   }
-  var optsEt = [{v:'', t:'Todas as etapas'}].concat(rel.etapas.map(function(e){ return {v:e.etapaChave, t:e.etapa}; }));
+  var optsEt = [{v:'', t:'Todas as etapas'}].concat(relFull.etapas.map(function(e){ return {v:e.etapaChave, t:e.etapa}; }));
   html += vgSelect_('vg-etapa', 'Etapa', optsEt, VG_ETAPA, 'onVGEtapa_(this.value)');
   html += '</div>';
 
@@ -1534,11 +1541,12 @@ function renderVisaoGeral_() {
     cont.innerHTML = html; return;
   }
 
-  // KPIs
+  // KPIs — dinâmicos conforme o filtro. Com uma etapa selecionada, refletem só ela.
   var k = rel.kpis;
+  var ehEtapaFiltrada = !!VG_ETAPA;
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px;">';
-  html += vgKpi_('Etapas concluídas', vgFmt_(k.nAmostra), 'prazos na amostra');
-  html += vgKpi_('Mediana geral', vgFmt_(k.mediana) + ' d', 'prazo mediano');
+  html += vgKpi_(ehEtapaFiltrada ? 'Conclusões' : 'Etapas concluídas', vgFmt_(k.nAmostra), 'prazos na amostra');
+  html += vgKpi_(ehEtapaFiltrada ? 'Mediana da etapa' : 'Mediana geral', vgFmt_(k.mediana) + ' d', 'prazo mediano');
   html += vgKpi_('Outliers', vgFmt_(k.nOutliers), 'prazos atípicos');
   if (rel.ranking.melhorUnidade) html += vgKpi_('Melhor prazo', esc(rel.ranking.melhorUnidade.nome), 'mediana ' + vgFmt_(rel.ranking.melhorUnidade.mediana) + ' d');
   if (rel.ranking.piorUnidade) html += vgKpi_('Pior prazo', esc(rel.ranking.piorUnidade.nome), 'mediana ' + vgFmt_(rel.ranking.piorUnidade.mediana) + ' d');

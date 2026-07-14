@@ -97,6 +97,11 @@ unidade — estatística por etapa, comparação por unidade, ranking e KPIs:
   as unidades vêm ordenadas por mediana; usa o nome amigável quando fornecido.
 - **KPIs:** conta outliers pela cerca própria de cada etapa; propaga os
   `descartados` somados; escopo vazio não quebra.
+- **Filtro de etapa (`opts.etapaChave`):** com uma etapa selecionada, TUDO
+  (KPIs, ranking e boxplot) passa a refletir só ela — `nAmostra`/`mediana`/
+  `nOutliers` viram os daquela etapa, e o ranking de unidades é por-etapa. Sem
+  filtro, agrega todas (soma dos `n` por etapa == `nAmostra`). Cobre a coerência
+  que faltava nos cards da aba.
 
 ### `relatorio-csv.test.js` — exportação CSV (`paraCSV`)
 Fase 4 do plano: gera o CSV da tabela-resumo no formato Excel pt-BR — delimitador
