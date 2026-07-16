@@ -720,15 +720,50 @@ function fs_editarProcessoFilaApp(params) {
       if (objeto.length > 200) objeto = objeto.substring(0, 200).trim();
       if (!_fsPodeEditarFila_(pid)) throw new Error('Só é possível editar pela Fila processos que ainda não começaram ou que retornaram.');
 
+      var procAtual = _fsGet_('processos/' + pid) || {};
+      var modalEfetiva = (params.modalidade !== undefined)
+        ? String(params.modalidade || '').trim()
+        : String(procAtual.modalidade || '').trim();
+      var ehCD = _ehCDMod_(modalEfetiva);
+
       var upd = { objeto: objeto };
-      if (params.modalidade !== undefined) upd.modalidade = String(params.modalidade || '').trim();
+      if (params.modalidade !== undefined) upd.modalidade = modalEfetiva;
       if (params.d0 !== undefined) upd.d0 = String(params.d0 || '').trim() ? new Date(params.d0 + 'T12:00:00') : null;
       if (params.temIRP !== undefined) upd.temIrp = (params.temIRP === 'Sim');
+      if (params.tipoCD !== undefined) upd.tipoCD = ehCD ? String(params.tipoCD || '').trim() : '';
+      if (params.procuradoria !== undefined) upd.procuradoria = ehCD ? (params.procuradoria === 'Não' ? 'Não' : 'Sim') : '';
       if (params.setor !== undefined) upd.setorRequisitante = String(params.setor || '').trim();
       if (params.emailReq !== undefined) upd.emailRequisitante = String(params.emailReq || '').trim();
       if (params.nroSuap !== undefined) upd.suap = String(params.nroSuap || '').trim();
       if (params.linkSuap !== undefined) upd.linkSuap = String(params.linkSuap || '').trim() || '#';
       _fsUpdate_('processos/' + pid, upd);
+
+      // Reaplica as condicionais nas etapas (marca/reverte "Não se aplica",
+      // renomeia adequações). Nunca altera etapas concluídas.
+      var temIRPef = (params.temIRP !== undefined) ? params.temIRP : (procAtual.temIrp === true ? 'Sim' : 'Não');
+      var tipoEf   = ehCD ? ((params.tipoCD !== undefined) ? params.tipoCD : String(procAtual.tipoCD || '')) : '';
+      var procEf   = ehCD ? ((params.procuradoria !== undefined) ? params.procuradoria : String(procAtual.procuradoria || 'Sim')) : 'Sim';
+      var cond = _fsCondicionais_({ modalidade: modalEfetiva, temIRP: temIRPef, tipoCD: tipoEf, procuradoria: procEf });
+      var gerenciadas = { 3:true, 4:true, 6:true, 8:true };  // etapas controladas pelas condicionais
+      _fsEtapasDoProc_(pid).forEach(function(e){
+        var o = e.obj || {};
+        var ordem = Number(o.ordem || 0);
+        var st = String(o.status || '');
+        if (st.toLowerCase().indexOf('conclu') >= 0) return;   // não mexe em concluída
+        var jaNA = st.toLowerCase().indexOf('não se aplica') >= 0 || st.toLowerCase().indexOf('nao se aplica') >= 0;
+        var patch = {};
+        if (cond.na[ordem]) {
+          if (!jaNA) patch.status = 'Não se aplica';
+        } else if (jaNA && gerenciadas[ordem]) {
+          patch.status = 'Não iniciada';
+        }
+        if (ordem === 5) {
+          patch.etapa = cond.procuradoriaNao ? 'Adequações finais dos documentos'
+                                             : 'Adequações finais dos documentos e envio à Procuradoria';
+        }
+        if (Object.keys(patch).length) _fsUpdate_(e.path, patch);
+      });
+
       return { ok: true, nome: objeto };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
@@ -787,6 +822,33 @@ var FS_ETAPAS_TEMPLATE = [
   { nome: 'Assinatura contrato / Ata (ARP)', fase: 'Contratual', prazo: 20 }
 ];
 
+// ── _fsCondicionais_ ───────────────────────────────────────────────────────
+// Espelha _aplicarCondicionaisEtapas_ (planilha) para o caminho Firestore.
+// Retorna, com base nas condicionais do processo:
+//   { na: {ordem:true,...}, procuradoriaNao: bool }
+// Ordens do FS_ETAPAS_TEMPLATE: 3=Minuta TR, 4=IRP, 5=Adequações/Procuradoria,
+// 6=Versão Final TR, 8=Fase externa, 9=Assinatura (sempre na).
+function _ehCDMod_(modalidade) {
+  return String(modalidade || '').toLowerCase().indexOf('direta') >= 0;
+}
+function _fsCondicionais_(cfg) {
+  cfg = cfg || {};
+  function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+  var ehCD       = norm(cfg.modalidade).indexOf('direta') >= 0;
+  var tipo       = norm(cfg.tipoCD);
+  var ehAdesao   = ehCD && tipo.indexOf('adesao') >= 0;
+  // "com disputa" (não apenas "disputa", que também aparece em "sem disputa")
+  var temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+  var semIRP     = (cfg.temIRP !== 'Sim') || ehAdesao;
+  var semProc    = ehCD && (cfg.procuradoria === 'Não');
+  var na = {};
+  if (semIRP) na[4] = true;
+  if (ehAdesao) { na[3] = true; na[6] = true; }
+  if (ehCD && !temDisputa) na[8] = true;   // fase externa só em CD com disputa
+  na[9] = true;                            // contratual (fora do SEL) — sempre na
+  return { na: na, procuradoriaNao: semProc };
+}
+
 function fs_cadastrarProcesso(params) {
   return _withAppLockResult_('cadastrar processo (fs)', function() {
     try {
@@ -819,6 +881,8 @@ function fs_cadastrarProcesso(params) {
         d0: d0,
         linkSuap: String(params.linkSuap || '#').trim(),
         temIrp: (params.temIRP === 'Sim'),
+        tipoCD: _ehCDMod_(modalidade) ? String(params.tipoCD || '').trim() : '',
+        procuradoria: _ehCDMod_(modalidade) ? (params.procuradoria === 'Não' ? 'Não' : 'Sim') : '',
         status: d0 ? 'Em andamento' : 'Em planejamento',
         setorRequisitante: String(params.setor || '').trim(),
         emailRequisitante: String(params.emailReq || '').trim(),
@@ -826,14 +890,14 @@ function fs_cadastrarProcesso(params) {
       });
 
       var fasePrazoExt = modalidade === 'Concorrência' ? 100 : (modalidade === 'Pregão Eletrônico' ? 90 : 30);
+      var cond = _fsCondicionais_({ modalidade: modalidade, temIRP: params.temIRP, tipoCD: params.tipoCD, procuradoria: params.procuradoria });
       FS_ETAPAS_TEMPLATE.forEach(function(t, i){
         var ordem = i + 1;
         var ext = t.fase === 'Externa';
         var nome = ext ? ('Fase externa — ' + (modalidade || 'Pregão Eletrônico')) : t.nome;
+        if (ordem === 5 && cond.procuradoriaNao) nome = 'Adequações finais dos documentos';
         var prazo = ext ? fasePrazoExt : t.prazo;
-        var status = 'Não iniciada';
-        if (ordem === 4 && params.temIRP !== 'Sim') status = 'Não se aplica'; // IRP sem SRP
-        if (ordem === 9) status = 'Não se aplica';                            // contratual (fora do SEL)
+        var status = cond.na[ordem] ? 'Não se aplica' : 'Não iniciada';
         var agente = ext ? (ehPE ? (params.respExterno || '') : (params.respExterno || params.respInterno || '')) : (params.respInterno || '');
         _fsSet_('etapas/' + novoPID + '_' + String(ordem).padStart(2, '0'), {
           processoId: novoPID, ordem: ordem, etapa: nome, fase: t.fase,
@@ -1185,6 +1249,8 @@ function _fsGetEtapasParaApp_(opts) {
       id: pid, num: String(p.suap || '').trim(), nome: String(p.objeto || '').trim(),
       modal: String(p.modalidade || '').trim(),
       temIRP: (p.temIrp === true || String(p.temIrp).trim().toLowerCase() === 'sim'),
+      tipoCD: String(p.tipoCD || '').trim(),
+      procuradoria: (String(p.procuradoria || '').trim().toLowerCase() !== 'não' && String(p.procuradoria || '').trim().toLowerCase() !== 'nao'),
       req: String(p.setorRequisitante || '').trim(), emailR: String(p.emailRequisitante || '').trim(),
       suap: String(p.linkSuap || '#').trim()
     };
@@ -1238,6 +1304,7 @@ function _fsGetEtapasParaApp_(opts) {
     for (var k = 0; k < etCalc.length; k++) { if (etCalc[k].retornoFila) { etRet = etCalc[k]; break; } }
     return {
       id: p.id, num: p.num || p.id, nome: p.nome, modal: p.modal, modalAbrev: mAbrev,
+      temIRP: p.temIRP, tipoCD: p.tipoCD, procuradoria: p.procuradoria,
       req: p.req, emailR: p.emailR, suap: p.suap, d0_iso: _toIso_(p.d0),
       execucao: execucao, status: st, retornoFila: retornoFila,
       motivoFila: etRet ? etRet.motivo : '', servidor: srvInt, servidorExt: srvExt,
