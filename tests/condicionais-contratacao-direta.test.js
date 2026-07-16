@@ -96,7 +96,9 @@ test('Retorno para fila não some quando o marcador cai em etapa derivada "na"',
   const procs = [processo({ id: 'PR', d0: '2026-06-02', modalidade: 'Contratação Direta', tipoCD: 'Adesão', temIrp: true })];
   const etapas = [
     etapa({ processoId: 'PR', etapa: 'ETP + Mapa de Riscos + Pesquisa de Preços', ordem: 2, status: 'Concluída' }),
-    etapa({ processoId: 'PR', etapa: 'IRP — Intenção de Registro de Preços', ordem: 4, status: 'Em andamento', motivoAtraso: 'RETORNO PARA FILA: testando' })
+    // Marcador numa etapa JÁ gravada como "Não se aplica" (caso real do bug):
+    // a leitura precisa reexibi-la para não perder o retorno.
+    etapa({ processoId: 'PR', etapa: 'IRP — Intenção de Registro de Preços', ordem: 4, status: 'Não se aplica', motivoAtraso: 'RETORNO PARA FILA: testando' })
   ];
   const r = construir(procs, etapas, [], { isChefe: true });
   const p = r.processos.find((x) => x.id === 'PR');
