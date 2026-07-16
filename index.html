@@ -4055,6 +4055,8 @@ function editarProcessoFila_(pid) {
     d0:         d0Iso,
     nroSuap:    p.num || '',
     temIRP:     !!p.temIRP,
+    tipoCD:      p.tipoCD || '',
+    procuradoria: (p.procuradoria !== false),
     setor:      p.req || '',
     emailReq:   p.emailR || '',
     linkSuap:   (p.suap && p.suap !== '#') ? p.suap : ''
@@ -4067,6 +4069,32 @@ function editarProcessoFila_(pid) {
 function _toIsoLocal_(d) {
   if (!(d instanceof Date)) d = new Date(d);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// ── Condicionais de contratação direta (edição pela fila) ──────────────────
+function ehCDEdit_()     { return EDIT_PROC && EDIT_PROC.modalidade === 'Contratação Direta'; }
+function ehAdesaoEdit_() { return ehCDEdit_() && EDIT_PROC.tipoCD === 'Adesão'; }
+
+function cdBlockEdit_() {
+  if (!ehCDEdit_()) return '';
+  var botoes = TIPOS_CD.map(function(t) {
+    return '<button class="serv-btn' + (EDIT_PROC.tipoCD===t.val?' selected':'') + '"'
+      + ' title="'+esc(t.hint)+'" onclick="selecionarTipoCDEdit_(\''+escJsAttr(t.val)+'\')">'
+      + esc(t.label) + '</button>';
+  }).join('');
+  return '<div class="form-group"><label class="form-label">Tipo de contratação direta'
+    + ' <span title="Passe o mouse em cada opção para a base legal." style="cursor:help;color:var(--muted)">ⓘ</span></label>'
+    + '<div class="serv-grid">' + botoes + '</div></div>'
+    + '<div class="form-group"><div class="toggle-row">'
+    + '<div><label>Envio à Procuradoria?</label><small title="'+esc(HINT_PROCURADORIA)+'" style="cursor:help">Facultativo em pequeno valor ⓘ</small></div>'
+    + '<label class="toggle"><input type="checkbox" id="e-proc"'+(EDIT_PROC.procuradoria!==false?' checked':'')+' onchange="EDIT_PROC.procuradoria=this.checked">'
+    + '<span class="toggle-slider"></span></label></div></div>';
+}
+
+function selecionarTipoCDEdit_(val) {
+  EDIT_PROC.tipoCD = val;
+  if (val === 'Adesão') EDIT_PROC.temIRP = false;
+  renderEditProc_();
 }
 
 function renderEditProc_() {
@@ -4083,16 +4111,17 @@ function renderEditProc_() {
     + '<div class="form-group"><label class="form-label">Objeto <span class="req">*</span></label>'
     + '<input type="text" class="field-input" id="e-objeto" placeholder="Objeto do processo" value="'+esc(e.objeto||'')+'" maxlength="200"></div>'
     + '<div class="form-group"><label class="form-label">Modalidade</label>'
-    + '<select class="field-input" id="e-modal">'
+    + '<select class="field-input" id="e-modal" onchange="EDIT_PROC.modalidade=this.value; renderEditProc_();">'
     + MODALIDADES.map(function(m){ return '<option'+(e.modalidade===m?' selected':'')+'>'+m+'</option>'; }).join('')
     + '</select></div>'
     + '<div class="form-group"><label class="form-label">D0 — Data de abertura</label>'
     + '<input type="date" class="field-input" id="e-d0" value="'+(e.d0||'')+'"></div>'
     + '<div class="form-group"><label class="form-label">Setor Requisitante</label>'
     + '<input type="text" class="field-input" id="e-setor" placeholder="Ex: DIRED, DECOF, DIAD…" value="'+esc(e.setor||'')+'"></div>'
+    + cdBlockEdit_()
     + '<div class="form-group"><div class="toggle-row">'
-    + '<div><label>Tem IRP?</label><small>Intenção de Registro de Preços</small></div>'
-    + '<label class="toggle"><input type="checkbox" id="e-irp"'+(e.temIRP?' checked':'')+'>'
+    + '<div><label>Tem IRP?</label><small>'+(ehAdesaoEdit_()?'Não se aplica em adesão':'Intenção de Registro de Preços')+'</small></div>'
+    + '<label class="toggle"><input type="checkbox" id="e-irp"'+(e.temIRP?' checked':'')+(ehAdesaoEdit_()?' disabled':'')+'>'
     + '<span class="toggle-slider"></span></label></div></div>'
     + '<div class="form-group"><label class="form-label">N° SUAP</label>'
     + '<input type="text" class="field-input" id="e-suap" placeholder="23040.000000/2026-00" value="'+esc(e.nroSuap||'')+'"></div>'
@@ -4135,6 +4164,8 @@ function salvarEditProc_() {
       d0:         document.getElementById('e-d0').value || '',
       nroSuap:    (document.getElementById('e-suap').value || '').trim(),
       temIRP:     document.getElementById('e-irp').checked ? 'Sim' : 'Não',
+      tipoCD:       ehCDEdit_() ? (EDIT_PROC.tipoCD || '') : '',
+      procuradoria: ehCDEdit_() ? (EDIT_PROC.procuradoria!==false ? 'Sim' : 'Não') : 'Sim',
       setor:      (document.getElementById('e-setor').value || '').trim(),
       emailReq:   (document.getElementById('e-email').value || '').trim(),
       linkSuap:   (document.getElementById('e-link').value || '').trim(),
@@ -4438,6 +4469,21 @@ var NOVO = {};   // dados acumulados do formulário
 var NOVO_STEP = 0;
 
 var MODALIDADES = ['Pregão Eletrônico', 'Contratação Direta', 'Concorrência'];
+
+// Tipos de contratação direta. Cada tipo deriva quais etapas se aplicam.
+// A explicação legal aparece ao passar o mouse (atributo title).
+var TIPOS_CD = [
+  { val:'Dispensa com disputa',  label:'Dispensa c/ disputa',
+    hint:'Dispensa eletrônica com disputa (art. 75, §3º, Lei 14.133/2021). Mantém a fase externa (sessão de disputa).' },
+  { val:'Dispensa sem disputa',  label:'Dispensa s/ disputa',
+    hint:'Dispensa direta sem sessão de disputa. Sem fase externa — a etapa de disputa não se aplica.' },
+  { val:'Inexigibilidade',       label:'Inexigibilidade',
+    hint:'Inexigibilidade de licitação (art. 74, Lei 14.133/2021). Sem fase externa.' },
+  { val:'Adesão',                label:'Adesão (carona)',
+    hint:'Adesão a Ata de Registro de Preços de outro órgão. Usa o TR do gerenciador — não se aplicam Minuta do TR, Versão Final do TR, IRP nem fase externa.' }
+];
+var HINT_PROCURADORIA = 'Orientação Normativa AGU nº 69/2021: o parecer jurídico não é obrigatório nas contratações diretas de pequeno valor (art. 75, I e II, Lei 14.133/2021), salvo se houver minuta de contrato não padronizada pela assessoria jurídica ou dúvida do gestor sobre a legalidade. Marque "Não" para dispensar o envio à Procuradoria — as adequações finais dos documentos continuam sendo cobradas no prazo.';
+
 // SERVIDORES é derivado dinamicamente de SERV_DATA ao carregar
 function getNomesServ_() { return SERV_DATA.map(function(s){ return s.nome; }); }
 
@@ -4446,7 +4492,7 @@ function abrirNovoProc() {
     toast('Cadastro de processo fica restrito à chefia.', 'err');
     return;
   }
-  NOVO = { objeto:'', modalidade:'Pregão Eletrônico', d0:'', nroSuap:'', temIRP:false, setor:'', emailReq:'', linkSuap:'', respInterno:'', respExterno:'' };
+  NOVO = { objeto:'', modalidade:'Pregão Eletrônico', d0:'', nroSuap:'', temIRP:false, tipoCD:'', procuradoria:true, setor:'', emailReq:'', linkSuap:'', respInterno:'', respExterno:'' };
   NOVO_STEP = 0;
   document.getElementById('ov-novo').classList.add('open');
   document.getElementById('modal-novo').classList.add('open');
@@ -4456,6 +4502,34 @@ function abrirNovoProc() {
 function fecharNovoProc() {
   document.getElementById('ov-novo').classList.remove('open');
   document.getElementById('modal-novo').classList.remove('open');
+}
+
+// ── Condicionais de contratação direta (cadastro) ──────────────────────────
+function ehCDNovo_()     { return NOVO.modalidade === 'Contratação Direta'; }
+function ehAdesaoNovo_() { return ehCDNovo_() && NOVO.tipoCD === 'Adesão'; }
+
+// Bloco do passo 2 exibido só quando a modalidade é Contratação Direta:
+// seletor de tipo (com explicação legal no hover) + toggle de envio à Procuradoria.
+function cdBlockNovo_() {
+  if (!ehCDNovo_()) return '';
+  var botoes = TIPOS_CD.map(function(t) {
+    return '<button class="serv-btn' + (NOVO.tipoCD===t.val?' selected':'') + '"'
+      + ' title="'+esc(t.hint)+'" onclick="selecionarTipoCD_(\''+escJsAttr(t.val)+'\')">'
+      + esc(t.label) + '</button>';
+  }).join('');
+  return '<div class="form-group"><label class="form-label">Tipo de contratação direta <span class="req">*</span>'
+    + ' <span title="Passe o mouse em cada opção para a base legal." style="cursor:help;color:var(--muted)">ⓘ</span></label>'
+    + '<div class="serv-grid">' + botoes + '</div></div>'
+    + '<div class="form-group"><div class="toggle-row">'
+    + '<div><label>Envio à Procuradoria?</label><small title="'+esc(HINT_PROCURADORIA)+'" style="cursor:help">Facultativo em pequeno valor ⓘ</small></div>'
+    + '<label class="toggle"><input type="checkbox" id="n-proc"'+(NOVO.procuradoria!==false?' checked':'')+' onchange="NOVO.procuradoria=this.checked">'
+    + '<span class="toggle-slider"></span></label></div></div>';
+}
+
+function selecionarTipoCD_(val) {
+  NOVO.tipoCD = val;
+  if (val === 'Adesão') NOVO.temIRP = false;   // adesão não tem IRP
+  renderNovoStep();
 }
 
 function voltarOuFecharNovo() {
@@ -4501,9 +4575,10 @@ function renderNovoStep() {
       + '<div class="step-desc">Setor solicitante e características do processo.</div>'
       + '<div class="form-group"><label class="form-label">Setor Requisitante <span class="req">*</span></label>'
       + '<input type="text" class="field-input" id="n-setor" placeholder="Ex: DIRED, DECOF, DIAD…" value="'+esc(NOVO.setor||'')+'"></div>'
+      + cdBlockNovo_()
       + '<div class="form-group"><div class="toggle-row">'
-      + '<div><label>Tem IRP?</label><small>Intenção de Registro de Preços</small></div>'
-      + '<label class="toggle"><input type="checkbox" id="n-irp"'+(NOVO.temIRP?' checked':'')+' onchange="NOVO.temIRP=this.checked">'
+      + '<div><label>Tem IRP?</label><small>'+(ehAdesaoNovo_()?'Não se aplica em adesão':'Intenção de Registro de Preços')+'</small></div>'
+      + '<label class="toggle"><input type="checkbox" id="n-irp"'+(NOVO.temIRP?' checked':'')+(ehAdesaoNovo_()?' disabled':'')+' onchange="NOVO.temIRP=this.checked">'
       + '<span class="toggle-slider"></span></label></div></div>'
       + '<div class="form-group"><label class="form-label">N° SUAP</label>'
       + '<input type="text" class="field-input" id="n-suap" placeholder="23040.000000/2026-00" value="'+esc(NOVO.nroSuap||'')+'"></div>'
@@ -4559,7 +4634,9 @@ function renderNovoStep() {
       + '<div class="info-row"><span>Modalidade</span><span>'+esc(NOVO.modalidade)+'</span></div>'
       + '<div class="info-row"><span>D0</span><span>'+isoToDisplay(NOVO.d0)+'</span></div>'
       + '<div class="info-row"><span>Setor</span><span>'+esc(NOVO.setor)+'</span></div>'
+      + (ehCDNovo_() ? '<div class="info-row"><span>Tipo (dir.)</span><span>'+esc(NOVO.tipoCD||'—')+'</span></div>' : '')
       + '<div class="info-row"><span>IRP</span><span>'+(NOVO.temIRP?'Sim':'Não')+'</span></div>'
+      + (ehCDNovo_() ? '<div class="info-row"><span>Procuradoria</span><span>'+(NOVO.procuradoria!==false?'Sim':'Não')+'</span></div>' : '')
       + '<div class="info-row"><span>N° SUAP</span><span>'+(NOVO.nroSuap||'—')+'</span></div>'
       + '<div class="info-row"><span>Resp. interno</span><span>'+esc(NOVO.respInterno)+'</span></div>'
       + (ehPE4 ? '<div class="info-row"><span>Resp. externo</span><span>'+esc(NOVO.respExterno)+'</span></div>' : '')
@@ -4607,6 +4684,7 @@ function avancarNovoStep() {
   } else if (NOVO_STEP === 1) {
     var setor = document.getElementById('n-setor').value.trim();
     if (!setor) { toast('Informe o setor requisitante.', 'err'); return; }
+    if (ehCDNovo_() && !NOVO.tipoCD) { toast('Selecione o tipo de contratação direta.', 'err'); return; }
     NOVO.setor    = setor;
     NOVO.nroSuap  = document.getElementById('n-suap').value.trim();
     NOVO.linkSuap = document.getElementById('n-link').value.trim();
@@ -4655,6 +4733,8 @@ function salvarNovoProc() {
       d0:          NOVO.d0,
       nroSuap:     NOVO.nroSuap,
       temIRP:      NOVO.temIRP ? 'Sim' : 'Não',
+      tipoCD:       ehCDNovo_() ? (NOVO.tipoCD || '') : '',
+      procuradoria: ehCDNovo_() ? (NOVO.procuradoria!==false ? 'Sim' : 'Não') : 'Sim',
       setor:       NOVO.setor,
       emailReq:    NOVO.emailReq,
       linkSuap:    NOVO.linkSuap,

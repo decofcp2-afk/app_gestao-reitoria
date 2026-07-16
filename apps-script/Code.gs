@@ -1418,6 +1418,8 @@ function _getEtapasParaApp_(sess) {
     modal: hP.indexOf('Modalidade'),
     d0:    hP.indexOf('D0 (Data Abertura)'),
     irp:   hP.indexOf('Tem IRP?'),
+    tipoCD: hP.indexOf('Tipo Contratação Direta'),
+    proc:  hP.indexOf('Envio à Procuradoria?'),
     req:   hP.indexOf('Setor Requisitante'),
     suap:  hP.indexOf('Link SUAP'),
     emailR: hP.indexOf('EmailRequisitante'),
@@ -1443,6 +1445,8 @@ function _getEtapasParaApp_(sess) {
         nome:  String(r[iP.nome] || '').trim(),
         modal: String(r[iP.modal]|| '').trim(),
         temIRP: iP.irp >= 0 ? String(r[iP.irp] || '').trim().toLowerCase() === 'sim' : false,
+        tipoCD: iP.tipoCD >= 0 ? String(r[iP.tipoCD] || '').trim() : '',
+        procuradoria: iP.proc >= 0 ? (String(r[iP.proc] || '').trim().toLowerCase() !== 'não' && String(r[iP.proc] || '').trim().toLowerCase() !== 'nao') : true,
         req:   iP.req >= 0 ? String(r[iP.req] || '').trim() : '',
         emailR: iP.emailR >= 0 ? String(r[iP.emailR] || '').trim() : '',
         suap:  String(r[iP.suap] || '#').trim()
@@ -1456,6 +1460,8 @@ function _getEtapasParaApp_(sess) {
       modal:  String(r[iP.modal]|| '').trim(),
       d0:     d0,
       temIRP: String(r[iP.irp] || '').trim().toLowerCase() === 'sim',
+      tipoCD: iP.tipoCD >= 0 ? String(r[iP.tipoCD] || '').trim() : '',
+      procuradoria: iP.proc >= 0 ? (String(r[iP.proc] || '').trim().toLowerCase() !== 'não' && String(r[iP.proc] || '').trim().toLowerCase() !== 'nao') : true,
       req:    iP.req  >= 0 ? String(r[iP.req]  || '').trim() : '',
       emailR: iP.emailR >= 0 ? String(r[iP.emailR] || '').trim() : '',
       suap:   String(r[iP.suap] || '#').trim()
@@ -1627,6 +1633,7 @@ function _getEtapasParaApp_(sess) {
 
     return {
       id: p.id, num: p.num || p.id, nome: p.nome, modal: p.modal, modalAbrev: mAbrev,
+      temIRP: p.temIRP, tipoCD: p.tipoCD, procuradoria: p.procuradoria,
       req: p.req, emailR: p.emailR, suap: p.suap, d0_iso: _toIso_(p.d0),
       execucao: execucao, status: st,
       retornoFila: retornoFila,
@@ -2625,7 +2632,7 @@ function cadastrarProcesso(params) {
     }
 
     // ── Lê cabeçalho de Processos ─────────────────────────────────
-    var lP   = _garantirColunas_(shP, 'ProcessoID', ['Setor Requisitante', 'EmailRequisitante']);
+    var lP   = _garantirColunas_(shP, 'ProcessoID', ['Setor Requisitante', 'EmailRequisitante', 'Tipo Contratação Direta', 'Envio à Procuradoria?']);
     var hP   = lP.header;
     var hMap = {};
     hP.forEach(function(h, i) { hMap[h] = i; });
@@ -2667,6 +2674,11 @@ function cadastrarProcesso(params) {
     set_('Modalidade',         params.modalidade);
     set_('D0 (Data Abertura)', d0Obj || '');
     set_('Tem IRP?',           params.temIRP   || 'Não');
+    // Condicionais de contratação direta (só relevantes quando a modalidade é
+    // "Contratação Direta"; para as demais gravamos vazio).
+    var ehCDcad = String(params.modalidade || '').toLowerCase().indexOf('direta') >= 0;
+    set_('Tipo Contratação Direta', ehCDcad ? (params.tipoCD || '') : '');
+    set_('Envio à Procuradoria?',   ehCDcad ? (params.procuradoria === 'Não' ? 'Não' : 'Sim') : '');
     set_('Setor Requisitante', params.setor    || '');
     set_('Link SUAP',          params.linkSuap || '#');
     set_('EmailRequisitante',  params.emailReq || '');
@@ -2712,12 +2724,6 @@ function cadastrarProcesso(params) {
       // Etapa 9 (Assinatura contrato/ARP): agente do setor de contratos — deixa como está no modelo
     }
 
-    // Etapa 4 — IRP: "Não se aplica" quando não tem IRP
-    var colSt = hE.indexOf('StatusEtapa ◄ EDITAR');
-    if (params.temIRP !== 'Sim' && colSt >= 0) {
-      shE.getRange(sepRow + 4, colSt + 1).setValue('Não se aplica');
-    }
-
     // Etapa 8 — Fase externa: ajusta nome e prazo conforme modalidade
     // (bloco pré-formatado assume Pregão Eletrônico como padrão)
     if (params.modalidade !== 'Pregão Eletrônico') {
@@ -2737,9 +2743,21 @@ function cadastrarProcesso(params) {
       shE.getRange(sepRow + 7, colNm2 + 1).setValue('Envio ao SEL/SEPMA (Recebimento de processo, cadastro e publicação da licitação)');
     }
     // ── Etapa 9 — Assinatura contrato: Não se aplica (responsabilidade de Contratos/Jurídico)
-    if (colSt >= 0) {
-      shE.getRange(sepRow + 9, colSt + 1).setValue('Não se aplica');
+    var colStCad = hE.indexOf('StatusEtapa ◄ EDITAR');
+    if (colStCad >= 0) {
+      shE.getRange(sepRow + 9, colStCad + 1).setValue('Não se aplica');
     }
+
+    // ── Condicionais (IRP, tipo de contratação direta, Procuradoria) ─────
+    // Marca "Não se aplica" nas etapas que não se aplicam ao processo e ajusta
+    // o nome da etapa de adequações conforme o envio à Procuradoria. Localiza as
+    // etapas pelo NOME dentro do bloco, então roda após os nomes já definidos.
+    _aplicarCondicionaisEtapas_(shE, sepRow, hE, {
+      modalidade:   params.modalidade,
+      temIRP:       params.temIRP,
+      tipoCD:       ehCDcad ? params.tipoCD : '',
+      procuradoria: ehCDcad ? params.procuradoria : 'Sim'
+    }, { edicao: false });
 
     // ── Cria linhas iniciais na Capacidade para pontuação posterior ─────
     (function criarCapacidadeInicial_() {
@@ -3452,13 +3470,15 @@ function editarProcessoFilaApp(params) {
 
       var shP = _ss_().getSheetByName(ABA_PROC);
       if (!shP) throw new Error('Aba Processos não encontrada.');
-      var lP = _lerAba_(shP, 'ProcessoID');
+      var lP = _garantirColunas_(shP, 'ProcessoID', ['Tipo Contratação Direta', 'Envio à Procuradoria?']);
       var hP = lP.header;
       var iId    = hP.indexOf('ProcessoID');
       var iObj   = hP.indexOf('Objeto');
       var iModal = hP.indexOf('Modalidade');
       var iD0    = hP.indexOf('D0 (Data Abertura)');
       var iIrp   = hP.indexOf('Tem IRP?');
+      var iTipo  = hP.indexOf('Tipo Contratação Direta');
+      var iProc  = hP.indexOf('Envio à Procuradoria?');
       var iReq   = hP.indexOf('Setor Requisitante');
       var iSuap  = hP.indexOf('Link SUAP');
       var iNum   = hP.indexOf('N° SUAP');
@@ -3497,6 +3517,18 @@ function editarProcessoFilaApp(params) {
         if (iIrp >= 0 && params.temIRP !== undefined) {
           shP.getRange(linha, iIrp + 1).setValue(params.temIRP === 'Sim' ? 'Sim' : 'Não');
         }
+        // Condicionais de contratação direta (só relevantes quando a modalidade
+        // efetiva for "Contratação Direta"; para as demais gravamos vazio).
+        var modalEfetiva = (params.modalidade !== undefined)
+          ? String(params.modalidade || '').trim()
+          : String(lP.values[i][iModal] || '').trim();
+        var ehCDedit = modalEfetiva.toLowerCase().indexOf('direta') >= 0;
+        if (iTipo >= 0 && params.tipoCD !== undefined) {
+          shP.getRange(linha, iTipo + 1).setValue(ehCDedit ? String(params.tipoCD || '').trim() : '');
+        }
+        if (iProc >= 0 && params.procuradoria !== undefined) {
+          shP.getRange(linha, iProc + 1).setValue(ehCDedit ? (params.procuradoria === 'Não' ? 'Não' : 'Sim') : '');
+        }
         // Setor requisitante
         if (iReq >= 0 && params.setor !== undefined) {
           shP.getRange(linha, iReq + 1).setValue(String(params.setor || '').trim());
@@ -3514,6 +3546,29 @@ function editarProcessoFilaApp(params) {
           var lk = String(params.linkSuap || '').trim();
           shP.getRange(linha, iSuap + 1).setValue(lk || '#');
         }
+
+        // Reaplica as condicionais das etapas (IRP, tipo de contratação direta,
+        // Procuradoria) — marca/reverte "Não se aplica" sem tocar em concluídas.
+        var temIRPef = (params.temIRP !== undefined)
+          ? params.temIRP
+          : (iIrp >= 0 ? String(lP.values[i][iIrp] || '') : 'Não');
+        var tipoEf = ehCDedit
+          ? ((params.tipoCD !== undefined) ? params.tipoCD : (iTipo >= 0 ? String(lP.values[i][iTipo] || '') : ''))
+          : '';
+        var procEf = ehCDedit
+          ? ((params.procuradoria !== undefined) ? params.procuradoria : (iProc >= 0 ? String(lP.values[i][iProc] || '') : 'Sim'))
+          : 'Sim';
+        try {
+          var bloco = _localizarBlocoEtapas_(pid);
+          if (bloco) {
+            _aplicarCondicionaisEtapas_(bloco.shE, bloco.sepRow, bloco.hE, {
+              modalidade:   modalEfetiva,
+              temIRP:       temIRPef,
+              tipoCD:       tipoEf,
+              procuradoria: procEf
+            }, { edicao: true });
+          }
+        } catch(condErr) { /* não bloqueia a edição se o bloco não for localizado */ }
 
         // Propaga o objeto para a aba Capacidade e Etapas (separador do bloco)
         _atualizarObjetoCapacidade_(pid, objeto);
@@ -3643,6 +3698,115 @@ function _atualizarSeparadorEtapas_(pid, objeto) {
       if (!sepPid) shE.getRange(sepRow, 1).setValue(objeto);
     }
   } catch(e) { /* silencioso: separador é cosmético */ }
+}
+
+// ── _localizarBlocoEtapas_ ─────────────────────────────────────────────────
+// Localiza o bloco de etapas de um processo na aba Etapas. Retorna
+// { shE, hE, sepRow } ou null se não encontrar. sepRow é a linha do separador
+// (imediatamente acima da 1ª etapa); as 9 etapas ficam em sepRow+1 .. sepRow+9.
+function _localizarBlocoEtapas_(pid) {
+  var shE = _ss_().getSheetByName(ABA_ETP);
+  if (!shE) return null;
+  var lE = _lerAba_(shE, 'ProcessoID');
+  var iPidE = lE.header.indexOf('ProcessoID');
+  if (iPidE < 0) return null;
+  var minRow = Infinity;
+  for (var e = lE.hIdx + 1; e < lE.values.length; e++) {
+    if (String(lE.values[e][iPidE] || '').trim() === pid) {
+      var rw = e + 1; if (rw < minRow) minRow = rw;
+    }
+  }
+  if (minRow === Infinity) return null;
+  return { shE: shE, hE: lE.header, sepRow: minRow - 1 };
+}
+
+// ── _aplicarCondicionaisEtapas_ ────────────────────────────────────────────
+// Aplica as condicionais das etapas de um processo, marcando "Não se aplica"
+// nas etapas que não se aplicam e ajustando o nome da etapa de adequações
+// conforme o envio à Procuradoria. Espelha o padrão já usado para o IRP.
+//
+// cfg:  { modalidade, temIRP('Sim'|'Não'), tipoCD, procuradoria('Sim'|'Não') }
+// opts: { edicao: bool } — na edição, também REVERTE de "Não se aplica" para
+//        pendente (vazio) as etapas que voltaram a se aplicar. NUNCA altera
+//        etapas já concluídas.
+//
+// Regras (contratação direta):
+//  - Adesão            → Minuta do TR, Versão Final do TR, IRP e Fase externa = na
+//  - Dispensa s/ disputa / Inexigibilidade → Fase externa = na
+//  - Dispensa c/ disputa → mantém a Fase externa
+//  - Sem IRP           → etapa IRP = na (Art. 35 §único; minuta do TR permanece)
+//  - Procuradoria = Não → renomeia a etapa de adequações (mantém prazo, Art. 37)
+function _aplicarCondicionaisEtapas_(shE, sepRow, hE, cfg, opts) {
+  cfg  = cfg  || {};
+  opts = opts || {};
+  var N = 9;
+  var colNm = hE.indexOf('Etapa');
+  var colSt = hE.indexOf('StatusEtapa ◄ EDITAR');
+  if (colNm < 0 || colSt < 0) return;
+
+  function norm(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  var nomes = shE.getRange(sepRow + 1, colNm + 1, N, 1).getValues().map(function(r){ return r[0]; });
+  var stats = shE.getRange(sepRow + 1, colSt + 1, N, 1).getValues().map(function(r){ return String(r[0] || ''); });
+
+  function achaIdx(sub) {
+    for (var k = 0; k < N; k++) { if (norm(nomes[k]).indexOf(sub) >= 0) return k; }
+    return -1;
+  }
+  var idxMinuta = achaIdx('minuta');
+  var idxIRP    = achaIdx('irp');
+  var idxProc   = achaIdx('procuradoria');
+  if (idxProc < 0) idxProc = achaIdx('adequac');
+  var idxVersao = achaIdx('versao final');
+  if (idxVersao < 0) idxVersao = achaIdx('versao');
+  var idxFaseE  = achaIdx('fase externa');
+
+  var ehCD       = norm(cfg.modalidade).indexOf('direta') >= 0;
+  var tipo       = norm(cfg.tipoCD);
+  var ehAdesao   = ehCD && tipo.indexOf('adesao') >= 0;
+  // "com disputa" (não apenas "disputa", que também aparece em "sem disputa")
+  var temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+  var semIRP     = (cfg.temIRP !== 'Sim') || ehAdesao;
+  var semProc    = ehCD && (cfg.procuradoria === 'Não');
+
+  // "gerenciadas": etapas cujo status na/não-na é controlado por estas
+  // condicionais. Só elas podem ser REVERTIDAS de "Não se aplica" na edição —
+  // assim não reabrimos etapas marcadas na por outros motivos (ex.: Assinatura
+  // do contrato, sempre na por ser responsabilidade de Contratos/Jurídico).
+  var gerenciadas = {};
+  [idxIRP, idxMinuta, idxVersao, idxFaseE].forEach(function(ix){ if (ix >= 0) gerenciadas[ix] = true; });
+
+  var naSet = {};
+  if (idxIRP >= 0 && semIRP) naSet[idxIRP] = true;
+  if (ehAdesao) {
+    if (idxMinuta >= 0) naSet[idxMinuta] = true;
+    if (idxVersao >= 0) naSet[idxVersao] = true;
+  }
+  // Fase externa só se aplica: (a) modalidades com fase externa própria
+  // (Pregão/Concorrência), ou (b) contratação direta COM disputa. Nos demais
+  // casos de contratação direta (sem disputa, inexigibilidade, adesão) → na.
+  if (idxFaseE >= 0 && ehCD && !temDisputa) naSet[idxFaseE] = true;
+
+  for (var k = 0; k < N; k++) {
+    if (norm(stats[k]).indexOf('conclu') >= 0) continue;     // nunca mexe em concluída
+    var jaNA = norm(stats[k]).indexOf('nao se aplica') >= 0;
+    if (naSet[k]) {
+      if (!jaNA) shE.getRange(sepRow + 1 + k, colSt + 1).setValue('Não se aplica');
+    } else if (opts.edicao && jaNA && gerenciadas[k]) {
+      shE.getRange(sepRow + 1 + k, colSt + 1).setValue('');  // voltou a se aplicar
+    }
+  }
+
+  if (idxProc >= 0) {
+    var nomeProc = semProc
+      ? 'Adequações finais dos documentos'
+      : 'Adequações finais dos documentos e envio à Procuradoria';
+    if (norm(nomes[idxProc]) !== norm(nomeProc)) {
+      shE.getRange(sepRow + 1 + idxProc, colNm + 1).setValue(nomeProc);
+    }
+  }
 }
 
 // Persiste a ordem manual da fila (drag-and-drop). Só chefia.

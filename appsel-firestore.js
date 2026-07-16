@@ -163,6 +163,8 @@
         nome: String(p.objeto || '').trim(),
         modal: String(p.modalidade || '').trim(),
         temIRP: (p.temIrp === true || String(p.temIrp).trim().toLowerCase() === 'sim'),
+        tipoCD: String(p.tipoCD || '').trim(),
+        procuradoria: (String(p.procuradoria || '').trim().toLowerCase() !== 'não' && String(p.procuradoria || '').trim().toLowerCase() !== 'nao'),
         req: String(p.setorRequisitante || '').trim(),
         emailR: String(p.emailRequisitante || '').trim(),
         suap: String(p.linkSuap || '#').trim()
@@ -234,6 +236,7 @@
 
       return {
         id: p.id, num: p.num || p.id, nome: p.nome, modal: p.modal, modalAbrev: mAbrev,
+        temIRP: p.temIRP, tipoCD: p.tipoCD, procuradoria: p.procuradoria,
         req: p.req, emailR: p.emailR, suap: p.suap, d0_iso: toIso(p.d0),
         execucao: execucao, status: st,
         retornoFila: retornoFila,
