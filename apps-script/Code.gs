@@ -1932,7 +1932,11 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
     var elinha = j + 1; // 1-based
 
     if (efase.indexOf('ext') >= 0) {
-      hasExterna = true;
+      // Só conta como "tem fase externa" se ela realmente se aplica. Em
+      // Contratação Direta sem disputa / inexigibilidade / adesão a etapa de
+      // fase externa existe mas fica 'na' (não se aplica) — nesses casos não há
+      // transição de fase nem atribuição de pontos ao próximo servidor.
+      if (estat !== 'na') hasExterna = true;
     } else {
       hasInterna = true;
       // A etapa que acabamos de concluir (linhaConcluidaBase1) é tratada como ok
