@@ -2724,8 +2724,17 @@ function setFServ(btn, val) {
   aplicarFiltros();
 }
 
+// Re-renderiza a aba Fila quando ela está aberta. Sem isso, um reload de dados
+// (ex.: após iniciar/reativar) atualiza só a aba Etapas e a Fila fica com DOM
+// velho — botão "Iniciando…" preso e item ainda marcado, embora o processo já
+// tenha saído da fila (visível ao trocar de aba).
+function _refreshFilaSeAtiva_() {
+  var f = document.getElementById('tab-fila');
+  if (f && !f.hidden) renderFila_();
+}
+
 function aplicarFiltros() {
-  if (!DATA.length && !FILA.length) { renderEtapas([]); return; }
+  if (!DATA.length && !FILA.length) { renderEtapas([]); _refreshFilaSeAtiva_(); return; }
   var q = ((document.getElementById('fsearch')||{}).value||'').toLowerCase();
   var filt = DATA.filter(function(p) {
     var mQ = !q || (p.num+' '+p.nome).toLowerCase().indexOf(q) >= 0;
@@ -2742,6 +2751,7 @@ function aplicarFiltros() {
     return mQ && mM && mS;
   });
   renderEtapas(filt);
+  _refreshFilaSeAtiva_();
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -4290,6 +4300,7 @@ function iniciarSelecionados_() {
       if (res && res.ok) {
         toast('✓ ' + res.iniciados + ' processo' + (res.iniciados>1?'s iniciados/reativados':' iniciado/reativado') + '!', 'ok');
         FILA_ORDER = []; FILA_SEL = {}; FILA_SERV = {}; FILA_D0 = {}; FILA_EXPAND = {};
+        if (btn) { btn.disabled = false; btn.textContent = '▶ Iniciar/Reativar'; }
         setTimeout(carregarDados, 800);
       } else { toast('Erro: ' + (res && res.erro ? res.erro : ''), 'err'); if (btn) { btn.disabled = false; btn.textContent = '▶ Iniciar/Reativar'; } }
     })
