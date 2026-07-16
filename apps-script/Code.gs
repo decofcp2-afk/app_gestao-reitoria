@@ -1803,6 +1803,11 @@ function iniciarProcessos(params, authToken) {
           ? (extSegregada ? (item.servidorExt || '') : (item.servidorExt || item.servidor || ''))
           : (item.servidor || '');
         if (iAg >= 0) shE.getRange(j + 1, iAg + 1).setValue(agente);
+        // Limpa qualquer marcador de retorno preso (inclusive em etapas 'na'):
+        // senão o processo continua detectado como retornado e não sai da fila.
+        if (iMot >= 0 && _isRetornoFilaMotivo_(lE.values[j][iMot])) {
+          shE.getRange(j + 1, iMot + 1).clearContent();
+        }
         if (!primeiraEtapa && !_isEtapaContratual_(efaseRaw, enome)) {
           var stEt = iSta >= 0 ? _normStatus_(lE.values[j][iSta]) : 'pendente';
           if (stEt !== 'ok' && stEt !== 'na') primeiraEtapa = j + 1;
