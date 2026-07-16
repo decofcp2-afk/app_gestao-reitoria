@@ -646,7 +646,11 @@ function fs_iniciarProcessos(params, authToken) {
           var o = e.obj;
           var ext = String(o.fase || '').toLowerCase().indexOf('ext') >= 0;
           var agente = ext ? (extSeg ? (item.servidorExt || '') : (item.servidorExt || item.servidor || '')) : (item.servidor || '');
-          _fsUpdate_(e.path, { agente: agente });
+          var patch = { agente: agente };
+          // Limpa qualquer marcador de retorno preso (inclusive em etapas 'na'):
+          // senão o processo continua detectado como retornado e não sai da fila.
+          if (_isRetornoFilaMotivo_(o.motivoAtraso)) patch.motivoAtraso = '';
+          _fsUpdate_(e.path, patch);
           if (!primeira && !_isEtapaContratual_(o.fase, o.etapa)) {
             var st = _normStatus_(o.status);
             if (st !== 'ok' && st !== 'na') primeira = e;
