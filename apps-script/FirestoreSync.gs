@@ -764,6 +764,9 @@ function fs_editarProcessoFilaApp(params) {
         var ordem = Number(o.ordem || 0);
         var st = String(o.status || '');
         if (st.toLowerCase().indexOf('conclu') >= 0) return;   // não mexe em concluída
+        // Nunca marcar 'na' uma etapa que carrega o marcador de retorno — senão
+        // o retorno fica enterrado e o processo não reaparece na fila.
+        if (_isRetornoFilaMotivo_(o.motivoAtraso)) return;
         var jaNA = st.toLowerCase().indexOf('não se aplica') >= 0 || st.toLowerCase().indexOf('nao se aplica') >= 0;
         var patch = {};
         if (cond.na[ordem]) {

@@ -605,8 +605,9 @@ function _derivarCondicionaisLeitura_(proc, etapas) {
       || (ehAdesao && (ehMinuta || ehVersao))
       || (ehFaseE && ehCD && !temDisputa);
     // Nunca ocultar uma etapa que carrega o marcador de retorno para fila —
-    // senão o retorno "some" e o processo não reaparece na fila.
-    if (_isRetornoFilaMotivo_(et.motivo)) { /* mantém visível */ }
+    // senão o retorno "some" e o processo não reaparece na fila. Se já estiver
+    // gravada como 'na', reexibe (senão o filtro de leitura a remove).
+    if (_isRetornoFilaMotivo_(et.motivo)) { if (et.status === 'na') et.status = 'pendente'; }
     else if (et.status === 'ok') { /* concluída: mantém */ }
     else if (deveNA) et.status = 'na';
     else if (gerenciada && et.status === 'na') et.status = 'pendente';
@@ -3790,6 +3791,10 @@ function _aplicarCondicionaisEtapas_(shE, sepRow, hE, cfg, opts) {
 
   var nomes = shE.getRange(sepRow + 1, colNm + 1, N, 1).getValues().map(function(r){ return r[0]; });
   var stats = shE.getRange(sepRow + 1, colSt + 1, N, 1).getValues().map(function(r){ return String(r[0] || ''); });
+  var colMot = hE.indexOf('MotivoAtraso ◄ EDITAR');
+  var motivos = colMot >= 0
+    ? shE.getRange(sepRow + 1, colMot + 1, N, 1).getValues().map(function(r){ return String(r[0] || ''); })
+    : [];
 
   function achaIdx(sub) {
     for (var k = 0; k < N; k++) { if (norm(nomes[k]).indexOf(sub) >= 0) return k; }
@@ -3831,6 +3836,9 @@ function _aplicarCondicionaisEtapas_(shE, sepRow, hE, cfg, opts) {
 
   for (var k = 0; k < N; k++) {
     if (norm(stats[k]).indexOf('conclu') >= 0) continue;     // nunca mexe em concluída
+    // Nunca marcar 'na' uma etapa que carrega o marcador de retorno para fila —
+    // senão o retorno fica enterrado e o processo não reaparece na fila.
+    if (_isRetornoFilaMotivo_(motivos[k] || '')) continue;
     var jaNA = norm(stats[k]).indexOf('nao se aplica') >= 0;
     if (naSet[k]) {
       if (!jaNA) shE.getRange(sepRow + 1 + k, colSt + 1).setValue('Não se aplica');

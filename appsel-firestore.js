@@ -91,8 +91,10 @@
         || (ehAdesao && (ehMinuta || ehVersao))
         || (ehFaseE && ehCD && !temDisputa);
       // Nunca ocultar uma etapa que carrega o marcador de retorno para fila —
-      // senão o retorno "some" e o processo não reaparece na fila.
-      if (isRetornoFilaMotivo(et.motivo)) { /* mantém visível */ }
+      // senão o retorno "some" e o processo não reaparece na fila. Se já estiver
+      // gravada como 'na', reexibe (senão o filtro de leitura a remove e o
+      // marcador é perdido).
+      if (isRetornoFilaMotivo(et.motivo)) { if (et.status === 'na') et.status = 'pendente'; }
       else if (et.status === 'ok') { /* concluída: mantém */ }
       else if (deveNA) et.status = 'na';
       else if (gerenciada && et.status === 'na') et.status = 'pendente'; // reverte
