@@ -499,7 +499,10 @@ function _fsTransicaoFase_(pid, docEtapaConcluida) {
     var ext = String(o.fase || '').toLowerCase().indexOf('ext') >= 0;
     var st = _normStatus_(o.status);
     var ehAtual = (e.path === 'etapas/' + docEtapaConcluida);
-    if (ext) { hasExt = true; }
+    // Fase externa só conta se realmente se aplica (não 'na'). Em Contratação
+    // Direta sem disputa / inexigibilidade / adesão a fase externa fica 'na' —
+    // não há transição de fase nem pontos ao próximo servidor.
+    if (ext) { if (st !== 'na') hasExt = true; }
     else { hasInt = true; if (!ehAtual && st !== 'ok' && st !== 'na') allIntOk = false; }
   });
   if (!hasInt || !allIntOk || !hasExt) return { feita: false, servidorExt: '' };
