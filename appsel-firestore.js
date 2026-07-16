@@ -66,6 +66,40 @@
       n.indexOf('ata (arp)') >= 0 || n.indexOf('gestao contratual') >= 0;
   }
 
+  // Deriva, a partir das condicionais salvas no PROCESSO (tipo de contratação
+  // direta, IRP, Procuradoria), quais etapas não se aplicam — e aplica em tempo
+  // de leitura. Assim a fila/detalhe refletem a condição mesmo em processos
+  // antigos ou antes de o backend reprocessar o status de cada etapa. Trata os
+  // dois sentidos (marcar 'na' / reverter 'na' de volta) e NUNCA altera etapas
+  // concluídas. Espelha _aplicarCondicionaisEtapas_ (Apps Script).
+  function aplicarCondicionaisLeitura(base, etapas) {
+    if (!etapas || !etapas.length) return;
+    var ehCD       = normText(base.modal).indexOf('direta') >= 0;
+    var tipo       = normText(base.tipoCD);
+    var ehAdesao   = ehCD && tipo.indexOf('adesao') >= 0;
+    var temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+    var semIRP     = !base.temIRP || ehAdesao;
+    var semProc    = ehCD && base.procuradoria === false;
+    etapas.forEach(function (et) {
+      var n = normText(et.nome);
+      var ehIRP    = n.indexOf('irp') >= 0;
+      var ehMinuta = n.indexOf('minuta') >= 0;
+      var ehVersao = n.indexOf('versao final') >= 0;
+      var ehFaseE  = n.indexOf('fase externa') >= 0;
+      var gerenciada = ehIRP || ehMinuta || ehVersao || ehFaseE;
+      var deveNA = (ehIRP && semIRP)
+        || (ehAdesao && (ehMinuta || ehVersao))
+        || (ehFaseE && ehCD && !temDisputa);
+      if (et.status === 'ok') { /* concluída: mantém */ }
+      else if (deveNA) et.status = 'na';
+      else if (gerenciada && et.status === 'na') et.status = 'pendente'; // reverte
+      if (ehCD && (n.indexOf('adequac') >= 0 || n.indexOf('procuradoria') >= 0)) {
+        et.nome = semProc ? 'Adequações finais dos documentos'
+                          : 'Adequações finais dos documentos e envio à Procuradoria';
+      }
+    });
+  }
+
   function ordenarPorFila(lista) {
     return lista
       .map(function (item, idx) { return { item: item, idx: idx }; })
@@ -169,6 +203,7 @@
         emailR: String(p.emailRequisitante || '').trim(),
         suap: String(p.linkSuap || '#').trim()
       };
+      aplicarCondicionaisLeitura(base, etpPorProc[pid]);
       var d0 = parseTs(p.d0);
       if (!d0) { filaPrevisao.push(base); return; }
       base.d0 = d0;

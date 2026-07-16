@@ -68,6 +68,28 @@ test('Etapas "Não se aplica" ficam fora do prazo total do processo', () => {
   assert.ok(!nomesEtapasNoPrazo.includes('Fase externa'), 'Fase externa (na) não pode contar no prazo');
 });
 
+test('Adesão: fila/detalhe pulam etapas por derivação, mesmo sem status "na" gravado', () => {
+  // Processo de adesão cujas etapas ainda estão com status NORMAL (não foram
+  // reprocessadas). A leitura deve derivar na a partir do tipoCD do processo.
+  const procs = [processo({ id: 'PA', d0: '2026-06-02', modalidade: 'Contratação Direta', tipoCD: 'Adesão', temIrp: true })];
+  const etapas = [
+    etapa({ processoId: 'PA', etapa: 'ETP + Mapa de Riscos + Pesquisa de Preços', ordem: 2, status: 'Concluída', prazoDias: 45 }),
+    etapa({ processoId: 'PA', etapa: 'Minuta do Termo de Referência', ordem: 3, status: 'Concluída', prazoDias: 10 }),
+    etapa({ processoId: 'PA', etapa: 'IRP — Intenção de Registro de Preços', ordem: 4, status: 'Em andamento', prazoDias: 15 }),
+    etapa({ processoId: 'PA', etapa: 'Versão final do TR e demais documentos aprovados', ordem: 6, status: 'Não iniciada', prazoDias: 10 }),
+    etapa({ processoId: 'PA', etapa: 'Fase externa — Contratação Direta', fase: 'Externa', ordem: 8, status: 'Não iniciada', prazoDias: 30 })
+  ];
+  const r = construir(procs, etapas, [], { isChefe: true });
+  const p = r.processos.find((x) => x.id === 'PA');
+  const visiveis = p.etapas.filter((e) => e.status !== 'na').map((e) => e.nome);
+  // IRP, Versão final e Fase externa somem do prazo (derivados na).
+  assert.ok(!visiveis.some((n) => /IRP/.test(n)), 'IRP deve virar na em adesão');
+  assert.ok(!visiveis.some((n) => /Versão final/.test(n)), 'Versão final do TR deve virar na em adesão');
+  assert.ok(!visiveis.some((n) => /Fase externa/.test(n)), 'Fase externa deve virar na em adesão');
+  // ETP (concluída) permanece — derivação nunca mexe em etapa concluída.
+  assert.ok(visiveis.some((n) => /ETP/.test(n)), 'ETP concluída deve permanecer');
+});
+
 test('Tabela-verdade das condicionais (derivação de "Não se aplica")', () => {
   const casos = [
     ['Pregão sem IRP', { modalidade: 'Pregão Eletrônico', temIRP: 'Não' }, [4, 9]],

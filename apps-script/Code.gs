@@ -579,6 +579,41 @@ function _isEtapaContratual_(fase, nome) {
     n.indexOf('gestao contratual') >= 0;
 }
 
+// Deriva, a partir das condicionais salvas no PROCESSO (tipo de contratação
+// direta, IRP, Procuradoria), quais etapas não se aplicam — e aplica em tempo
+// de leitura sobre os objetos de etapa (status já normalizado). Assim a
+// fila/detalhe refletem a condição mesmo em processos antigos ou antes de o
+// backend reprocessar o status de cada etapa. Trata os dois sentidos e NUNCA
+// altera etapas concluídas. Espelha _aplicarCondicionaisEtapas_ / a versão do
+// appsel-firestore.js.
+function _derivarCondicionaisLeitura_(proc, etapas) {
+  if (!etapas || !etapas.length) return;
+  var ehCD       = _normText_(proc.modal).indexOf('direta') >= 0;
+  var tipo       = _normText_(proc.tipoCD);
+  var ehAdesao   = ehCD && tipo.indexOf('adesao') >= 0;
+  var temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+  var semIRP     = !proc.temIRP || ehAdesao;
+  var semProc    = ehCD && proc.procuradoria === false;
+  etapas.forEach(function(et) {
+    var n = _normText_(et.nome);
+    var ehIRP    = n.indexOf('irp') >= 0;
+    var ehMinuta = n.indexOf('minuta') >= 0;
+    var ehVersao = n.indexOf('versao final') >= 0;
+    var ehFaseE  = n.indexOf('fase externa') >= 0;
+    var gerenciada = ehIRP || ehMinuta || ehVersao || ehFaseE;
+    var deveNA = (ehIRP && semIRP)
+      || (ehAdesao && (ehMinuta || ehVersao))
+      || (ehFaseE && ehCD && !temDisputa);
+    if (et.status === 'ok') { /* concluída: mantém */ }
+    else if (deveNA) et.status = 'na';
+    else if (gerenciada && et.status === 'na') et.status = 'pendente';
+    if (ehCD && (n.indexOf('adequac') >= 0 || n.indexOf('procuradoria') >= 0)) {
+      et.nome = semProc ? 'Adequações finais dos documentos'
+                        : 'Adequações finais dos documentos e envio à Procuradoria';
+    }
+  });
+}
+
 function _isSim_(v) {
   if (v === true) return true;
   var n = String(v || '').trim().toLowerCase()
@@ -1551,6 +1586,7 @@ function _getEtapasParaApp_(sess) {
     // forçadas a 'na' acima) ficam FORA do app: não são atribuição do SEL.
     // Filtrar antes da cascata mantém os índices (etapaAtualIdx) coerentes
     // com a lista exibida; o cursor já não avançava em etapas 'na'.
+    _derivarCondicionaisLeitura_(p, etpPorProc[p.id] || []);
     var etapas = (etpPorProc[p.id] || []).filter(function(et) {
       return et.status !== 'na';
     });
@@ -1656,6 +1692,7 @@ function _getEtapasParaApp_(sess) {
   // Enriquece filaPrevisao com prazos das etapas (para simulação no app)
   filaPrevisao = filaPrevisao.map(function(fp) {
     var ets = etpPorProc[fp.id] || [];
+    _derivarCondicionaisLeitura_(fp, ets);
     fp.etapasPrazos = ets.map(function(e) {
       return { nome: e.nome, prazo: e.prazo, fase: e.fase, status: e.status };
     });
