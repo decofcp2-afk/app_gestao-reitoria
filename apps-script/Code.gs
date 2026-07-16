@@ -604,7 +604,10 @@ function _derivarCondicionaisLeitura_(proc, etapas) {
     var deveNA = (ehIRP && semIRP)
       || (ehAdesao && (ehMinuta || ehVersao))
       || (ehFaseE && ehCD && !temDisputa);
-    if (et.status === 'ok') { /* concluída: mantém */ }
+    // Nunca ocultar uma etapa que carrega o marcador de retorno para fila —
+    // senão o retorno "some" e o processo não reaparece na fila.
+    if (_isRetornoFilaMotivo_(et.motivo)) { /* mantém visível */ }
+    else if (et.status === 'ok') { /* concluída: mantém */ }
     else if (deveNA) et.status = 'na';
     else if (gerenciada && et.status === 'na') et.status = 'pendente';
     if (ehCD && (n.indexOf('adequac') >= 0 || n.indexOf('procuradoria') >= 0)) {
@@ -4052,14 +4055,39 @@ function devolverProcessoFilaApp(params) {
       var hP = lP.header;
       var iPidP = hP.indexOf('ProcessoID');
       if (iPidP < 0) throw new Error('Coluna ProcessoID não encontrada em Processos.');
+      var iModalP = hP.indexOf('Modalidade');
+      var iIrpP   = hP.indexOf('Tem IRP?');
+      var iTipoP  = hP.indexOf('Tipo Contratação Direta');
+      var iProcP  = hP.indexOf('Envio à Procuradoria?');
       var existeProc = false;
+      var procCond = { modal:'', temIRP:false, tipoCD:'', procuradoria:true };
       for (var rp = lP.hIdx + 1; rp < lP.values.length; rp++) {
         if (String(lP.values[rp][iPidP] || '').trim() === pid) {
           existeProc = true;
+          procCond.modal        = iModalP >= 0 ? String(lP.values[rp][iModalP] || '').trim() : '';
+          procCond.temIRP       = iIrpP  >= 0 && String(lP.values[rp][iIrpP] || '').trim().toLowerCase() === 'sim';
+          procCond.tipoCD       = iTipoP >= 0 ? String(lP.values[rp][iTipoP] || '').trim() : '';
+          procCond.procuradoria = iProcP < 0 || String(lP.values[rp][iProcP] || '').trim().toLowerCase() !== 'não';
           break;
         }
       }
       if (!existeProc) throw new Error('Processo não encontrado.');
+      // Etapas que a leitura oculta como "Não se aplica" (IRP, TR em adesão,
+      // fase externa) devem ser puladas ao escolher a etapa-alvo do retorno.
+      var _naL = (function() {
+        var eh = _normText_(procCond.modal).indexOf('direta') >= 0;
+        var tp = _normText_(procCond.tipoCD);
+        var ad = eh && tp.indexOf('adesao') >= 0;
+        var dp = eh && tp.indexOf('com disputa') >= 0;
+        var sIRP = !procCond.temIRP || ad;
+        return function(nomeEt) {
+          var n = _normText_(nomeEt);
+          if (n.indexOf('irp') >= 0 && sIRP) return true;
+          if (ad && (n.indexOf('minuta') >= 0 || n.indexOf('versao final') >= 0)) return true;
+          if (n.indexOf('fase externa') >= 0 && eh && !dp) return true;
+          return false;
+        };
+      })();
 
       var lE = _lerAba_(shE, 'ProcessoID');
       var hdr = lE.header;
@@ -4082,7 +4110,9 @@ function devolverProcessoFilaApp(params) {
         var nome = String(row[iNome] || '').trim();
         if (!nome || _isEtapaContratual_(fase, nome)) continue;
         var st = _normStatus_(row[iStatus]);
-        if (st === 'na') continue;
+        // Pula etapas 'na' (gravadas) e as derivadas 'na' pelas condicionais,
+        // exceto se já carregam um marcador de retorno.
+        if ((st === 'na' || _naL(nome)) && !_isRetornoFilaMotivo_(row[iMotivo])) continue;
         if (st === 'ok') { concluidas++; continue; }
         if ((st === 'retornado' || _isRetornoFilaMotivo_(row[iMotivo])) && idxRetornada < 0) idxRetornada = i;
         if (st === 'pendente' && idxPrimeiraPendente < 0) idxPrimeiraPendente = i;

@@ -563,7 +563,19 @@ function fs_devolverProcessoFilaApp(params) {
       var servidor = String(params.servidor || '').trim() || '—';
       if (!pid) throw new Error('Processo não informado.');
       if (motivo.length < 8) throw new Error('Informe o motivo do retorno para a fila.');
-      if (!_fsGet_('processos/' + pid)) throw new Error('Processo não encontrado.');
+      var procDoc = _fsGet_('processos/' + pid);
+      if (!procDoc) throw new Error('Processo não encontrado.');
+
+      // Condicionais do processo: etapas derivadas "Não se aplica" (IRP, TR em
+      // adesão, fase externa) precisam ser puladas ao escolher a etapa-alvo do
+      // retorno — senão o marcador cai numa etapa que a leitura oculta e o
+      // retorno "some" (processo não reaparece na fila).
+      var condDev = _fsCondicionais_({
+        modalidade:   String(procDoc.modalidade || ''),
+        temIRP:       (procDoc.temIrp === true ? 'Sim' : 'Não'),
+        tipoCD:       String(procDoc.tipoCD || ''),
+        procuradoria: String(procDoc.procuradoria || 'Sim')
+      });
 
       var etapas = _fsEtapasDoProc_(pid);
       var alvo = null, primeiraPend = null, retornada = null, concluidas = 0;
@@ -571,7 +583,9 @@ function fs_devolverProcessoFilaApp(params) {
         var o = e.obj;
         if (!o.etapa || _isEtapaContratual_(o.fase, o.etapa)) return;
         var st = _normStatus_(o.status);
-        if (st === 'na') return;
+        // Pula etapas 'na' (gravadas) e as derivadas 'na', exceto se já
+        // carregam um marcador de retorno.
+        if ((st === 'na' || condDev.na[Number(o.ordem || 0)]) && !_isRetornoFilaMotivo_(o.motivoAtraso)) return;
         if (st === 'ok') { concluidas++; return; }
         if ((st === 'retornado' || _isRetornoFilaMotivo_(o.motivoAtraso)) && !retornada) retornada = e;
         if (st === 'pendente' && !primeiraPend) primeiraPend = e;

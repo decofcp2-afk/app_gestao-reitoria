@@ -90,6 +90,20 @@ test('Adesão: fila/detalhe pulam etapas por derivação, mesmo sem status "na" 
   assert.ok(visiveis.some((n) => /ETP/.test(n)), 'ETP concluída deve permanecer');
 });
 
+test('Retorno para fila não some quando o marcador cai em etapa derivada "na"', () => {
+  // Adesão: a IRP derivaria para "na", mas carrega o marcador de retorno.
+  // A leitura deve mantê-la visível para o processo ser detectado como retornado.
+  const procs = [processo({ id: 'PR', d0: '2026-06-02', modalidade: 'Contratação Direta', tipoCD: 'Adesão', temIrp: true })];
+  const etapas = [
+    etapa({ processoId: 'PR', etapa: 'ETP + Mapa de Riscos + Pesquisa de Preços', ordem: 2, status: 'Concluída' }),
+    etapa({ processoId: 'PR', etapa: 'IRP — Intenção de Registro de Preços', ordem: 4, status: 'Em andamento', motivoAtraso: 'RETORNO PARA FILA: testando' })
+  ];
+  const r = construir(procs, etapas, [], { isChefe: true });
+  const p = r.processos.find((x) => x.id === 'PR');
+  assert.equal(p.retornoFila, true, 'processo deve ser detectado como retornado');
+  assert.ok(p.etapas.some((e) => /IRP/.test(e.nome) && e.status !== 'na'), 'etapa com marcador de retorno fica visível');
+});
+
 test('Tabela-verdade das condicionais (derivação de "Não se aplica")', () => {
   const casos = [
     ['Pregão sem IRP', { modalidade: 'Pregão Eletrônico', temIRP: 'Não' }, [4, 9]],

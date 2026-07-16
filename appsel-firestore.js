@@ -90,7 +90,10 @@
       var deveNA = (ehIRP && semIRP)
         || (ehAdesao && (ehMinuta || ehVersao))
         || (ehFaseE && ehCD && !temDisputa);
-      if (et.status === 'ok') { /* concluída: mantém */ }
+      // Nunca ocultar uma etapa que carrega o marcador de retorno para fila —
+      // senão o retorno "some" e o processo não reaparece na fila.
+      if (isRetornoFilaMotivo(et.motivo)) { /* mantém visível */ }
+      else if (et.status === 'ok') { /* concluída: mantém */ }
       else if (deveNA) et.status = 'na';
       else if (gerenciada && et.status === 'na') et.status = 'pendente'; // reverte
       if (ehCD && (n.indexOf('adequac') >= 0 || n.indexOf('procuradoria') >= 0)) {
