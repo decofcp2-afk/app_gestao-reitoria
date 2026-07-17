@@ -609,7 +609,9 @@
       <div class="cfg-card">
         <div class="cfg-row cfg-row-col">
           <span class="note">Estes dados aparecem no rodapé do <b>Painel de Contratações</b> público desta unidade. São atualizados no painel ao trocar de unidade.</span>
-          <label>Endereço</label>
+          <label>Nome da unidade</label>
+          <input type="text" class="field-input" id="cfg-uni-nome" placeholder="Ex.: São Cristóvão I" maxlength="80" style="width:100%">
+          <label style="margin-top:8px">Endereço</label>
           <input type="text" class="field-input" id="cfg-uni-endereco" placeholder="Ex.: Campo de São Cristóvão, 177 · São Cristóvão — Rio de Janeiro / RJ" maxlength="160" style="width:100%">
           <label style="margin-top:8px">E-mail institucional</label>
           <input type="email" class="field-input" id="cfg-uni-email" placeholder="Ex.: decof.sc1@cp2.g12.br" maxlength="120" style="width:100%">
@@ -5446,12 +5448,14 @@ function popularUnidadesLogin(){
 }
 // ── Dados da unidade (endereço + e-mail institucional → rodapé do painel) ──
 function carregarDadosUnidade_(){
+  var nomeEl = document.getElementById('cfg-uni-nome');
   var endEl = document.getElementById('cfg-uni-endereco');
   var mailEl = document.getElementById('cfg-uni-email');
   if (!endEl || !mailEl) return;
   google.script.run
     .withSuccessHandler(function(d){
       if (d && d.ok){
+        if (nomeEl) nomeEl.value = d.nome || '';
         endEl.value  = d.endereco || '';
         mailEl.value = d.emailInstitucional || '';
       }
@@ -5460,12 +5464,15 @@ function carregarDadosUnidade_(){
     .fs_getDadosUnidade({ authToken: (typeof AUTH_TOKEN!=='undefined'?AUTH_TOKEN:'') });
 }
 function salvarDadosUnidade_(){
+  var nomeEl = document.getElementById('cfg-uni-nome');
   var endEl = document.getElementById('cfg-uni-endereco');
   var mailEl = document.getElementById('cfg-uni-email');
   var msg = document.getElementById('cfg-uni-msg');
   var btn = document.getElementById('btn-uni-salvar');
+  var nome = nomeEl ? (nomeEl.value||'').trim() : '';
   var endereco = (endEl.value||'').trim();
   var email = (mailEl.value||'').trim();
+  if (nomeEl && nome.length < 3){ msg.style.color='#b02035'; msg.textContent='Informe o nome da unidade (mín. 3 caracteres).'; return; }
   if (email && email.indexOf('@') < 0){ msg.style.color='#b02035'; msg.textContent='E-mail inválido.'; return; }
   if (btn) btn.disabled = true;
   msg.style.color='inherit'; msg.textContent='Salvando…';
@@ -5476,7 +5483,7 @@ function salvarDadosUnidade_(){
       else { msg.style.color='#b02035'; msg.textContent='Erro: '+((r&&r.erro)||'falhou'); }
     })
     .withFailureHandler(function(e){ if (btn) btn.disabled = false; msg.style.color='#b02035'; msg.textContent='Erro: '+((e&&e.message)||e); })
-    .fs_salvarDadosUnidade({ endereco: endereco, emailInstitucional: email, authToken: (typeof AUTH_TOKEN!=='undefined'?AUTH_TOKEN:'') });
+    .fs_salvarDadosUnidade({ nome: nome, endereco: endereco, emailInstitucional: email, authToken: (typeof AUTH_TOKEN!=='undefined'?AUTH_TOKEN:'') });
 }
 // Excluir unidade (Configurações). Destrutivo — via Apps Script (fs_excluirUnidade).
 function popularExcluirUnidade(){

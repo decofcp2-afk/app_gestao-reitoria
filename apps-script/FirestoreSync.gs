@@ -393,11 +393,22 @@ function fs_salvarDadosUnidade(params) {
       if (email && email.indexOf('@') < 0) throw new Error('E-mail institucional inválido.');
       var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
       var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
-      // updateMask preserva os demais campos do doc (nome, sigla, ativo…).
+      // updateMask preserva os demais campos do doc (sigla, ativo…).
+      var fields = { endereco: endereco, emailInstitucional: email };
       var url = projBase + '/unidades/' + uid
         + '?updateMask.fieldPaths=endereco&updateMask.fieldPaths=emailInstitucional';
-      _fsReq_('patch', url, { fields: _fsToFields_({ endereco: endereco, emailInstitucional: email }) });
-      return { ok: true, endereco: endereco, emailInstitucional: email };
+      // Nome da unidade: só entra no update quando enviado (permite corrigir
+      // cadastros com nome errado). Vazio é ignorado para não apagar o nome.
+      if (params.nome !== undefined) {
+        var nome = String(params.nome || '').trim();
+        if (nome && nome.length < 3) throw new Error('Nome da unidade muito curto.');
+        if (nome) {
+          fields.nome = nome;
+          url += '&updateMask.fieldPaths=nome';
+        }
+      }
+      _fsReq_('patch', url, { fields: _fsToFields_(fields) });
+      return { ok: true, nome: fields.nome, endereco: endereco, emailInstitucional: email };
     } catch (e) { return { ok: false, erro: e.message }; }
   });
 }
