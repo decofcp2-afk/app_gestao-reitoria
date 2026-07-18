@@ -1946,14 +1946,24 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
     }
   }
 
-  // Só há transição se havia fase interna, ela está toda concluída E há fase externa
-  if (!hasInterna || !allIntOk || !hasExterna) return { feita: false, servidorExt: '' };
+  // CD sem fase externa aplicável: a fase interna concluída encerra o processo.
+  // Não há transição (nem mensagem/pontos ao próximo servidor), mas as cargas
+  // devem ser inativadas na origem — sem isso o dado fica "Sim" para sempre e
+  // só a leitura da Capacidade (que exclui concluídos) compensa.
+  var concluiuSemExterna = hasInterna && allIntOk && !hasExterna;
 
-  // Desativa a linha de fase interna na Capacidade
+  // Só há transição se havia fase interna, ela está toda concluída E há fase externa
+  if (!concluiuSemExterna && (!hasInterna || !allIntOk || !hasExterna)) {
+    return { feita: false, servidorExt: '' };
+  }
+
+  // Atualiza as linhas do processo na Capacidade:
+  //  - transição: interna → 'Não', externa → 'Sim' (assume a fase externa)
+  //  - concluiuSemExterna: todas → 'Não' (processo encerrado)
   var servidorExt = '';
   try {
     var shCap = _ss_().getSheetByName('📊 Capacidade');
-    if (!shCap) return { feita: true, servidorExt: '' };
+    if (!shCap) return { feita: !concluiuSemExterna, servidorExt: '' };
 
     var capData = shCap.getRange(1, 1, shCap.getLastRow(), shCap.getLastColumn()).getValues();
     var regHdr = -1;
@@ -1961,28 +1971,28 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
       var cr = capData[ci].map(function(c){ return String(c).trim(); });
       if (cr[0].indexOf('Servidor') >= 0 && cr[2] === 'ProcessoID') { regHdr = ci; break; }
     }
-    if (regHdr < 0) return { feita: true, servidorExt: '' };
+    if (regHdr < 0) return { feita: !concluiuSemExterna, servidorExt: '' };
 
     var hCap  = capData[regHdr].map(function(c){ return String(c).trim(); });
     var iAtivo = hCap.indexOf('Ativo');
-    if (iAtivo < 0) return { feita: true, servidorExt: '' };
+    if (iAtivo < 0) return { feita: !concluiuSemExterna, servidorExt: '' };
 
     for (var r = regHdr + 1; r < capData.length; r++) {
       var cpid  = String(capData[r][2] || '').trim();
       if (cpid !== pid) continue;
       var cfase = String(capData[r][5] || '').trim().toLowerCase();
       var cserv = String(capData[r][0] || '').trim();
-      if (cfase.indexOf('ext') >= 0) {
+      if (!concluiuSemExterna && cfase.indexOf('ext') >= 0) {
         servidorExt = _fsNomeServ_(cserv);
         shCap.getRange(r + 1, iAtivo + 1).setValue('Sim');
       } else {
-        // Fase interna: inativa
+        // Fase interna (ou processo encerrado sem externa): inativa
         shCap.getRange(r + 1, iAtivo + 1).setValue('Não');
       }
     }
   } catch(e2) { /* silencioso — a conclusão em si já foi salva */ }
 
-  return { feita: true, servidorExt: servidorExt };
+  return { feita: !concluiuSemExterna, servidorExt: servidorExt };
 }
 
 // ── getHistorico ──────────────────────────────────────────────────────────

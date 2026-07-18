@@ -538,6 +538,16 @@ function _fsTransicaoFase_(pid, docEtapaConcluida) {
     if (ext) { if (st !== 'na') hasExt = true; }
     else { hasInt = true; if (!ehAtual && st !== 'ok' && st !== 'na') allIntOk = false; }
   });
+  // CD sem fase externa aplicável: a fase interna concluída encerra o processo.
+  // Não há transição (nem mensagem/pontos ao próximo servidor), mas as cargas
+  // devem ser inativadas na origem — sem isso o dado fica "ativo" para sempre
+  // e só a leitura da Capacidade (que exclui concluídos) compensa.
+  if (hasInt && allIntOk && !hasExt) {
+    _fsQueryEq_('cargas', 'processoId', pid).forEach(function(c){
+      if (c.obj.ativo === true) _fsUpdate_(c.path, { ativo: false });
+    });
+    return { feita: false, servidorExt: '' };
+  }
   if (!hasInt || !allIntOk || !hasExt) return { feita: false, servidorExt: '' };
   var servidorExt = '';
   _fsQueryEq_('cargas', 'processoId', pid).forEach(function(c){
