@@ -393,6 +393,11 @@ function fs_salvarDadosUnidade(params) {
       if (email && email.indexOf('@') < 0) throw new Error('E-mail institucional inválido.');
       var proj = PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID');
       var projBase = 'https://firestore.googleapis.com/v1/projects/' + proj + '/databases/(default)/documents';
+      // Estado anterior — base da trilha de auditoria gravada no histórico.
+      var docAntes;
+      try { docAntes = _fsReq_('get', projBase + '/unidades/' + uid); }
+      catch (eGet) { if (eGet && eGet.httpCode === 404) docAntes = null; else throw eGet; }
+      var antes = (docAntes && docAntes.fields) ? _fsDocToObj_(docAntes) : {};
       // updateMask preserva os demais campos do doc (sigla, ativo…).
       var fields = { endereco: endereco, emailInstitucional: email };
       var url = projBase + '/unidades/' + uid
@@ -408,6 +413,23 @@ function fs_salvarDadosUnidade(params) {
         }
       }
       _fsReq_('patch', url, { fields: _fsToFields_(fields) });
+      // Auditoria: registra no histórico QUEM alterou os dados cadastrais e o
+      // antes → depois de cada campo modificado. Só grava se algo mudou.
+      var difs = [];
+      function _dif_(rotulo, velho, novo) {
+        velho = String(velho || '').trim(); novo = String(novo || '').trim();
+        if (velho !== novo) difs.push(rotulo + ': "' + (velho || '—') + '" → "' + (novo || '—') + '"');
+      }
+      if (fields.nome !== undefined) _dif_('Nome', antes.nome, fields.nome);
+      _dif_('Endereço', antes.endereco, endereco);
+      _dif_('E-mail institucional', antes.emailInstitucional, email);
+      if (difs.length) {
+        _fsAppendHist_({
+          pid: 'unidade', etapa: 'Dados da unidade',
+          servidor: String(params.servidor || '').trim() || '—',
+          motivo: 'ALTERAÇÃO CADASTRAL: ' + difs.join(' · ')
+        });
+      }
       return { ok: true, nome: fields.nome, endereco: endereco, emailInstitucional: email };
     } catch (e) { return { ok: false, erro: e.message }; }
   });

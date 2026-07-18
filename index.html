@@ -3671,15 +3671,17 @@ function renderHistorico() {
     + '📚 '+comMotivo.length+' registro'+(comMotivo.length>1?'s':'')+' no histórico</div>';
   comMotivo.forEach(function(h) {
     var ehRegressao = String(h.motivo || '').indexOf('REGRESSAO:') === 0;
+    // Auditoria de dados cadastrais (unidade): card próprio, sem etapa/atraso.
+    var ehCadastro = String(h.motivo || '').indexOf('ALTERAÇÃO CADASTRAL') === 0;
     // Exibe o NOME do processo (objeto) com link SUAP clicavel. ProcessoID nao e mostrado.
-    var nomeProc = h.objeto || h.pid;
-    var procHtml = (h.suap)
+    var nomeProc = ehCadastro ? '⚙️ Dados da unidade' : (h.objeto || h.pid);
+    var procHtml = (h.suap && !ehCadastro)
       ? '<a href="'+esc(h.suap)+'" target="_blank" rel="noopener" style="color:var(--navy);text-decoration:none;">'+esc(nomeProc)+' ↗</a>'
       : esc(nomeProc);
     html += '<div class="hist-card">'
-      + '<span class="hist-dias">'+(ehRegressao ? 'Regressão' : '+'+h.dias+'d atraso')+'</span>'
+      + '<span class="hist-dias">'+(ehCadastro ? 'Cadastro' : ehRegressao ? 'Regressão' : '+'+h.dias+'d atraso')+'</span>'
       + '<div class="hist-proc">'+procHtml+'</div>'
-      + '<div class="hist-etapa">Etapa: '+esc(h.etapa)+'</div>'
+      + (ehCadastro ? '' : '<div class="hist-etapa">Etapa: '+esc(h.etapa)+'</div>')
       + '<div class="hist-mot">"'+esc(h.motivo)+'"</div>'
       + '<div class="hist-foot">'
       + '<span>🔒 '+esc(h.servidor)+' · '+h.tsStr+'</span>'
@@ -5483,7 +5485,9 @@ function salvarDadosUnidade_(){
       else { msg.style.color='#b02035'; msg.textContent='Erro: '+((r&&r.erro)||'falhou'); }
     })
     .withFailureHandler(function(e){ if (btn) btn.disabled = false; msg.style.color='#b02035'; msg.textContent='Erro: '+((e&&e.message)||e); })
-    .fs_salvarDadosUnidade({ nome: nome, endereco: endereco, emailInstitucional: email, authToken: (typeof AUTH_TOKEN!=='undefined'?AUTH_TOKEN:'') });
+    .fs_salvarDadosUnidade({ nome: nome, endereco: endereco, emailInstitucional: email,
+      servidor: (typeof SERVIDOR!=='undefined'?SERVIDOR:''),  // auditoria: quem alterou
+      authToken: (typeof AUTH_TOKEN!=='undefined'?AUTH_TOKEN:'') });
 }
 // Excluir unidade (Configurações). Destrutivo — via Apps Script (fs_excluirUnidade).
 function popularExcluirUnidade(){
