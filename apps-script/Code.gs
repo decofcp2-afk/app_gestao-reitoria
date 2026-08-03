@@ -1065,6 +1065,7 @@ function _apiCallAppSEL_(method, args) {
     fns.fs_atualizarStatusEtapa   = fs_atualizarStatusEtapa;
     fns.fs_concluirEtapa          = fs_concluirEtapa;
     fns.fs_regredirEtapa          = fs_regredirEtapa;
+    fns.fs_reabrirProcessoConcluido = fs_reabrirProcessoConcluido;
     fns.fs_devolverProcessoFilaApp= fs_devolverProcessoFilaApp;
     fns.fs_iniciarProcessos       = fs_iniciarProcessos;
     fns.fs_salvarEmailProcesso    = fs_salvarEmailProcesso;

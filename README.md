@@ -45,6 +45,7 @@ O Painel de Contratacoes le a mesma planilha por outro Apps Script, separado e s
 - Recuperacao de senha por e-mail.
 - Registro e conclusao de etapas.
 - Regressao de etapa quando uma etapa precisa ser reaberta.
+- Reabertura de processo concluido por engano (restrita a chefia), com justificativa no historico.
 - Retorno de processo para a fila preservando o status real do processo.
 - Reativacao de processos retornados pela aba Fila.
 - Controle de capacidade por servidor e fase.
