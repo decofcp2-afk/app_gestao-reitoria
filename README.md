@@ -12,7 +12,11 @@ app_gestao-reitoria/
 |-- config.js               URL publica do Apps Script da DECOF
 |-- CHECKLIST_PUBLICACAO.md roteiro de publicacao e testes
 |-- apps-script/
-|   `-- Code.gs             backend do App Gestao para copiar no Apps Script
+|   |-- Code.gs             backend do App Gestao (publicado no Apps Script)
+|   |-- FirestoreSync.gs    escritas e leituras do Firestore (fs_*)
+|   `-- appsscript.json     manifesto do projeto do Apps Script
+|-- scripts/
+|   `-- deploy-apps-script.sh  publica o backend (nao use `clasp push` direto)
 |-- README.md
 `-- .gitignore             bloqueia arquivos sensiveis (inclui chaves Firebase)
 ```

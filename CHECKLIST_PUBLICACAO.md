@@ -6,6 +6,29 @@ Aplicação **interna e protegida por login**. A equipe SEL/SEPMA faz toda a ges
 
 ## 1. Backend — Apps Script da DECOF
 
+### Atualizar o backend (projeto já existente)
+
+Use `scripts/deploy-apps-script.sh`, com o `clasp` autenticado na conta institucional:
+
+```bash
+scripts/deploy-apps-script.sh            # confere divergências, não escreve nada
+scripts/deploy-apps-script.sh release    # envia + versiona + publica em produção
+```
+
+O `release` mantém a **mesma URL `/exec`** que está no `config.js` — ele atualiza a
+implantação "Producao AppSEL" em vez de criar outra.
+
+> **Não rode `clasp push` direto.** Os nomes dos arquivos diferem entre o repositório e
+> o projeto remoto (`apps-script/Code.gs` lá é `Código.js`, na raiz), e o push **espelha**
+> a pasta: o que não estiver nela é apagado no projeto. O script faz o mapeamento, confere
+> antes se alguém editou algo direto no editor e recusa publicar se encontrar arquivo que
+> ele não conhece. É por isso que **não existe `.clasp.json` na raiz** do repositório.
+
+Publicar só o código, sem mexer na produção: `scripts/deploy-apps-script.sh push`
+(atualiza apenas o `@HEAD`; a URL `/exec` continua servindo a versão anterior).
+
+### Primeira instalação (projeto novo)
+
 - Criar projeto novo no Apps Script da conta institucional da DECOF.
 - Copiar/atualizar `apps-script/Code.gs` no editor.
 - Em `Configurações do projeto > Propriedades do script`, configurar:
