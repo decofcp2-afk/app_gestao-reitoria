@@ -698,6 +698,10 @@
        style="margin-top:8px;width:100%;padding:11px;border:1.5px solid var(--amber);border-radius:10px;background:#fffbeb;font-size:13px;font-weight:700;cursor:pointer;color:#92400e;" hidden>
       ↩ Voltar processo para a fila
     </button>
+    <button id="btn-reabrir-proc" onclick="reabrirProcConcluido_()"
+       style="margin-top:8px;width:100%;padding:11px;border:1.5px solid var(--amber);border-radius:10px;background:#fffbeb;font-size:13px;font-weight:700;cursor:pointer;color:#92400e;" hidden>
+      ↩ Reabrir processo concluído
+    </button>
   </div>
 </div>
 
@@ -2994,6 +2998,14 @@ function abrirProcesso(idx) {
   if (btnVoltarFila) {
     btnVoltarFila.hidden = !(isChefeAtual_() && p.status !== 'ok' && p.status !== 'planejamento' && !isRetornoFila_(p));
   }
+  // Processo concluído não tem etapa atual (etapaAtualIdx = -1), então nenhum
+  // botão de etapa é desenhado — sem este atalho da chefia, uma conclusão feita
+  // por engano na última etapa deixaria o processo travado em "✓ Concluídos".
+  var btnReabrir = document.getElementById('btn-reabrir-proc');
+  if (btnReabrir) {
+    btnReabrir.hidden = !(isChefeAtual_() && processoConcluido
+      && window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo);
+  }
   footer.hidden = false;
 
   document.getElementById('ov-proc').classList.add('open');
@@ -3382,6 +3394,47 @@ function devolverProcFilaAtual_() {
   });
 }
 
+// Desfaz a conclusão de um processo inteiro reabrindo a ÚLTIMA etapa. Restrito
+// à chefia (isChefeAtual_ cobre o admin geral). Para voltar mais de uma etapa,
+// o chefe usa o "↩ Voltar" que reaparece na etapa reaberta.
+function reabrirProcConcluido_() {
+  var p = PROC_ATI;
+  if (!p || !isChefeAtual_()) return;
+  dialogoCampo_({
+    titulo: 'Reabrir processo concluído',
+    mensagem: 'Informe por que este processo precisa voltar ao andamento.\nEx.: a última etapa foi finalizada por engano.',
+    placeholder: 'Descreva o motivo da reabertura...',
+    textarea: true,
+    ok: 'Continuar'
+  }, function(motivo) {
+    if (motivo.length < 8) {
+      toast('Informe uma justificativa um pouco mais completa.', 'err');
+      return;
+    }
+    dialogoConfirmar_(
+      'Confirmar reabertura',
+      'A última etapa concluída voltará para "Em andamento" e perderá a data de realização registrada. O processo sai de "Concluídos" e volta a contar na Capacidade do responsável.',
+      function() {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.ok) {
+              toast('↩ Processo reaberto na etapa "' + (res.etapaReaberta || '') + '".', 'ok');
+              fecharProc();
+              HIST_CARREGADO = false;
+              atualizarCapacidadeAposMudanca_();
+              setTimeout(carregarDados, 500);
+            } else {
+              toast('Erro: ' + (res && res.erro ? res.erro : 'Não foi possível reabrir o processo.'), 'err');
+            }
+          })
+          .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), 'err'); })
+          .fs_reabrirProcessoConcluido({ processoId: p.id, servidor: SERVIDOR, motivo: motivo, authToken: AUTH_TOKEN });
+      },
+      'Reabrir processo'
+    );
+  });
+}
+
 function regredirEtapaAtual(etIdx) {
   var p = PROC_ATI;
   var et = p && p.etapas[etIdx];
@@ -3671,6 +3724,9 @@ function renderHistorico() {
     + '📚 '+comMotivo.length+' registro'+(comMotivo.length>1?'s':'')+' no histórico</div>';
   comMotivo.forEach(function(h) {
     var ehRegressao = String(h.motivo || '').indexOf('REGRESSAO:') === 0;
+    // Reabertura de processo concluído: registro sem atraso — sem isto o chip
+    // mostraria "+0d atraso".
+    var ehReabertura = String(h.motivo || '').indexOf('REABERTURA:') === 0;
     // Auditoria de dados cadastrais (unidade): card próprio, sem etapa/atraso.
     var ehCadastro = String(h.motivo || '').indexOf('ALTERAÇÃO CADASTRAL') === 0;
     // Exibe o NOME do processo (objeto) com link SUAP clicavel. ProcessoID nao e mostrado.
@@ -3679,7 +3735,7 @@ function renderHistorico() {
       ? '<a href="'+esc(h.suap)+'" target="_blank" rel="noopener" style="color:var(--navy);text-decoration:none;">'+esc(nomeProc)+' ↗</a>'
       : esc(nomeProc);
     html += '<div class="hist-card">'
-      + '<span class="hist-dias">'+(ehCadastro ? 'Cadastro' : ehRegressao ? 'Regressão' : '+'+h.dias+'d atraso')+'</span>'
+      + '<span class="hist-dias">'+(ehCadastro ? 'Cadastro' : ehRegressao ? 'Regressão' : ehReabertura ? 'Reabertura' : '+'+h.dias+'d atraso')+'</span>'
       + '<div class="hist-proc">'+procHtml+'</div>'
       + (ehCadastro ? '' : '<div class="hist-etapa">Etapa: '+esc(h.etapa)+'</div>')
       + '<div class="hist-mot">"'+esc(h.motivo)+'"</div>'

@@ -599,6 +599,70 @@ function fs_regredirEtapa(params) {
   });
 }
 
+// Reabre a ÚLTIMA etapa de um processo já concluído (100% das etapas aplicáveis
+// em "Concluída"). Cobre o caso real de quem finaliza a etapa final por engano:
+// como o status do processo é derivado das etapas, ele vai para "✓ Concluídos"
+// e some da lista de andamento — sem etapa atual, o app não mostra mais nenhum
+// botão de etapa (nem o "↩ Voltar" da regressão comum), e o processo fica
+// travado. Diferente de fs_regredirEtapa, aqui é preciso reativar a carga: a
+// conclusão da última etapa inativa as duas fases (_fsTransicaoFase_), então
+// sem isso o processo voltaria ao andamento mas seus pontos ficariam contando
+// como carga "futura" do servidor, não como carga atual.
+function fs_reabrirProcessoConcluido(params) {
+  return _withAppLockResult_('reabrir processo concluído (fs)', function() {
+    try {
+      params = params || {};
+      _authRequire_(params.authToken, true); // chefia (o admin geral também tem isChefe)
+      var pid = String(params.processoId || '').trim();
+      var motivo = String(params.motivo || '').trim();
+      var servidor = String(params.servidor || '').trim() || '—';
+      if (!pid) throw new Error('Processo não informado.');
+      if (motivo.length < 8) throw new Error('Informe uma justificativa para a reabertura.');
+      var procDoc = _fsGet_('processos/' + pid);
+      if (!procDoc) throw new Error('Processo não encontrado.');
+
+      // Etapas que a leitura deriva como "Não se aplica" (IRP, TR em adesão,
+      // fase externa em CD sem disputa) continuam gravadas como 'Pendente'. Sem
+      // considerá-las, um processo que o app mostra 100% concluído seria
+      // rejeitado aqui como "não concluído" — mesmo cuidado de
+      // fs_devolverProcessoFilaApp.
+      var condReab = _fsCondicionais_({
+        modalidade:   String(procDoc.modalidade || ''),
+        temIRP:       (procDoc.temIrp === true ? 'Sim' : 'Não'),
+        tipoCD:       String(procDoc.tipoCD || ''),
+        procuradoria: String(procDoc.procuradoria || 'Sim')
+      });
+
+      var aplicaveis = [];
+      _fsEtapasDoProc_(pid).forEach(function(e){
+        var o = e.obj;
+        if (_isEtapaContratual_(o.fase, o.etapa)) return;
+        if (_normStatus_(o.status) === 'na') return;
+        if (condReab.na[Number(o.ordem || 0)]) return;
+        aplicaveis.push(e);
+      });
+      if (!aplicaveis.length) throw new Error('Processo sem etapas aplicáveis.');
+      // Trava de estado: protege contra dois chefes reabrindo ao mesmo tempo e
+      // contra chamada fora do fluxo (o botão só aparece em processo concluído).
+      for (var i = 0; i < aplicaveis.length; i++) {
+        if (_normStatus_(aplicaveis[i].obj.status) !== 'ok') throw new Error('Este processo não está concluído.');
+      }
+
+      var alvo = aplicaveis[aplicaveis.length - 1];
+      var nomeAlvo = String(alvo.obj.etapa || '').trim();
+      _fsUpdate_(alvo.path, { status: 'Em andamento', dataRealizacao: null, motivoAtraso: '' });
+
+      var ext = String(alvo.obj.fase || '').toLowerCase().indexOf('ext') >= 0;
+      _fsSetCargaAtivo_(pid, ext ? 'externa' : 'interna', true);
+      _fsSetCargaAtivo_(pid, ext ? 'interna' : 'externa', false);
+      _fsUpdate_('processos/' + pid, { status: 'Em andamento' });
+
+      _fsAppendHist_({ pid: pid, etapa: nomeAlvo, servidor: servidor, motivo: 'REABERTURA: ' + motivo });
+      return { ok: true, etapaReaberta: nomeAlvo };
+    } catch(e) { return { ok: false, erro: e.message }; }
+  });
+}
+
 function fs_devolverProcessoFilaApp(params) {
   return _withAppLockResult_('devolver processo para fila (fs)', function() {
     try {

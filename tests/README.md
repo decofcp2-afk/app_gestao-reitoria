@@ -32,6 +32,26 @@ npm test          # ou: node --test
 - Após a troca de fase, o responsável externo ativo vira o responsável corrente.
 - Fallback para o agente da etapa quando não há carga.
 
+### `reabrir-concluido.test.js` — reabertura de processo concluído
+Caso real: um servidor concluiu sem querer a **última** etapa e o processo foi para
+"✓ Concluídos". Como o status vem das etapas, `etapaAtualIdx` vira `-1` e o modal
+deixa de desenhar qualquer botão de etapa — nem o "↩ Voltar" da regressão comum —,
+travando o processo. O botão da chefia (`fs_reabrirProcessoConcluido`,
+`apps-script/FirestoreSync.gs`) reabre a última etapa aplicável. Os testes cobrem:
+- **Escolha do alvo** (espelho da regra do GS; mantenha em sincronia): última etapa
+  aplicável, ignorando contratuais, etapas `na` gravadas **e** as derivadas `na`
+  pelas condicionais do processo (`_fsCondicionais_`) — sem isso, uma Contratação
+  Direta sem disputa, que o app mostra 100% concluída, seria recusada como "não
+  concluída".
+- **Trava de estado:** processo com etapa em andamento não é elegível (protege
+  contra dois chefes reabrindo ao mesmo tempo).
+- **Efeito em `construir`:** o processo sai de `status: 'ok'`, a barra deixa os 100%,
+  a data de realização some e a etapa reaberta volta a ser a atual — é o que traz os
+  botões de volta.
+- **Efeito na Capacidade:** com a carga da fase reaberta reativada, o processo volta a
+  pesar como carga **atual** do responsável, não como projeção "futuros" (a conclusão
+  havia inativado as duas fases em `_fsTransicaoFase_`).
+
 ### `prune-servidores.test.js` — poda de servidores fantasmas
 Spec da regra de `_fsPodarServidoresOrfaos_` (Apps Script): remove docs de
 servidores que saíram da lista, mantém os atuais e — **trava de segurança** —
