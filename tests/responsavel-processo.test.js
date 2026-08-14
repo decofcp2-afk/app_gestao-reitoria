@@ -21,7 +21,9 @@ const { construir, nomeRespGenerico } = require('../appsel-firestore.js');
 const { carga, etapa, processo } = require('./helpers.js');
 
 test('Rótulos de setor/equipe não valem como responsável', () => {
-  ['DIAD', 'DECOF', 'DIAD/DECOF', 'Equipe de Planejamento', 'Setor de licitações', '', '   ']
+  ['DIAD', 'DECOF', 'DIAD/DECOF', 'SEL/SEPMA', 'SEL', 'SEL SEPMA', 'sel/sepma',
+   'Equipe de Planejamento', 'Setor de licitações', 'Seção de Licitações',
+   'Coordenação de Compras', 'Gabinete', '', '   ']
     .forEach(function (n) {
       assert.equal(nomeRespGenerico(n), true, 'deveria ser genérico: ' + JSON.stringify(n));
     });
@@ -31,6 +33,33 @@ test('Nome de pessoa vale como responsável', () => {
   ['Amanda', 'Beatriz Souza', 'Jean-Pierre', 'Ana Paula'].forEach(function (n) {
     assert.equal(nomeRespGenerico(n), false, 'não deveria ser genérico: ' + n);
   });
+});
+
+// A regra anterior casava as siglas como SUBSTRING. Ampliar a lista sem mudar
+// isso apagaria pessoas reais da tela — "sel" está dentro de vários nomes
+// comuns, e sumir com o responsável é pior do que mostrar uma sigla.
+test('Sigla dentro de nome de pessoa não torna o nome genérico', () => {
+  ['Selma', 'Selma Diadorim', 'Anselmo', 'Marisel', 'Giselle Proença', 'Celso Reitoria Neto']
+    .forEach(function (n) {
+      assert.equal(nomeRespGenerico(n), false, 'não deveria ser genérico: ' + n);
+    });
+});
+
+test('Sigla acompanhada de nome continua sendo a pessoa', () => {
+  assert.equal(nomeRespGenerico('Amanda SEL'), false);
+  assert.equal(nomeRespGenerico('SEL Amanda'), false);
+});
+
+test('Processo antigo com Agente "SEL/SEPMA" fica sem responsável, não com a sigla', () => {
+  const p = processoConcluido({
+    cargas: [],
+    etapas: [
+      etapa({ processoId: 'P1', ordem: 1, fase: 'Interna', status: 'Concluída', agente: 'SEL/SEPMA' }),
+      etapa({ processoId: 'P1', ordem: 8, fase: 'Externa', status: 'Concluída', agente: 'SEL/SEPMA' })
+    ]
+  });
+  assert.equal(p.servidor, '');
+  assert.equal(p.servidorExt, '');
 });
 
 // Processo concluído nas duas fases, com responsáveis diferentes por fase.
