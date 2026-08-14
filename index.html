@@ -4790,14 +4790,15 @@ function aplicarTriggerStatus_(r) {
   if (instalado) {
     btn.disabled = false;
     btn.textContent = 'Reinstalar trigger';
-    // Acionador de pontuação é posterior aos de prazo: quem instalou antes
-    // continua com os avisos funcionando, mas precisa reinstalar para receber
-    // a cobrança de pontuação — o aviso abaixo é o que torna isso visível.
-    var faltaPont = r.pontuacao === false;
-    msg.style.color = faltaPont ? 'var(--amber)' : 'var(--green)';
-    msg.textContent = (faltaPont ? '⚠ Trigger instalado, sem a cobrança de pontuação — reinstale' : '✓ Trigger instalado')
+    // O acionador de pontuação é posterior aos de prazo. Quem instalou antes
+    // não fica sem a cobrança — ela roda junto com o aviso das 10h30 (ver
+    // enviarAvisosPrazoProximos) —, então aqui é só a dica do horário melhor,
+    // não um alerta de coisa quebrada.
+    msg.style.color = 'var(--green)';
+    msg.textContent = '✓ Trigger instalado'
       + (r.hora ? ' · ' + r.hora : '')
-      + (!faltaPont && r.pontuacaoHora ? ' · pontuação ' + r.pontuacaoHora : '')
+      + (r.pontuacao === false ? ' · pontuação junto com o aviso das 10h30 (reinstale para 9h30)'
+                               : (r.pontuacaoHora ? ' · pontuação ' + r.pontuacaoHora : ''))
       + (r.dias ? ' · ' + r.dias : '')
       + (r.timezone ? ' · fuso ' + r.timezone : '');
   } else if (naoInstalado) {

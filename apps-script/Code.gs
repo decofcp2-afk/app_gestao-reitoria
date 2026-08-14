@@ -2597,7 +2597,24 @@ function enviarAvisosPrazo(modo) {
 // Antes rodavam só a unidade padrão (reitoria-sel), então os demais campi nunca
 // recebiam aviso automático de prazo. Agora percorrem TODAS as unidades ativas.
 function enviarAvisosPrazoProximos() {
-  return _enviarAvisosTodasUnidades_('proximos');
+  var resumo = _enviarAvisosTodasUnidades_('proximos');
+  // Rede de segurança da cobrança de pontuação. Ela tem acionador próprio
+  // (9h30), mas ele só passa a existir depois de alguém clicar em "Reinstalar
+  // trigger" — em projetos cujos acionadores foram instalados antes desta
+  // versão, a cobrança simplesmente nunca sairia, e ninguém perceberia (a
+  // falta de e-mail não chama atenção). Rodá-la aqui torna a reinstalação
+  // opcional: ela passa a valer só pelo horário mais cedo.
+  //
+  // Rodar duas vezes no mesmo dia é inofensivo: a varredura trava em um
+  // e-mail por processo/fase por dia, então quando o acionador de 9h30 existe
+  // esta chamada não encontra nada pendente e sai barata.
+  try {
+    resumo += '\n' + enviarCobrancaPontuacaoTodasUnidades();
+  } catch (e) {
+    // Nunca deixa a cobrança derrubar o aviso de prazo, que é a rotina crítica.
+    resumo += '\nCobranca de pontuacao falhou: ' + (e && e.message ? e.message : e);
+  }
+  return resumo;
 }
 
 function enviarAvisosPrazoVencidos() {
