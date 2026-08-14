@@ -2331,14 +2331,10 @@ function enviarAvisosPrazo(modo) {
     return p.num ? p.num : (p.nome || 'Processo');
   }
 
+  // Delega para a regra única do projeto: sem isso, um agente "SEL/SEPMA"
+  // passava por aqui como se fosse pessoa e o aviso tentava achar e-mail dele.
   function respGenerico_(nome) {
-    var n = String(nome || '').toLowerCase();
-    return !n
-      || n.indexOf('equipe') >= 0
-      || n.indexOf('planejamento') >= 0
-      || n.indexOf('decof') >= 0
-      || n.indexOf('diad') >= 0
-      || n.indexOf('setor') >= 0;
+    return _respNomeGenerico_(nome);
   }
 
   // Classifica os avisos
@@ -2915,13 +2911,32 @@ function _infoProcessoAviso_(pid) {
   return info;
 }
 
-// Rótulo de setor/equipe no campo Agente ("DIAD/DECOF", "Equipe de
+// Siglas de setor que aparecem no campo Agente de processos antigos. São
+// comparadas por TOKEN INTEIRO, nunca como pedaço da palavra: "sel" dentro de
+// "Selma", "Anselmo" ou "Marisel" é nome de gente, e apagar essas pessoas seria
+// pior que exibir a sigla.
+var SIGLAS_SETOR = ['sel', 'sepma', 'decof', 'diad', 'dirad', 'proen', 'progepe', 'reitoria', 'cpii'];
+
+// Rótulo de setor/equipe no campo Agente ("SEL/SEPMA", "DIAD/DECOF", "Equipe de
 // Planejamento") não identifica pessoa: não vira responsável nem destinatário.
+// Espelha nomeRespGenerico (appsel-firestore.js) e respGenerico_ (index.html).
 function _respNomeGenerico_(nome) {
-  var n = _normText_(nome);
-  if (!n) return true;
-  return n.indexOf('equipe') >= 0 || n.indexOf('planejamento') >= 0
-    || n.indexOf('decof') >= 0 || n.indexOf('diad') >= 0 || n.indexOf('setor') >= 0;
+  var s = String(nome == null ? '' : nome).trim();
+  if (!s) return true;
+  var n = _normText_(s);
+  // Par de setores ("SEL/SEPMA", "DIAD/DECOF"): nome de pessoa não leva barra.
+  if (s.indexOf('/') >= 0) return true;
+  if (n.indexOf('equipe') >= 0 || n.indexOf('planejamento') >= 0 || n.indexOf('setor') >= 0
+    || n.indexOf('secao') >= 0 || n.indexOf('secretaria') >= 0 || n.indexOf('coordenac') >= 0
+    || n.indexOf('diretoria') >= 0 || n.indexOf('gabinete') >= 0) return true;
+  // Só é sigla quando TODOS os tokens são siglas: "SEL" e "SEL SEPMA" são
+  // setor; "Amanda SEL" continua sendo a Amanda.
+  var tokens = n.split(/[^a-z0-9]+/).filter(function(t){ return !!t; });
+  if (!tokens.length) return true;
+  for (var i = 0; i < tokens.length; i++) {
+    if (SIGLAS_SETOR.indexOf(tokens[i]) < 0) return false;
+  }
+  return true;
 }
 
 function _procRefHtmlAviso_(info) {

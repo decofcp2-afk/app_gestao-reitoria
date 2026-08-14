@@ -60,15 +60,29 @@
     return 'pendente';
   }
   function isRetornoFilaMotivo(m) { return normText(m).indexOf('retorno para fila:') === 0; }
+  // Siglas de setor que aparecem no campo Agente de processos antigos. São
+  // comparadas por TOKEN INTEIRO, nunca como pedaço da palavra: "sel" dentro de
+  // "Selma", "Anselmo" ou "Marisel" é nome de gente, e apagar essas pessoas da
+  // tela seria pior que exibir a sigla.
+  var SIGLAS_SETOR = ['sel', 'sepma', 'decof', 'diad', 'dirad', 'proen', 'progepe', 'reitoria', 'cpii'];
+
   // Nome de responsável "genérico": rótulo de setor/equipe digitado no campo
-  // Agente da etapa (DIAD, DECOF, "Equipe de Planejamento"…). Não identifica
-  // pessoa, então não serve como responsável exibido nem como destinatário de
-  // e-mail. Espelha respGenerico_ do Code.gs (rotina de avisos de prazo).
+  // Agente da etapa ("SEL/SEPMA", "DIAD/DECOF", "Equipe de Planejamento"…).
+  // Não identifica pessoa, então não serve como responsável exibido nem como
+  // destinatário de e-mail. Espelha _respNomeGenerico_ do Code.gs.
   function nomeRespGenerico(nome) {
-    var n = normText(nome);
-    if (!n) return true;
-    return n.indexOf('equipe') >= 0 || n.indexOf('planejamento') >= 0
-      || n.indexOf('decof') >= 0 || n.indexOf('diad') >= 0 || n.indexOf('setor') >= 0;
+    var s = String(nome == null ? '' : nome).trim();
+    if (!s) return true;
+    var n = normText(s);
+    // Par de setores ("SEL/SEPMA", "DIAD/DECOF"): nome de pessoa não leva barra.
+    if (s.indexOf('/') >= 0) return true;
+    if (n.indexOf('equipe') >= 0 || n.indexOf('planejamento') >= 0 || n.indexOf('setor') >= 0
+      || n.indexOf('secao') >= 0 || n.indexOf('secretaria') >= 0 || n.indexOf('coordenac') >= 0
+      || n.indexOf('diretoria') >= 0 || n.indexOf('gabinete') >= 0) return true;
+    // Só é sigla quando TODOS os tokens são siglas: "SEL" e "SEL SEPMA" são
+    // setor; "Amanda SEL" continua sendo a Amanda.
+    var tokens = n.split(/[^a-z0-9]+/).filter(function (t) { return !!t; });
+    return tokens.length > 0 && tokens.every(function (t) { return SIGLAS_SETOR.indexOf(t) >= 0; });
   }
   function isEtapaContratual(fase, nome) {
     var f = normText(fase), n = normText(nome);
