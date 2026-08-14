@@ -194,5 +194,19 @@ mesma fase, e `temFaseExterna` sinaliza quando a fase externa não se aplica. A
 montagem das tags (`responsaveisExibidos_`/`tagsResponsaveisHtml_`, no
 `index.html`) espelha essa regra.
 
+### `correcao-responsavel.test.js` — correção retroativa em processo concluído
+Processos antigos foram importados sem o nome de quem respondeu por eles, ou com
+a sigla do setor no lugar da pessoa; a chefia passou a poder corrigir isso com o
+processo já encerrado. Mexer no registro de um processo fechado tem dois riscos,
+e é o que os testes fixam: **ressuscitar carga na Capacidade** (a atribuição
+ativa a carga da "fase corrente" — num concluído não existe fase corrente, e o
+teste verifica pelo efeito observável que ele continua fora da Capacidade) e
+**reescrever histórico sem rastro** (a correção gera uma linha com quem mudou e
+de quem para quem, e só em processo concluído, para não poluir o histórico com a
+troca rotineira de responsável). Cobre ainda a detecção de "processo concluído"
+usada pela auditoria: etapas "Não se aplica" e contratuais não impedem, processo
+em andamento não dispara, e processo sem etapa aplicável nenhuma não vira
+registro.
+
 ### `helpers.js`
 Builders dos dados simulados (cargas, etapas, processos, servidores).

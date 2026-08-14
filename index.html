@@ -1992,20 +1992,27 @@ function responsaveisExibidos_(p) {
   return out;
 }
 
-// Tags de responsável do card/cabeçalho. `onclickTroca` só é ligado quando a
-// troca faz sentido (processo em andamento e usuário com permissão).
+// Tags de responsável do card/cabeçalho. `permiteTroca` liga o clique que abre
+// a atribuição — inclusive em processo CONCLUÍDO, onde vira correção
+// retroativa do registro (processo antigo importado sem responsável, ou com um
+// rótulo de setor no lugar da pessoa). A correção não mexe na Capacidade:
+// processo concluído não conta carga para ninguém.
 function tagsResponsaveisHtml_(p, idx, permiteTroca) {
   var resps = responsaveisExibidos_(p);
+  var concluido = p.status === 'ok';
+  var dica = concluido ? ' — clique para corrigir o registro' : ' — clique para trocar responsável';
   if (!resps.length) {
     return permiteTroca
-      ? '<span style="background:var(--bg);color:var(--muted);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;cursor:pointer;" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">+ Atribuir</span>'
+      ? '<span title="' + (concluido ? 'Registrar quem respondeu por este processo' : 'Atribuir responsável') + '"'
+        + ' style="background:var(--bg);color:var(--muted);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;cursor:pointer;"'
+        + ' onclick="event.stopPropagation();abrirTrocaServ('+idx+')">+ Atribuir</span>'
       : '';
   }
   var mostraFase = resps.length > 1;
   return resps.map(function(r) {
     var sd = SERV_DATA.find(function(s){ return _mesmoServ_(s.nome, r.nome); }) || { cor: '#6b7280' };
     var rotulo = mostraFase ? (r.fase === 'Fase externa' ? 'Ext · ' : 'Int · ') + r.nome : r.nome;
-    return '<span title="' + esc(r.fase) + (permiteTroca ? ' — clique para trocar responsável' : '') + '" style="' + servTagStyle_(sd)
+    return '<span title="' + esc(r.fase) + (permiteTroca ? dica : '') + '" style="' + servTagStyle_(sd)
       + (permiteTroca ? 'cursor:pointer;' : '') + '"'
       + (permiteTroca ? ' onclick="event.stopPropagation();abrirTrocaServ(' + idx + ')"' : '')
       + '>' + esc(rotulo) + '</span>';
@@ -3026,9 +3033,9 @@ function renderEtapas(filtrado) {
       var pct   = p.execucao;
       var idx   = DATA.indexOf(p);
       var alerta = (p.status !== 'aguardando' && p.status !== 'paralisado') && temPrazoVencido(p);
-      // Concluído já não tem responsável a trocar — as tags viram só registro
-      // de quem respondeu por cada fase.
-      var ownerHtml = tagsResponsaveisHtml_(p, idx, p.status !== 'ok' && isChefeAtual_());
+      // No concluído as tags são registro de quem respondeu por cada fase — e a
+      // chefia pode corrigi-lo (processo antigo sem responsável gravado).
+      var ownerHtml = tagsResponsaveisHtml_(p, idx, isChefeAtual_());
       out += '<div class="proc-card" onclick="abrirProcesso(' + idx + ')" style="'+(alerta?'border-left:4px solid #f59e0b;':'')+'">'
         + (alerta ? '<div class="proc-warn-badge" title="Prazo vencido — informe o motivo">!</div>' : '')
         + '<div class="proc-card-top">'
@@ -3066,7 +3073,7 @@ function abrirProcesso(idx) {
   var p    = PROC_ATI;
   var hoje = new Date(); hoje.setHours(0,0,0,0);
 
-  var tagsRespModal = tagsResponsaveisHtml_(p, idx, false);
+  var tagsRespModal = tagsResponsaveisHtml_(p, idx, isChefeAtual_());
   document.getElementById('proc-header').innerHTML =
     '<div class="proc-header-top">'
     + '<button class="proc-back" onclick="fecharProc()" aria-label="Voltar para a lista de processos">'
@@ -3317,18 +3324,33 @@ function _renderTrocaServBody_() {
     return h;
   }
 
-  var h = secaoServ_('Responsável — Fase Interna', 'int');
+  var concluido = p.status === 'ok';
+
+  // Em processo concluído a atribuição é correção de registro histórico, não
+  // distribuição de trabalho: sem carga a redistribuir, o aviso de Capacidade
+  // seria ruído. O aviso explica o que a ação faz e o que ela NÃO faz.
+  var h = concluido
+    ? '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:#1e3a8a;line-height:1.45;">'
+      + '<b>Processo concluído.</b> Aqui você corrige quem consta como responsável — útil em processo antigo importado sem o nome, ou com a sigla do setor no lugar da pessoa. '
+      + 'A correção vale para o registro e para o histórico: não altera prazos, não reabre etapa e não soma pontos na Capacidade, porque processo concluído não conta carga para ninguém.'
+      + '</div>'
+    : '';
+
+  h += secaoServ_('Responsável — Fase Interna', 'int');
   if (ehPE) h += secaoServ_('Responsável — Fase Externa', 'ext');
 
   // Aviso de Capacidade (mostra se algum selecionado)
   var avisoCap = '';
-  if (SERV_SEL.int) avisoCap += capAvisoHtml_(SERV_SEL.int, 'int', 0);
-  if (ehPE && SERV_SEL.ext) avisoCap += capAvisoHtml_(SERV_SEL.ext, 'ext', 0);
+  if (!concluido) {
+    if (SERV_SEL.int) avisoCap += capAvisoHtml_(SERV_SEL.int, 'int', 0);
+    if (ehPE && SERV_SEL.ext) avisoCap += capAvisoHtml_(SERV_SEL.ext, 'ext', 0);
+  }
   h += '<div id="cap-aviso-serv" style="margin-bottom:8px;">' + avisoCap + '</div>';
 
   // Botões de ação
   h += '<div style="display:flex;gap:8px;margin-top:4px;">'
-    + '<button onclick="confirmarAtribuicao_()" style="flex:1;padding:13px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Confirmar</button>'
+    + '<button onclick="confirmarAtribuicao_()" style="flex:1;padding:13px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">'
+    + (concluido ? 'Salvar correção' : 'Confirmar') + '</button>'
     + '<button onclick="fecharTrocaServ()" style="padding:13px 16px;background:var(--bg);color:var(--muted);border:1.5px solid var(--border);border-radius:10px;font-size:14px;cursor:pointer;">Cancelar</button>'
     + '</div>';
 
@@ -3356,12 +3378,14 @@ function fecharTrocaServ() {
 function confirmarAtribuicao_() {
   var p = DATA[SERV_IDX_ATI];
   if (!p) return;
+  var concluido = p.status === 'ok';
+  var rotuloBtn = concluido ? 'Salvar correção' : 'Confirmar';
   var btn = document.querySelector('#serv-body button[onclick*="confirmarAtribuicao"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
 
   google.script.run
     .withSuccessHandler(function(res) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Confirmar'; }
+      if (btn) { btn.disabled = false; btn.textContent = rotuloBtn; }
       if (!res.ok) { toast('Erro: ' + (res.erro || ''), 'err'); return; }
 
       // Atualiza DATA localmente
@@ -3385,16 +3409,23 @@ function confirmarAtribuicao_() {
         }
         toast('Responsável atualizado, mas pontuação precisa de ajuste na Capacidade.', 'err');
       } else {
-        toast('✓ Responsável' + (SERV_SEL.ext ? 'es atualizados' : ' atualizado') + '!', 'ok');
+        toast(concluido
+          ? '✓ Registro do responsável corrigido.'
+          : '✓ Responsável' + (SERV_SEL.ext ? 'es atualizados' : ' atualizado') + '!', 'ok');
         fecharTrocaServ();
       }
+      if (concluido) HIST_CARREGADO = false;   // a correção entrou no histórico
       renderEtapas();
     })
     .withFailureHandler(function(e) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Confirmar'; }
+      if (btn) { btn.disabled = false; btn.textContent = rotuloBtn; }
       toast('Erro: ' + (e.message || e), 'err');
     })
-    .atribuirResponsaveisApp({ pid: p.id, servInt: SERV_SEL.int, servExt: SERV_SEL.ext, modal: p.modal, authToken: AUTH_TOKEN });
+    // `servidor` identifica quem fez a correção: em processo concluído ela
+    // entra no histórico, porque mexer no registro de um processo encerrado
+    // precisa deixar rastro.
+    .atribuirResponsaveisApp({ pid: p.id, servInt: SERV_SEL.int, servExt: SERV_SEL.ext, modal: p.modal,
+                               servidor: SERVIDOR, authToken: AUTH_TOKEN });
 }
 
 // ══════════════════════════════════════════════════════════════════════

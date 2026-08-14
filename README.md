@@ -54,6 +54,7 @@ O Painel de Contratacoes le a mesma planilha por outro Apps Script, separado e s
 - Reativacao de processos retornados pela aba Fila, com aviso de retomada aos mesmos destinatarios.
 - Cobranca automatica da pontuacao de carga quando um processo fica sem pontuar.
 - Controle de capacidade por servidor e fase.
+- Correcao retroativa do responsavel em processo ja concluido (restrita a chefia), registrada no historico.
 - Cadastro e manutencao da equipe.
 - Envio de avisos de prazo de segunda a sexta-feira, em dois lotes.
 

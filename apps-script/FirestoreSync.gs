@@ -1136,10 +1136,11 @@ function fs_atribuirResponsaveisApp(params) {
       var servExtVal = ehPE ? servExt : (servExt || servInt || '');
       var cargas = _fsQueryEq_('cargas', 'processoId', pid);
       var foundInt = false, foundExt = false;
+      var antesInt = '', antesExt = '';   // para o registro de auditoria
       cargas.forEach(function(c){
         var ext = String(c.obj.fase || '').toLowerCase().indexOf('ext') >= 0;
-        if (ext) { foundExt = true; _fsUpdate_(c.path, { servidor: servExtVal }); }
-        else { foundInt = true; _fsUpdate_(c.path, { servidor: servInt || '' }); }
+        if (ext) { foundExt = true; antesExt = antesExt || String(c.obj.servidor || ''); _fsUpdate_(c.path, { servidor: servExtVal }); }
+        else { foundInt = true; antesInt = antesInt || String(c.obj.servidor || ''); _fsUpdate_(c.path, { servidor: servInt || '' }); }
       });
       if (!foundInt) {
         _fsSet_('cargas/' + pid + '_int_01', {
@@ -1157,17 +1158,37 @@ function fs_atribuirResponsaveisApp(params) {
       // 2) etapas: Agente Responsável por fase + ativa a fase corrente
       var etapas = _fsEtapasDoProc_(pid);
       var faseAtual = '';
+      var aplicaveis = 0, concluidas = 0;
       etapas.forEach(function(e){
         var o = e.obj;
         var ext = String(o.fase || '').toLowerCase().indexOf('ext') >= 0;
         var st = _normStatus_(o.status);
         if (!faseAtual && st !== 'ok' && st !== 'na') faseAtual = ext ? 'externa' : 'interna';
+        if (st !== 'na' && !_isEtapaContratual_(o.fase, o.etapa)) {
+          aplicaveis++;
+          if (st === 'ok') concluidas++;
+        }
         var novoAg = ext ? (ehPE ? (servExt || '') : (servExt || servInt || '')) : (servInt || '');
         _fsUpdate_(e.path, { agente: novoAg });
       });
+      // Processo concluído não tem fase corrente: nada é ativado, então a
+      // atribuição não ressuscita carga na Capacidade.
       if (faseAtual) _fsSetCargaAtivo_(pid, faseAtual, true);
 
-      return { ok: true, avisos: avisos };
+      // Auditoria da correção retroativa: mexer no responsável de um processo
+      // já encerrado é reescrever registro histórico, e isso precisa de rastro
+      // — quem mudou, quando e de quem para quem.
+      var procConcluido = aplicaveis > 0 && concluidas >= aplicaveis;
+      if (procConcluido) {
+        _fsAppendHist_({
+          pid: pid,
+          etapa: '—',
+          servidor: String(params.servidor || '').trim() || '—',
+          motivo: _motivoCorrecaoResponsavel_(antesInt, servInt, antesExt, servExtVal, ehPE)
+        });
+      }
+
+      return { ok: true, avisos: avisos, retroativo: procConcluido };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
 }
