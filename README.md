@@ -100,7 +100,7 @@ Regras:
 - A mesma lista aparece no app, na aba **Pontuacao** da central de notificacoes (visivel so para a chefia). Clicar leva direto a fase correspondente da aba Capacidade.
 - Em Configuracoes ha o botao **Cobrar pontuacao agora**, para disparo manual.
 
-> Quem instalou os acionadores antes desta versao precisa clicar em **Reinstalar trigger**: os avisos de prazo continuam funcionando, mas o acionador da cobranca de pontuacao so passa a existir depois da reinstalacao. O app sinaliza isso em Configuracoes.
+A cobranca **nao depende** de reinstalar acionador: quando o acionador proprio das 9h30 nao existe (projetos cujos triggers foram instalados antes desta versao), a varredura roda junto com o aviso de prazo das 10h30. Reinstalar o trigger so antecipa o horario — o app mostra em Configuracoes qual dos dois esta valendo. Rodar duas vezes no mesmo dia e inofensivo: a trava de um e-mail por processo/fase por dia vale para as duas execucoes.
 
 ## Configuracao
 
