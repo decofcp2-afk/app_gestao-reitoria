@@ -167,5 +167,32 @@ Firestore. Corrigido para Title Case por palavra, espelhando `_fsNomeServ_`
 (apps-script/FirestoreSync.gs) — a mesma regra passou a ser usada nos 5 outros
 pontos do código (Code.gs e FirestoreSync.gs) que tinham a mesma conta errada.
 
+### `pontuacao-pendente.test.js` — cobrança de pontuação (`pontuacoesPendentes`)
+A pontuação de carga é lançada num segundo passo, depois do cadastro, e é o
+passo que mais escapa. Sem ela o processo **não entra no cálculo da
+Capacidade**: o setor aparece com folga que não tem e a distribuição de novos
+processos é feita sobre um número subestimado. A varredura alimenta a aba
+"Pontuação" do sino e a cobrança diária por e-mail (`_pontuacoesPendentes_`,
+`apps-script/Code.gs` — espelho desta função). O risco da regra não é deixar de
+cobrar, é cobrar o que **nunca** vai ser pontuado, porque aí a cobrança diária
+vira ruído permanente — por isso a maioria dos testes fixa as exclusões:
+processo concluído, processo devolvido à fila, fase inteira "Não se aplica"
+(a fase externa de uma contratação direta sem disputa, cuja carga nasce no
+cadastro) e carga órfã. Cobre também: processo recém-cadastrado (sem D0) é
+cobrado e vem primeiro na lista, e a pendência some assim que qualquer critério
+recebe pontos.
+
+### `responsavel-processo.test.js` — responsável exibido no topo do processo
+Em processo concluído, o app mostrava ora o responsável da fase interna (quem
+iniciou), ora um rótulo de setor ("DIAD/DECOF"), ora ninguém. Concluído não tem
+etapa atual, então a tela sempre caía no fallback `servidor || servidorExt` — e
+esse fallback aceitava qualquer texto do campo Agente da etapa, inclusive nome
+de setor. Os testes fixam `nomeRespGenerico` (quais nomes não identificam
+pessoa) e o efeito em `construir()`: `srvInt`/`srvExt` nunca recebem rótulo de
+setor, um agente genérico numa etapa não impede achar a pessoa em outra etapa da
+mesma fase, e `temFaseExterna` sinaliza quando a fase externa não se aplica. A
+montagem das tags (`responsaveisExibidos_`/`tagsResponsaveisHtml_`, no
+`index.html`) espelha essa regra.
+
 ### `helpers.js`
 Builders dos dados simulados (cargas, etapas, processos, servidores).

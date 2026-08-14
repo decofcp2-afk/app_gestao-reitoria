@@ -554,6 +554,10 @@
       <button class="notif-tab" id="notif-tab-prox" onclick="setNotifCat_('prox')">
         Prazos próximos <span class="notif-tab-count" id="notif-cnt-prox">0</span>
       </button>
+      <!-- Só para a chefia: processos sem pontuação de carga (ver renderNotif_). -->
+      <button class="notif-tab" id="notif-tab-pont" onclick="setNotifCat_('pont')" hidden>
+        Pontuação <span class="notif-tab-count" id="notif-cnt-pont">0</span>
+      </button>
     </div>
     <div class="notif-body" id="notif-body"></div>
   </div>
@@ -594,11 +598,12 @@
       <div class="cfg-card">
         <div class="cfg-row cfg-row-col">
           <label>Avisos segunda a sexta</label>
-          <span class="note">Instala acionadores para prazos próximos às 10h30 e etapas vencidas às 14h, no fuso do projeto. O requisitante acompanha o lote correspondente quando houver e-mail cadastrado. O remetente é a conta que instalou os acionadores.</span>
+          <span class="note">Instala acionadores para prazos próximos às 10h30, etapas vencidas às 14h e cobrança de pontuação pendente às 9h30, no fuso do projeto. O requisitante acompanha o lote correspondente quando houver e-mail cadastrado. O remetente é a conta que instalou os acionadores.</span>
           <div class="cfg-actions">
             <button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar trigger</button>
             <button class="btn-cfg" id="btn-trigger-test" onclick="testarEmailAvisos()">Testar e-mail</button>
             <button class="btn-cfg" id="btn-trigger-run" onclick="executarAvisosAgora()">Enviar avisos agora</button>
+            <button class="btn-cfg" id="btn-pont-run" onclick="executarCobrancaPontuacaoAgora()">Cobrar pontuação agora</button>
             <span id="trigger-ok"></span>
           </div>
         </div>
@@ -811,6 +816,18 @@
   </div>
   <div class="step-body" id="pont-body" style="padding:16px;"></div>
   <div class="conc-footer" id="pont-footer"></div>
+</div>
+
+<!-- ═══════════ MODAL: RETORNO PARA A FILA (motivo + aviso por e-mail) ═══════ -->
+<div id="ov-fila-ret" class="overlay"></div>
+<div id="modal-fila-ret" class="sheet" style="border-radius:0;top:0;max-height:100vh;">
+  <div class="conc-topbar">
+    <button class="btn-back" onclick="voltarOuFecharFilaRet_()">‹</button>
+    <span class="conc-topbar-title" id="fila-ret-titulo">Voltar processo para a fila</span>
+    <span style="font-size:12px;color:var(--muted);" id="fila-ret-step-lbl"></span>
+  </div>
+  <div class="step-body" id="fila-ret-body" style="padding:16px;"></div>
+  <div class="conc-footer" id="fila-ret-footer"></div>
 </div>
 
 <!-- ══════════════════════════════ TOAST ══════════════════════════════ -->
@@ -1210,7 +1227,7 @@ function salvarCacheOffline_() {
     data: DATA || [],
     fila: FILA || [],
     calendario: { feriados: Object.keys(CALENDARIO_FERIADOS || {}), municipio: CALENDARIO_MUNICIPIO, modoContagem: MODO_CONTAGEM_PRAZOS },
-    notificacoes: NOTIF || { prox: [], venc: [] },
+    notificacoes: NOTIF || { prox: [], venc: [], pont: [] },
     diasAviso: NOTIF_DIAS_AVISO,
     triggerStatus: TRIGGER_STATUS
   };
@@ -1237,7 +1254,8 @@ function aplicarCacheOffline_(cache, detalhe) {
   OFFLINE_LAST_SYNC = cache.ts || '';
   DATA = cache.data || [];
   FILA = cache.fila || [];
-  NOTIF = cache.notificacoes || { prox: [], venc: [] };
+  NOTIF = cache.notificacoes || { prox: [], venc: [], pont: [] };
+  if (!NOTIF.pont) NOTIF.pont = [];
   NOTIF_DIAS_AVISO = cache.diasAviso || NOTIF_DIAS_AVISO || 3;
   TRIGGER_STATUS = cache.triggerStatus === undefined ? null : cache.triggerStatus;
   if (cache.calendario) aplicarCalendario_(cache.calendario);
@@ -1291,7 +1309,10 @@ function abrirDialogo_(opts, cb) {
   document.getElementById('dlg-title').textContent = opts.titulo || 'Confirmar';
   document.getElementById('dlg-msg').textContent = opts.mensagem || '';
   document.getElementById('dlg-ok').textContent = opts.ok || 'Confirmar';
-  document.getElementById('dlg-cancel').textContent = opts.cancelar || 'Cancelar';
+  var btnCancel = document.getElementById('dlg-cancel');
+  btnCancel.textContent = opts.cancelar || 'Cancelar';
+  // Diálogo informativo (só dá ciência, não há o que cancelar).
+  btnCancel.hidden = !!opts.somenteOk;
   var wrap = document.getElementById('dlg-field-wrap');
   if (opts.campo) {
     var tag = opts.textarea ? 'textarea' : 'input';
@@ -1921,6 +1942,61 @@ function servTagHtml_(nome) {
   return '<span style="'+servTagStyle_(sd)+'">'+esc(nome)+'</span>';
 }
 
+// Rótulo de setor/equipe digitado no campo Agente ("DIAD/DECOF", "Equipe de
+// Planejamento") não identifica pessoa e não deve aparecer como responsável.
+// Espelha nomeRespGenerico (appsel-firestore.js) e respGenerico_ (Code.gs).
+function respGenerico_(nome) {
+  var n = String(nome || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (!n) return true;
+  return n.indexOf('equipe') >= 0 || n.indexOf('planejamento') >= 0
+    || n.indexOf('decof') >= 0 || n.indexOf('diad') >= 0 || n.indexOf('setor') >= 0;
+}
+
+// Responsáveis a exibir no topo do processo.
+//   • Em andamento: quem responde pela FASE CORRENTE (comportamento de sempre).
+//   • Concluído: não existe fase corrente, então mostra quem respondeu por cada
+//     fase — interna e externa. Antes caía no fallback e exibia sempre o
+//     responsável da fase interna (quem iniciou), ou um rótulo genérico.
+// Devolve [{nome, fase}] já sem nomes genéricos.
+function responsaveisExibidos_(p) {
+  var out = [];
+  function push(nome, fase) {
+    nome = String(nome || '').trim();
+    if (!nome || respGenerico_(nome)) return;
+    if (out.some(function(o){ return _mesmoServ_(o.nome, nome); })) return;
+    out.push({ nome: nome, fase: fase });
+  }
+  if (p.status === 'ok') {
+    push(p.servidor, 'Fase interna');
+    push(p.servidorExt, 'Fase externa');
+    return out;
+  }
+  var etAtual = p.etapaAtualIdx >= 0 ? p.etapas[p.etapaAtualIdx] : null;
+  var extAtiva = !!(etAtual && String(etAtual.fase || '').toLowerCase().indexOf('ext') >= 0);
+  push(extAtiva ? (p.servidorExt || p.servidor) : (p.servidor || p.servidorExt), extAtiva ? 'Fase externa' : 'Fase interna');
+  return out;
+}
+
+// Tags de responsável do card/cabeçalho. `onclickTroca` só é ligado quando a
+// troca faz sentido (processo em andamento e usuário com permissão).
+function tagsResponsaveisHtml_(p, idx, permiteTroca) {
+  var resps = responsaveisExibidos_(p);
+  if (!resps.length) {
+    return permiteTroca
+      ? '<span style="background:var(--bg);color:var(--muted);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;cursor:pointer;" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">+ Atribuir</span>'
+      : '';
+  }
+  var mostraFase = resps.length > 1;
+  return resps.map(function(r) {
+    var sd = SERV_DATA.find(function(s){ return _mesmoServ_(s.nome, r.nome); }) || { cor: '#6b7280' };
+    var rotulo = mostraFase ? (r.fase === 'Fase externa' ? 'Ext · ' : 'Int · ') + r.nome : r.nome;
+    return '<span title="' + esc(r.fase) + (permiteTroca ? ' — clique para trocar responsável' : '') + '" style="' + servTagStyle_(sd)
+      + (permiteTroca ? 'cursor:pointer;' : '') + '"'
+      + (permiteTroca ? ' onclick="event.stopPropagation();abrirTrocaServ(' + idx + ')"' : '')
+      + '>' + esc(rotulo) + '</span>';
+  }).join('');
+}
+
 // Aplica SERV_DATA aos globals derivados (SERV_CLS, CHEFES) e atualiza a UI
 function aplicarServidores_(lista) {
   SERV_DATA = lista;
@@ -2384,8 +2460,8 @@ function toggleHdrMenu_() {
 // ══════════════════════════════════════════════════════════════════════
 // CENTRAL DE NOTIFICAÇÕES
 // ══════════════════════════════════════════════════════════════════════
-var NOTIF = { prox: [], venc: [] };
-var NOTIF_CAT = 'venc'; // categoria ativa: 'venc' | 'prox'
+var NOTIF = { prox: [], venc: [], pont: [] };
+var NOTIF_CAT = 'venc'; // categoria ativa: 'venc' | 'prox' | 'pont' (só chefia)
 var NOTIF_PILHA_ABERTA = {}; // chave "cat:processoId" → true quando a pilha está expandida
 
 function _normNomeNotif_(s) {
@@ -2445,7 +2521,9 @@ function sincronizarNotificacoesLocais_(salvar) {
     atualizarBadgeNotif_();
     return;
   }
+  var pontAtual = NOTIF.pont || [];
   NOTIF = _coletarNotificacoesLocais_();
+  NOTIF.pont = pontAtual;   // prazos são recalculados local; pontuação vem do Firestore/servidor
   atualizarBadgeNotif_();
   var panel = document.getElementById('notif-panel');
   if (panel && !panel.hidden) renderNotif_();
@@ -2475,16 +2553,48 @@ function carregarNotificacoes_() {
     })
     .withFailureHandler(function() { /* silencioso — central é auxiliar */ })
     .getAlertasApp(AUTH_TOKEN);
+  carregarPontuacoesPendentes_();
+}
+
+// Pontuação pendente: o mesmo alerta que a chefia recebe por e-mail, dentro do
+// app. Só faz sentido para quem pontua, então some para os demais perfis.
+function carregarPontuacoesPendentes_() {
+  if (!isChefeAtual_()) { NOTIF.pont = []; atualizarBadgeNotif_(); return; }
+  function aplicar(lista) {
+    NOTIF.pont = lista || [];
+    atualizarBadgeNotif_();
+    var panel = document.getElementById('notif-panel');
+    if (panel && !panel.hidden) renderNotif_();
+    salvarCacheOffline_();
+  }
+  var temFs = window.AppselFirestore && window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo
+    && window.APPSEL_CONFIG.firebase && window.firebase;
+  if (temFs) {
+    window.AppselFirestore.carregarPontuacoesPendentes()
+      .then(aplicar)
+      .catch(function() { /* silencioso — central é auxiliar */ });
+    return;
+  }
+  google.script.run
+    .withSuccessHandler(function(r) { if (r && r.ok) aplicar(r.pendentes); })
+    .withFailureHandler(function() { /* silencioso */ })
+    .getPontuacoesPendentesApp(AUTH_TOKEN);
 }
 
 function atualizarBadgeNotif_() {
-  var total = NOTIF.venc.length + NOTIF.prox.length;
+  var nPont = (NOTIF.pont || []).length;
+  var total = NOTIF.venc.length + NOTIF.prox.length + nPont;
   var badge = document.getElementById('notif-badge');
   if (!badge) return;
   badge.textContent = total > 99 ? '99+' : String(total);
   badge.hidden = total === 0;
   document.getElementById('notif-cnt-venc').textContent = NOTIF.venc.length;
   document.getElementById('notif-cnt-prox').textContent = NOTIF.prox.length;
+  var tabPont = document.getElementById('notif-tab-pont');
+  if (tabPont) {
+    tabPont.hidden = !isChefeAtual_();
+    document.getElementById('notif-cnt-pont').textContent = nPont;
+  }
 }
 
 function toggleNotif_() {
@@ -2494,7 +2604,8 @@ function toggleNotif_() {
 
 function abrirNotif_() {
   // Abre na categoria com itens; prioriza Vencidos
-  NOTIF_CAT = NOTIF.venc.length ? 'venc' : (NOTIF.prox.length ? 'prox' : 'venc');
+  NOTIF_CAT = NOTIF.venc.length ? 'venc'
+    : (NOTIF.prox.length ? 'prox' : ((NOTIF.pont || []).length && isChefeAtual_() ? 'pont' : 'venc'));
   NOTIF_PILHA_ABERTA = {}; // pilhas começam recolhidas a cada abertura
   document.getElementById('notif-ov').hidden = false;
   document.getElementById('notif-panel').hidden = false;
@@ -2512,6 +2623,8 @@ function setNotifCat_(cat) {
   NOTIF_CAT = cat;
   document.getElementById('notif-tab-venc').classList.toggle('active', cat === 'venc');
   document.getElementById('notif-tab-prox').classList.toggle('active', cat === 'prox');
+  var tabPont = document.getElementById('notif-tab-pont');
+  if (tabPont) tabPont.classList.toggle('active', cat === 'pont');
   renderNotif_();
 }
 
@@ -2563,6 +2676,7 @@ function toggleNotifPilha_(chave) {
 function renderNotif_() {
   var cont = document.getElementById('notif-body');
   if (!cont) return;
+  if (NOTIF_CAT === 'pont') { renderNotifPontuacao_(cont); return; }
   var lista = NOTIF_CAT === 'venc' ? NOTIF.venc : NOTIF.prox;
   var ehVenc = NOTIF_CAT === 'venc';
 
@@ -2643,6 +2757,39 @@ function renderNotif_() {
 function abrirNotifItem_(pid) {
   fecharNotif_();
   abrirProcessoPorId_(pid);
+}
+
+// Aba "Pontuação": processos sem pontuação de carga. Sem ela o processo não
+// entra no cálculo da Capacidade e o setor aparece com folga que não tem.
+function renderNotifPontuacao_(cont) {
+  var lista = NOTIF.pont || [];
+  if (!lista.length) {
+    cont.innerHTML = '<div class="notif-empty"><div class="notif-empty-ic">⚖️</div>'
+      + 'Todos os processos ativos estão pontuados.</div>';
+    return;
+  }
+  var html = '<div style="padding:10px 12px;margin:0 0 8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:12px;color:#991b1b;line-height:1.45;">'
+    + 'Sem pontuação, estes processos <b>não contam na Capacidade</b> — a carga do setor aparece menor do que é.'
+    + '</div>';
+  lista.forEach(function(it) {
+    var proc = it.num ? (it.num + ' · ' + (it.objeto || '')) : (it.objeto || it.pid);
+    html += '<div class="notif-item" style="border-left-color:var(--amber);cursor:pointer;" onclick="abrirNotifPontuacao_(\'' + escJsAttr(it.fase) + '\')">'
+      + '<div class="notif-item-body">'
+      + '<div class="notif-item-proc">' + esc(proc) + '</div>'
+      + '<div class="notif-item-etapa">' + esc(it.faseLabel) + (it.servidor ? ' · ' + esc(it.servidor) : '') + '</div>'
+      + '<div class="notif-item-prazo" style="color:var(--amber)">'
+      + (it.iniciado ? 'Em andamento sem pontuação' : 'Na fila, ainda sem pontuação') + '</div>'
+      + '</div></div>';
+  });
+  cont.innerHTML = html;
+}
+
+function abrirNotifPontuacao_(fase) {
+  fecharNotif_();
+  var btn = document.getElementById(fase === 'ext' ? 'cap-btn-ext' : 'cap-btn-int');
+  switchTab('capacidade');
+  // Abre já na fase da pendência — é onde está o botão "✏️ Pontuar".
+  if (btn) switchCapPhase(btn);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -2864,11 +3011,9 @@ function renderEtapas(filtrado) {
       var pct   = p.execucao;
       var idx   = DATA.indexOf(p);
       var alerta = (p.status !== 'aguardando' && p.status !== 'paralisado') && temPrazoVencido(p);
-      var extAtiva = p.etapaAtualIdx >= 0 && p.etapas[p.etapaAtualIdx] && (p.etapas[p.etapaAtualIdx].fase||'').toLowerCase().indexOf('ext') >= 0;
-      var respAtual = extAtiva ? (p.servidorExt || p.servidor || '') : (p.servidor || p.servidorExt || '');
-      var ownerHtml = respAtual
-        ? '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return _mesmoServ_(s.nome, respAtual);})||{cor:'#6b7280'})+';cursor:pointer;" title="Clique para trocar responsável" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">'+esc(respAtual)+'</span>'
-        : (isChefeAtual_() ? '<span style="background:var(--bg);color:var(--muted);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;cursor:pointer;" onclick="event.stopPropagation();abrirTrocaServ('+idx+')">+ Atribuir</span>' : '');
+      // Concluído já não tem responsável a trocar — as tags viram só registro
+      // de quem respondeu por cada fase.
+      var ownerHtml = tagsResponsaveisHtml_(p, idx, p.status !== 'ok' && isChefeAtual_());
       out += '<div class="proc-card" onclick="abrirProcesso(' + idx + ')" style="'+(alerta?'border-left:4px solid #f59e0b;':'')+'">'
         + (alerta ? '<div class="proc-warn-badge" title="Prazo vencido — informe o motivo">!</div>' : '')
         + '<div class="proc-card-top">'
@@ -2906,8 +3051,7 @@ function abrirProcesso(idx) {
   var p    = PROC_ATI;
   var hoje = new Date(); hoje.setHours(0,0,0,0);
 
-  var extAtivo = p.servidorExt && p.etapaAtualIdx >= 0 && p.etapas[p.etapaAtualIdx] && (p.etapas[p.etapaAtualIdx].fase||'').toLowerCase().indexOf('ext') >= 0;
-  var respAtualModal = extAtivo ? (p.servidorExt || p.servidor || '') : (p.servidor || p.servidorExt || '');
+  var tagsRespModal = tagsResponsaveisHtml_(p, idx, false);
   document.getElementById('proc-header').innerHTML =
     '<div class="proc-header-top">'
     + '<button class="proc-back" onclick="fecharProc()" aria-label="Voltar para a lista de processos">'
@@ -2919,9 +3063,7 @@ function abrirProcesso(idx) {
     + '<div class="proc-header-text">'
     + '<div class="sheet-title">' + esc(p.nome) + '</div>'
     + '<div class="sheet-sub">' + esc(p.num||p.id) + ' · ' + esc(p.modal||'') + ' · ' + esc(p.req||'') + '</div>'
-    + (respAtualModal ? '<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">'
-        + '<span style="'+servTagStyle_(SERV_DATA.find(function(s){return _mesmoServ_(s.nome, respAtualModal);})||{cor:'#6b7280'})+'">'+esc(respAtualModal)+'</span>'
-        + '</div>' : '')
+    + (tagsRespModal ? '<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">' + tagsRespModal + '</div>' : '')
     + '</div></div>';
 
   var body = '<div style="margin-bottom:14px;">'
@@ -3355,43 +3497,286 @@ function editarLinkSuapProcAtivo_() {
   });
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// RETORNO PARA A FILA (motivo + aviso por e-mail)
+//
+// A justificativa que a chefia já digitava ficava só no histórico: o servidor
+// responsável e o setor requisitante descobriam a parada quando cobravam o
+// andamento. Agora o mesmo texto vira comunicação, com redação adaptada ao
+// motivo escolhido e revisável antes do envio.
+//
+// Catálogo espelhado em MOTIVOS_RETORNO_FILA (Code.gs) — o backend refaz o
+// texto padrão quando a chefia não edita nada, então os dois precisam bater.
+// ══════════════════════════════════════════════════════════════════════
+var MOTIVOS_FILA = [
+  { chave:'documentacao', rotulo:'Pendência de documentação do setor requisitante', emoji:'📄',
+    servidor:'O processo saiu do andamento porque depende de documentação ou de esclarecimentos do setor requisitante. Você não precisa tomar nenhuma providência enquanto ele estiver na fila.',
+    requisitante:'O processo foi retirado do andamento porque depende de documentação ou de esclarecimentos do setor de origem. A retomada acontece assim que a pendência for regularizada.',
+    cobraRequisitante:true },
+  { chave:'suspensao', rotulo:'Suspensão por decisão da Administração', emoji:'⛔',
+    servidor:'O processo foi suspenso por decisão da Administração e volta para a fila até nova determinação.',
+    requisitante:'O processo foi suspenso por decisão da Administração. A instrução fica interrompida até nova determinação superior.',
+    cobraRequisitante:false },
+  { chave:'orcamento', rotulo:'Indisponibilidade orçamentária', emoji:'💰',
+    servidor:'O processo volta para a fila por indisponibilidade orçamentária. A instrução é retomada quando houver disponibilidade.',
+    requisitante:'O processo foi retirado do andamento por indisponibilidade orçamentária. A instrução é retomada assim que houver disponibilidade para a contratação.',
+    cobraRequisitante:false },
+  { chave:'terceiros', rotulo:'Aguardando manifestação externa (Procuradoria, órgão ou fornecedor)', emoji:'⏳',
+    servidor:'O processo depende de manifestação externa ao setor e fica na fila até a resposta chegar.',
+    requisitante:'O processo depende de manifestação de instância externa ao setor de licitações. Ele permanece na fila até a resposta ser juntada aos autos.',
+    cobraRequisitante:false },
+  { chave:'prioridade', rotulo:'Repriorização da carga de trabalho do setor', emoji:'🔀',
+    servidor:'O processo volta para a fila por repriorização da carga do setor. Os pontos dele saem da sua capacidade até a retomada.',
+    requisitante:'O processo retornou para a fila de espera do setor de licitações por repriorização da carga de trabalho. Ele mantém a posição na fila e é retomado conforme a disponibilidade da equipe.',
+    cobraRequisitante:false },
+  { chave:'desistencia', rotulo:'Desistência ou cancelamento da demanda', emoji:'🚫',
+    servidor:'A demanda foi cancelada pelo setor requisitante. O processo sai do andamento e não gera mais prazos.',
+    requisitante:'Registramos a desistência/cancelamento da demanda. O processo sai do andamento e não gera mais prazos. Havendo interesse futuro, será necessária nova solicitação.',
+    cobraRequisitante:false },
+  { chave:'outro', rotulo:'Outro motivo', emoji:'📌',
+    servidor:'O processo saiu do andamento e voltou para a fila. Veja abaixo a justificativa registrada pela chefia.',
+    requisitante:'O processo saiu do andamento e voltou para a fila do setor de licitações. Veja abaixo a justificativa registrada.',
+    cobraRequisitante:false }
+];
+
+function motivoFila_(chave) {
+  return MOTIVOS_FILA.find(function(m){ return m.chave === chave; }) || MOTIVOS_FILA[MOTIVOS_FILA.length - 1];
+}
+
+var FILA_RET = null;      // estado do fluxo de retorno para a fila
+var FILA_RET_STEP = 1;
+
 function devolverProcFilaAtual_() {
   var p = PROC_ATI;
   if (!p || !isChefeAtual_()) return;
-  dialogoCampo_({
-    titulo: 'Voltar processo para a fila',
-    mensagem: 'Informe por que este processo deve sair do andamento e voltar para a fila.\nEx.: processo suspenso, paralisado, devolvido pelo setor ou desistência.',
-    placeholder: 'Descreva o motivo do retorno para a fila...',
-    textarea: true,
-    ok: 'Continuar'
-  }, function(motivo) {
-    if (motivo.length < 8) {
-      toast('Informe uma justificativa um pouco mais completa.', 'err');
-      return;
-    }
-    dialogoConfirmar_(
-      'Confirmar retorno à fila',
-      'O processo sairá da lista de andamento e aparecerá na aba Fila. O status atual, o D0 e as etapas já concluídas serão preservados; os avisos de atraso ficarão suspensos enquanto ele estiver na fila.',
-      function() {
-        google.script.run
-          .withSuccessHandler(function(res) {
-            if (res && res.ok) {
-              toast('↩ Processo retornado para a fila.', 'ok');
-              fecharProc();
-              HIST_CARREGADO = false;
-              atualizarCapacidadeAposMudanca_();
-              FILA_ORDER = []; FILA_SEL = {}; FILA_SERV = {}; FILA_D0 = {}; FILA_EXPAND = {};
-              setTimeout(function() { carregarDados(); switchTab('fila'); }, 700);
-            } else {
-              toast('Erro: ' + (res && res.erro ? res.erro : 'Não foi possível retornar para a fila.'), 'err');
-            }
-          })
-          .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), 'err'); })
-          .devolverProcessoFilaApp({ processoId: p.id, servidor: SERVIDOR, motivo: motivo, authToken: AUTH_TOKEN });
-      },
-      'Voltar para fila'
-    );
+  var resps = responsaveisExibidos_(p);
+  FILA_RET = {
+    p: p,
+    categoria: '',
+    motivo: '',
+    previsao: '',
+    servidorAlvo: resps.length ? resps[resps.length - 1].nome : '',
+    temEmailReq: !!(p.emailR && p.emailR.indexOf('@') > 0),
+    avisarServidor: true,
+    avisarRequisitante: !!(p.emailR && p.emailR.indexOf('@') > 0),
+    textoServidor: '',
+    textoRequisitante: '',
+    textoEditado: false
+  };
+  FILA_RET_STEP = 1;
+  document.getElementById('fila-ret-titulo').textContent = p.nome || 'Voltar para a fila';
+  document.getElementById('ov-fila-ret').classList.add('open');
+  document.getElementById('modal-fila-ret').classList.add('open');
+  renderFilaRet_();
+}
+
+function fecharFilaRet_() {
+  document.getElementById('ov-fila-ret').classList.remove('open');
+  document.getElementById('modal-fila-ret').classList.remove('open');
+  FILA_RET = null;
+}
+
+function voltarOuFecharFilaRet_() {
+  if (FILA_RET_STEP === 2) { FILA_RET_STEP = 1; renderFilaRet_(); return; }
+  fecharFilaRet_();
+}
+
+function renderFilaRet_() {
+  if (!FILA_RET) return;
+  document.getElementById('fila-ret-step-lbl').textContent = 'Passo ' + FILA_RET_STEP + ' de 2';
+  if (FILA_RET_STEP === 1) renderFilaRetMotivo_(); else renderFilaRetPrevia_();
+}
+
+function renderFilaRetMotivo_() {
+  var st = FILA_RET;
+  var html = '<div class="pont-section">'
+    + '<div class="pont-section-title">1. Por que o processo sai do andamento?</div>'
+    + '<div style="font-size:12px;color:var(--text2);line-height:1.45;margin-bottom:10px;">'
+    + 'O motivo escolhido define o texto do aviso enviado ao servidor responsável e ao setor requisitante — você revisa tudo no passo seguinte.'
+    + '</div>';
+  MOTIVOS_FILA.forEach(function(m) {
+    html += '<label class="pont-option' + (st.categoria === m.chave ? ' selected' : '') + '">'
+      + '<input type="radio" name="fila-ret-cat" value="' + m.chave + '"' + (st.categoria === m.chave ? ' checked' : '')
+      + ' onchange="setFilaRetCategoria_(this.value)">'
+      + '<span class="pont-option-label">' + m.emoji + ' ' + esc(m.rotulo) + '</span>'
+      + '</label>';
   });
+  html += '</div>';
+
+  html += '<div class="pont-section">'
+    + '<div class="pont-section-title">2. Justificativa</div>'
+    + '<textarea id="fila-ret-motivo" class="field-input" rows="4" maxlength="600" '
+    + 'placeholder="Descreva a situação concreta: o que falta, quem decidiu, o que se espera para retomar…" '
+    + 'oninput="FILA_RET.motivo=this.value;FILA_RET.textoEditado=false;">' + esc(st.motivo) + '</textarea>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:5px;">Fica registrada no histórico do processo e no corpo dos e-mails.</div>'
+    + '</div>';
+
+  html += '<div class="pont-section">'
+    + '<div class="pont-section-title">3. Previsão de retomada <span style="font-weight:400;color:var(--muted);">(opcional)</span></div>'
+    + '<input type="date" id="fila-ret-previsao" class="field-input" value="' + esc(st.previsao) + '" '
+    + 'onchange="FILA_RET.previsao=this.value;FILA_RET.textoEditado=false;">'
+    + '</div>';
+
+  var nomeServ = st.servidorAlvo;
+  html += '<div class="pont-section">'
+    + '<div class="pont-section-title">4. Quem será avisado por e-mail</div>'
+    + '<label class="pont-option' + (st.avisarServidor && nomeServ ? ' selected' : '') + '"' + (nomeServ ? '' : ' style="opacity:.55;"') + '>'
+    + '<input type="checkbox"' + (st.avisarServidor && nomeServ ? ' checked' : '') + (nomeServ ? '' : ' disabled')
+    + ' onchange="FILA_RET.avisarServidor=this.checked;renderFilaRet_();">'
+    + '<span class="pont-option-label">👤 Servidor responsável'
+    + (nomeServ ? ' <b>' + esc(nomeServ) + '</b>' : ' <span style="color:var(--amber);">— nenhum responsável identificado</span>') + '</span>'
+    + '</label>'
+    + '<label class="pont-option' + (st.avisarRequisitante && st.temEmailReq ? ' selected' : '') + '"' + (st.temEmailReq ? '' : ' style="opacity:.55;"') + '>'
+    + '<input type="checkbox"' + (st.avisarRequisitante && st.temEmailReq ? ' checked' : '') + (st.temEmailReq ? '' : ' disabled')
+    + ' onchange="FILA_RET.avisarRequisitante=this.checked;renderFilaRet_();">'
+    + '<span class="pont-option-label">🏛️ Setor requisitante'
+    + (st.temEmailReq ? ' <b>' + esc(st.p.emailR) + '</b>' : ' <span style="color:var(--amber);">— sem e-mail cadastrado neste processo</span>') + '</span>'
+    + '</label>'
+    + '</div>';
+
+  document.getElementById('fila-ret-body').innerHTML = html;
+  document.getElementById('fila-ret-footer').innerHTML =
+    '<button class="btn-prim" onclick="avancarFilaRet_()">Revisar aviso ›</button>'
+    + '<button class="btn-sec" onclick="fecharFilaRet_()">Cancelar</button>';
+}
+
+function setFilaRetCategoria_(chave) {
+  FILA_RET.categoria = chave;
+  FILA_RET.textoEditado = false;   // muda o motivo → texto padrão é remontado
+  renderFilaRet_();
+}
+
+// Texto padrão de cada aviso. Espelha _textoPadraoRetornoFila_ (Code.gs): se a
+// chefia não editar nada, o backend gera exatamente este mesmo texto.
+function textoPadraoFila_(paraRequisitante) {
+  var m = motivoFila_(FILA_RET.categoria);
+  return paraRequisitante ? m.requisitante : m.servidor;
+}
+
+function avancarFilaRet_() {
+  var st = FILA_RET;
+  var campoMotivo = document.getElementById('fila-ret-motivo');
+  if (campoMotivo) st.motivo = campoMotivo.value;
+  if (!st.categoria) { toast('Escolha o motivo do retorno.', 'err'); return; }
+  if (String(st.motivo || '').trim().length < 8) {
+    toast('Informe uma justificativa um pouco mais completa.', 'err');
+    return;
+  }
+  if (!st.textoEditado) {
+    st.textoServidor = textoPadraoFila_(false);
+    st.textoRequisitante = textoPadraoFila_(true);
+  }
+  FILA_RET_STEP = 2;
+  renderFilaRet_();
+}
+
+function renderFilaRetPrevia_() {
+  var st = FILA_RET;
+  var m = motivoFila_(st.categoria);
+  var vaiServidor = st.avisarServidor && st.servidorAlvo;
+  var vaiReq = st.avisarRequisitante && st.temEmailReq;
+
+  var html = '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:#1e3a8a;line-height:1.45;">'
+    + 'Assunto dos e-mails: <b>↩ Processo retornado para a fila — ' + esc(st.p.nome || st.p.id) + '</b><br>'
+    + 'Cada mensagem leva também a ficha do processo, o motivo (<b>' + esc(m.rotulo) + '</b>) e a sua justificativa.'
+    + '</div>';
+
+  if (!vaiServidor && !vaiReq) {
+    html += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:#92400e;">'
+      + 'Nenhum destinatário selecionado. O retorno para a fila será registrado normalmente, mas <b>ninguém será avisado</b>.'
+      + '</div>';
+  }
+
+  if (vaiServidor) {
+    html += '<div class="pont-section">'
+      + '<div class="pont-section-title">👤 Mensagem para ' + esc(st.servidorAlvo) + '</div>'
+      + '<textarea id="fila-ret-txt-serv" class="field-input" rows="4" maxlength="900" '
+      + 'oninput="FILA_RET.textoServidor=this.value;FILA_RET.textoEditado=true;">' + esc(st.textoServidor) + '</textarea>'
+      + '</div>';
+  }
+  if (vaiReq) {
+    html += '<div class="pont-section">'
+      + '<div class="pont-section-title">🏛️ Mensagem para o setor requisitante</div>'
+      + '<textarea id="fila-ret-txt-req" class="field-input" rows="4" maxlength="900" '
+      + 'oninput="FILA_RET.textoRequisitante=this.value;FILA_RET.textoEditado=true;">' + esc(st.textoRequisitante) + '</textarea>'
+      + (m.cobraRequisitante
+          ? '<div style="font-size:11px;color:#991b1b;margin-top:5px;">Este motivo acrescenta ao e-mail um pedido explícito de regularização pelo setor de origem.</div>'
+          : '')
+      + '</div>';
+  }
+
+  html += '<div class="pont-section">'
+    + '<div class="pont-section-title">Justificativa registrada</div>'
+    + '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#78350f;white-space:pre-wrap;">'
+    + esc(st.motivo) + '</div>'
+    + (st.previsao ? '<div style="font-size:12px;color:var(--text2);margin-top:8px;">Previsão de retomada: <b>' + esc(isoToDisplay(st.previsao)) + '</b></div>' : '')
+    + '</div>';
+
+  html += '<div style="font-size:12px;color:var(--text2);line-height:1.45;border-top:1px solid var(--border);padding-top:12px;">'
+    + 'Ao confirmar: o processo sai da lista de andamento e aparece na aba Fila. O status atual, o D0 e as etapas já concluídas são preservados; '
+    + 'os pontos saem da Capacidade e os avisos de atraso ficam suspensos enquanto ele estiver na fila.'
+    + '</div>';
+
+  document.getElementById('fila-ret-body').innerHTML = html;
+  document.getElementById('fila-ret-footer').innerHTML =
+    '<button class="btn-prim" id="btn-fila-ret-ok" onclick="confirmarFilaRet_()">'
+    + (vaiServidor || vaiReq ? '✓ Retornar para a fila e avisar' : '✓ Retornar para a fila') + '</button>'
+    + '<button class="btn-sec" onclick="voltarOuFecharFilaRet_()">‹ Voltar</button>';
+}
+
+function confirmarFilaRet_() {
+  var st = FILA_RET;
+  if (!st) return;
+  var btn = document.getElementById('btn-fila-ret-ok');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        var av = res.avisos || { enviados: 0, falhas: [] };
+        toast(av.enviados
+          ? '↩ Processo na fila. ' + av.enviados + ' aviso' + (av.enviados > 1 ? 's enviados' : ' enviado') + '.'
+          : '↩ Processo retornado para a fila.', 'ok');
+        if (av.falhas && av.falhas.length) {
+          // O retorno já está gravado — a falha é só do e-mail, e a chefia
+          // precisa saber para avisar por fora.
+          abrirDialogo_({
+            titulo: 'Aviso não enviado',
+            mensagem: 'O processo voltou para a fila normalmente, mas alguns e-mails não saíram:\n\n• ' + av.falhas.join('\n• '),
+            ok: 'Entendi',
+            somenteOk: true
+          }, function(){});
+        }
+        fecharFilaRet_();
+        fecharProc();
+        HIST_CARREGADO = false;
+        atualizarCapacidadeAposMudanca_();
+        FILA_ORDER = []; FILA_SEL = {}; FILA_SERV = {}; FILA_D0 = {}; FILA_EXPAND = {};
+        setTimeout(function() { carregarDados(); switchTab('fila'); }, 700);
+      } else {
+        toast('Erro: ' + (res && res.erro ? res.erro : 'Não foi possível retornar para a fila.'), 'err');
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Retornar para a fila e avisar'; }
+      }
+    })
+    .withFailureHandler(function(e) {
+      toast('Erro: ' + (e.message || e), 'err');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Retornar para a fila e avisar'; }
+    })
+    .devolverProcessoFilaApp({
+      processoId: st.p.id,
+      servidor: SERVIDOR,
+      motivo: String(st.motivo || '').trim(),
+      categoria: st.categoria,
+      previsao: st.previsao || '',
+      // Vai explícito para o e-mail sair para quem a prévia mostrou: o backend
+      // sozinho só saberia o responsável da fase externa/interna, e não o da
+      // fase em curso.
+      servidorAlvo: st.servidorAlvo || '',
+      avisarServidor: !!(st.avisarServidor && st.servidorAlvo),
+      avisarRequisitante: !!(st.avisarRequisitante && st.temEmailReq),
+      textoServidor: st.textoServidor || '',
+      textoRequisitante: st.textoRequisitante || '',
+      authToken: AUTH_TOKEN
+    });
 }
 
 // Desfaz a conclusão de um processo inteiro reabrindo a ÚLTIMA etapa. Restrito
@@ -4347,18 +4732,40 @@ function confirmarFilaServ_() {
 function iniciarSelecionados_() {
   var selecionados = FILA_ORDER.filter(function(p){ return FILA_SEL[p.id]; });
   if (!selecionados.length) { toast('Selecione ao menos um processo.','err'); return; }
+  // Processo que estava parado por RETORNO gera aviso de retomada — quem foi
+  // comunicado da parada precisa saber que ele voltou a andar. Processo novo
+  // (nunca iniciado) não gera e-mail nenhum.
+  var retomados = selecionados.filter(function(p){ return isRetornoFila_(p); });
+  if (!retomados.length) { _iniciarSelecionadosEnviar_(selecionados, ''); return; }
+  dialogoCampo_({
+    titulo: 'Avisar sobre a retomada',
+    mensagem: retomados.length + ' processo' + (retomados.length > 1 ? 's voltam' : ' volta')
+      + ' da fila para o andamento. O servidor responsável e o setor requisitante serão avisados por e-mail.\n'
+      + 'Se quiser, acrescente uma observação ao aviso (opcional).',
+    placeholder: 'Ex.: documentação regularizada pelo setor em 12/08.',
+    textarea: true,
+    ok: 'Iniciar/Reativar'
+  }, function(obs) {
+    _iniciarSelecionadosEnviar_(selecionados, String(obs || '').trim());
+  });
+}
+
+function _iniciarSelecionadosEnviar_(selecionados, obsRetomada) {
   var hoje_ = new Date();
   var hojeStr_ = hoje_.getFullYear()+'-'+String(hoje_.getMonth()+1).padStart(2,'0')+'-'+String(hoje_.getDate()).padStart(2,'0');
   var params = selecionados.map(function(p) {
     var srv = FILA_SERV[p.id] || { int: p.servidor||'', ext: p.servidorExt||'' };
-    return { pid: p.id, d0: FILA_D0[p.id] || _d0FilaPadrao_(p, hojeStr_), servidor: srv.int, servidorExt: srv.ext, modal: p.modal };
+    return { pid: p.id, d0: FILA_D0[p.id] || _d0FilaPadrao_(p, hojeStr_), servidor: srv.int, servidorExt: srv.ext, modal: p.modal,
+             obsRetomada: obsRetomada || '' };
   });
   var btn = document.getElementById('btn-iniciar-fila');
   if (btn) { btn.disabled = true; btn.textContent = 'Iniciando…'; }
   google.script.run
     .withSuccessHandler(function(res) {
       if (res && res.ok) {
-        toast('✓ ' + res.iniciados + ' processo' + (res.iniciados>1?'s iniciados/reativados':' iniciado/reativado') + '!', 'ok');
+        var avR = res.avisos || { enviados: 0 };
+        toast('✓ ' + res.iniciados + ' processo' + (res.iniciados>1?'s iniciados/reativados':' iniciado/reativado') + '!'
+          + (avR.enviados ? ' ' + avR.enviados + ' aviso' + (avR.enviados>1?'s de retomada enviados':' de retomada enviado') + '.' : ''), 'ok');
         FILA_ORDER = []; FILA_SEL = {}; FILA_SERV = {}; FILA_D0 = {}; FILA_EXPAND = {};
         if (btn) { btn.disabled = false; btn.textContent = '▶ Iniciar/Reativar'; }
         setTimeout(carregarDados, 800);
@@ -4383,9 +4790,14 @@ function aplicarTriggerStatus_(r) {
   if (instalado) {
     btn.disabled = false;
     btn.textContent = 'Reinstalar trigger';
-    msg.style.color = 'var(--green)';
-    msg.textContent = '✓ Trigger instalado'
+    // Acionador de pontuação é posterior aos de prazo: quem instalou antes
+    // continua com os avisos funcionando, mas precisa reinstalar para receber
+    // a cobrança de pontuação — o aviso abaixo é o que torna isso visível.
+    var faltaPont = r.pontuacao === false;
+    msg.style.color = faltaPont ? 'var(--amber)' : 'var(--green)';
+    msg.textContent = (faltaPont ? '⚠ Trigger instalado, sem a cobrança de pontuação — reinstale' : '✓ Trigger instalado')
       + (r.hora ? ' · ' + r.hora : '')
+      + (!faltaPont && r.pontuacaoHora ? ' · pontuação ' + r.pontuacaoHora : '')
       + (r.dias ? ' · ' + r.dias : '')
       + (r.timezone ? ' · fuso ' + r.timezone : '');
   } else if (naoInstalado) {
@@ -4419,7 +4831,8 @@ function instalarTrigger() {
   btn.disabled = true; btn.textContent = 'Instalando…';
   google.script.run
     .withSuccessHandler(function(msg) {
-      aplicarTriggerStatus_({ instalado: true, hora: '10h30 prazos próximos; 14h etapas vencidas', dias: 'segunda a sexta-feira' });
+      aplicarTriggerStatus_({ instalado: true, hora: '10h30 prazos próximos; 14h etapas vencidas',
+        pontuacao: true, pontuacaoHora: '9h30', dias: 'segunda a sexta-feira' });
       document.getElementById('trigger-ok').textContent = '✓ ' + msg;
       if (DATA.length || FILA.length) aplicarFiltros();
     })
@@ -4473,6 +4886,31 @@ function executarAvisosAgora() {
           toast('Erro ao executar avisos: ' + (e.message || e), 'err');
         })
         .enviarAvisosPrazoApp(AUTH_TOKEN);
+    },
+    'Enviar'
+  );
+}
+
+function executarCobrancaPontuacaoAgora() {
+  if (!isChefeAtual_()) return;
+  dialogoConfirmar_(
+    'Cobrar pontuação agora',
+    'Um e-mail por processo sem pontuação é enviado à chefia. Cada processo é cobrado no máximo uma vez por dia, e a cobrança cessa assim que a pontuação for lançada.',
+    function() {
+      var btn = document.getElementById('btn-pont-run');
+      if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+      google.script.run
+        .withSuccessHandler(function(msg) {
+          if (btn) { btn.disabled = false; btn.textContent = 'Cobrar pontuação agora'; }
+          toast(msg || 'Rotina executada.', 'ok');
+          var out = document.getElementById('trigger-ok');
+          if (out) { out.style.color = 'var(--green)'; out.textContent = '✓ ' + (msg || 'Rotina executada.'); }
+        })
+        .withFailureHandler(function(e) {
+          if (btn) { btn.disabled = false; btn.textContent = 'Cobrar pontuação agora'; }
+          toast('Erro ao cobrar pontuação: ' + (e.message || e), 'err');
+        })
+        .enviarCobrancaPontuacaoApp(AUTH_TOKEN);
     },
     'Enviar'
   );
@@ -5208,6 +5646,7 @@ function salvarPontuacao_() {
         fecharPontuacao();
         toast('✓ Pontuação salva!', 'ok');
         CAP_CARREGADO = false; carregarCapacidade_();
+        carregarPontuacoesPendentes_();   // some do sino assim que a carga é pontuada
       } else {
         toast('Erro: '+(res&&res.erro?res.erro:'Tente novamente.'), 'err');
         if (btn) { btn.disabled=false; btn.textContent='✓ Salvar pontuação'; }

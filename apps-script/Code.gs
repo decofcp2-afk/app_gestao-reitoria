@@ -1052,6 +1052,8 @@ function _apiCallAppSEL_(method, args) {
     instalarTriggerAvisos: instalarTriggerAvisos,
     enviarEmailTesteServidor: enviarEmailTesteServidor,
     enviarAvisosPrazoApp: enviarAvisosPrazoApp,
+    enviarCobrancaPontuacaoApp: enviarCobrancaPontuacaoApp,
+    getPontuacoesPendentesApp: getPontuacoesPendentesApp,
     getAlertasApp: getAlertasApp,
     cadastrarProcesso: cadastrarProcesso,
     salvarOutrosCap: salvarOutrosCap,
@@ -1773,7 +1775,11 @@ function iniciarProcessos(params, authToken) {
     }
 
     var iniciados = 0;
+    var retomados = [];   // processos que estavam na fila por RETORNO (não os novos)
     params.forEach(function(item) {
+      var eraRetorno = false;
+      var nomePrimeiraEtapa = '';
+      var extPrimeiraEtapa = false;
       var d0Obj = new Date(item.d0 + 'T12:00:00');
       var modalidadeProc = modalPorPid[item.pid] || item.modal || '';
       var extSegregada = _isModalidadeExtSegregada_(modalidadeProc);
@@ -1808,10 +1814,11 @@ function iniciarProcessos(params, authToken) {
         // senão o processo continua detectado como retornado e não sai da fila.
         if (iMot >= 0 && _isRetornoFilaMotivo_(lE.values[j][iMot])) {
           shE.getRange(j + 1, iMot + 1).clearContent();
+          eraRetorno = true;
         }
         if (!primeiraEtapa && !_isEtapaContratual_(efaseRaw, enome)) {
           var stEt = iSta >= 0 ? _normStatus_(lE.values[j][iSta]) : 'pendente';
-          if (stEt !== 'ok' && stEt !== 'na') primeiraEtapa = j + 1;
+          if (stEt !== 'ok' && stEt !== 'na') { primeiraEtapa = j + 1; nomePrimeiraEtapa = enome; extPrimeiraEtapa = isExt; }
         }
       }
       if (primeiraEtapa && iSta >= 0) {
@@ -1821,10 +1828,35 @@ function iniciarProcessos(params, authToken) {
       }
       _setCapacidadeAtivo_(item.pid, 'interna', 'Sim');
       _setCapacidadeAtivo_(item.pid, 'externa', 'Não');
+      if (eraRetorno && item.avisarRetomada !== false) {
+        // Avisa quem assume a etapa que voltou a andar: um processo pode ter
+        // parado já na fase externa, e aí o responsável não é o da interna.
+        retomados.push({
+          pid: item.pid,
+          servidorAlvo: extPrimeiraEtapa
+            ? (extSegregada ? (item.servidorExt || '') : (item.servidorExt || item.servidor || ''))
+            : (item.servidor || item.servidorExt || ''),
+          etapa: nomePrimeiraEtapa,
+          observacao: String(item.obsRetomada || '')
+        });
+      }
     });
     _sincronizarCapacidadeComEtapas_();
     _limparCacheCapacidade_();
-    return { ok: true, iniciados: iniciados };
+
+    // Aviso de retomada: fecha o ciclo do e-mail de retorno para a fila — quem
+    // foi comunicado da parada precisa saber que o processo voltou a andar.
+    // Só para os retomados; iniciar processo novo não dispara e-mail.
+    var avisosRetomada = { enviados: 0, destinos: [], falhas: [] };
+    retomados.forEach(function(r) {
+      var resAv = _notificarRetomadaFila_({
+        pid: r.pid, servidorAlvo: r.servidorAlvo, etapa: r.etapa, observacao: r.observacao
+      });
+      avisosRetomada.enviados += resAv.enviados;
+      avisosRetomada.destinos = avisosRetomada.destinos.concat(resAv.destinos);
+      avisosRetomada.falhas = avisosRetomada.falhas.concat(resAv.falhas);
+    });
+    return { ok: true, iniciados: iniciados, retomados: retomados.length, avisos: avisosRetomada };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
 }
@@ -2599,6 +2631,654 @@ function enviarAvisosPrazoApp(authToken) {
   // Envio manual a partir do app: escopo da unidade do próprio chefe (já vem em
   // _FS_UNIDADE_REQ pela API), portanto não percorre as demais unidades.
   return enviarAvisosPrazo();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// AVISOS DE MOVIMENTAÇÃO DO PROCESSO (saída para a fila e retomada)
+//
+// Um processo que sai do andamento some da lista de quem o acompanha e para de
+// gerar aviso de prazo. Sem comunicação, o servidor responsável e o setor
+// requisitante só descobrem a parada quando cobram o andamento — às vezes
+// semanas depois. Estas rotinas transformam a justificativa que a chefia já
+// digitava (e que ficava só no histórico) na comunicação dos dois lados.
+//
+// O texto é ADAPTÁVEL: cada motivo do catálogo abaixo tem uma redação própria
+// para o servidor e outra para o setor requisitante, porque a providência
+// esperada muda conforme o motivo (documentação pendente cobra o setor;
+// suspensão por decisão da administração não cobra ninguém). A chefia ainda
+// pode editar o texto na prévia antes de enviar — o que vier editado do app
+// chega aqui em `textoServidor`/`textoRequisitante` e substitui o padrão.
+// ══════════════════════════════════════════════════════════════════════════
+
+// Catálogo espelhado no index.html (MOTIVOS_FILA). Ao mudar um item aqui,
+// mude lá também — o app monta a prévia com o mesmo texto que o backend usaria.
+var MOTIVOS_RETORNO_FILA = [
+  {
+    chave: 'documentacao',
+    rotulo: 'Pendência de documentação do setor requisitante',
+    emoji: '📄',
+    servidor: 'O processo saiu do andamento porque depende de documentação ou de esclarecimentos do setor requisitante. '
+      + 'Você não precisa tomar nenhuma providência enquanto ele estiver na fila.',
+    requisitante: 'O processo foi retirado do andamento porque depende de documentação ou de esclarecimentos do setor de origem. '
+      + 'A retomada acontece assim que a pendência for regularizada.',
+    cobraRequisitante: true
+  },
+  {
+    chave: 'suspensao',
+    rotulo: 'Suspensão por decisão da Administração',
+    emoji: '⛔',
+    servidor: 'O processo foi suspenso por decisão da Administração e volta para a fila até nova determinação.',
+    requisitante: 'O processo foi suspenso por decisão da Administração. A instrução fica interrompida até nova determinação superior.',
+    cobraRequisitante: false
+  },
+  {
+    chave: 'orcamento',
+    rotulo: 'Indisponibilidade orçamentária',
+    emoji: '💰',
+    servidor: 'O processo volta para a fila por indisponibilidade orçamentária. A instrução é retomada quando houver disponibilidade.',
+    requisitante: 'O processo foi retirado do andamento por indisponibilidade orçamentária. '
+      + 'A instrução é retomada assim que houver disponibilidade para a contratação.',
+    cobraRequisitante: false
+  },
+  {
+    chave: 'terceiros',
+    rotulo: 'Aguardando manifestação externa (Procuradoria, órgão ou fornecedor)',
+    emoji: '⏳',
+    servidor: 'O processo depende de manifestação externa ao setor e fica na fila até a resposta chegar.',
+    requisitante: 'O processo depende de manifestação de instância externa ao setor de licitações. '
+      + 'Ele permanece na fila até a resposta ser juntada aos autos.',
+    cobraRequisitante: false
+  },
+  {
+    chave: 'prioridade',
+    rotulo: 'Repriorização da carga de trabalho do setor',
+    emoji: '🔀',
+    servidor: 'O processo volta para a fila por repriorização da carga do setor. Os pontos dele saem da sua capacidade até a retomada.',
+    requisitante: 'O processo retornou para a fila de espera do setor de licitações por repriorização da carga de trabalho. '
+      + 'Ele mantém a posição na fila e é retomado conforme a disponibilidade da equipe.',
+    cobraRequisitante: false
+  },
+  {
+    chave: 'desistencia',
+    rotulo: 'Desistência ou cancelamento da demanda',
+    emoji: '🚫',
+    servidor: 'A demanda foi cancelada pelo setor requisitante. O processo sai do andamento e não gera mais prazos.',
+    requisitante: 'Registramos a desistência/cancelamento da demanda. O processo sai do andamento e não gera mais prazos. '
+      + 'Havendo interesse futuro, será necessária nova solicitação.',
+    cobraRequisitante: false
+  },
+  {
+    chave: 'outro',
+    rotulo: 'Outro motivo',
+    emoji: '📌',
+    servidor: 'O processo saiu do andamento e voltou para a fila. Veja abaixo a justificativa registrada pela chefia.',
+    requisitante: 'O processo saiu do andamento e voltou para a fila do setor de licitações. Veja abaixo a justificativa registrada.',
+    cobraRequisitante: false
+  }
+];
+
+function _motivoRetornoFila_(chave) {
+  var alvo = _normText_(chave);
+  for (var i = 0; i < MOTIVOS_RETORNO_FILA.length; i++) {
+    if (MOTIVOS_RETORNO_FILA[i].chave === alvo) return MOTIVOS_RETORNO_FILA[i];
+  }
+  return MOTIVOS_RETORNO_FILA[MOTIVOS_RETORNO_FILA.length - 1]; // 'outro'
+}
+
+function _mailEsc_(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Texto livre digitado pela chefia → HTML seguro, preservando as quebras.
+function _mailTexto_(s) {
+  return _mailEsc_(s).replace(/\r?\n/g, '<br>');
+}
+
+// Mesmo visual dos avisos de prazo (cabeçalho azul + moldura), para o
+// destinatário reconhecer a origem da mensagem.
+function _mailWrap_(titulo, subtitulo, corpoHtml) {
+  return '<div style="font-family:Arial,sans-serif;max-width:640px;color:#1e293b;line-height:1.45;">'
+    + '<div style="background:#1a3a5c;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0;">'
+    + (subtitulo ? '<p style="margin:0 0 5px;font-size:12px;opacity:.82;">' + _mailEsc_(subtitulo) + '</p>' : '')
+    + '<h2 style="margin:0;font-size:18px;">' + _mailEsc_(titulo) + '</h2>'
+    + '</div><div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:18px;">'
+    + corpoHtml
+    + '<br><br>Atenciosamente,<br><b>Gestão de Etapas - SEL</b>'
+    + '<br><span style="color:#64748b;font-size:12px;">Mensagem automática do Sistema.</span>'
+    + '</div></div>';
+}
+
+function _mailEmailValido_(e) {
+  e = String(e || '').trim();
+  return e.indexOf('@') > 0 && e.indexOf('COLE') !== 0;
+}
+
+function _mailEnviar_(dest, assunto, htmlBody) {
+  if (!_mailEmailValido_(dest)) return false;
+  try {
+    MailApp.sendEmail(String(dest).trim(), assunto, '', { htmlBody: htmlBody });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function _emailDoServidor_(nome) {
+  nome = String(nome || '').trim();
+  if (!nome) return '';
+  var mapa = _getEmails_({ isChefe: true, nome: 'Sistema' });
+  return mapa[nome] || _emailServidorFallback_(nome) || '';
+}
+
+// E-mails de todas as chefias da unidade (mesma regra da rotina de prazos).
+function _emailsDaChefia_() {
+  var emails = [];
+  _getServidoresApp_().forEach(function(s) {
+    if (!s.isChefe) return;
+    var em = _emailDoServidor_(s.nome);
+    if (_mailEmailValido_(em) && emails.indexOf(em) < 0) emails.push(em);
+  });
+  var fb = _chefiaEmailFallback_();
+  if (_mailEmailValido_(fb) && emails.indexOf(fb) < 0) emails.push(fb);
+  return emails;
+}
+
+// Dados do processo usados nos e-mails de movimentação, sem passar pela
+// varredura completa de prazos (que lê o setor inteiro): no Firestore lê o doc
+// e as cargas do processo; na planilha, a linha de Processos e os agentes.
+function _infoProcessoAviso_(pid) {
+  pid = String(pid || '').trim();
+  var info = { id: pid, objeto: '', num: '', linkSuap: '', setorReq: '', emailReq: '', servidorInt: '', servidorExt: '' };
+  if (!pid) return info;
+
+  if (typeof _fsServerAtivo_ === 'function' && _fsServerAtivo_() && typeof _fsGet_ === 'function') {
+    var doc = _fsGet_('processos/' + pid) || {};
+    info.objeto   = String(doc.objeto || '').trim();
+    info.num      = String(doc.suap || '').trim();
+    info.linkSuap = String(doc.linkSuap || '').trim();
+    info.setorReq = String(doc.setorRequisitante || '').trim();
+    info.emailReq = String(doc.emailRequisitante || '').trim();
+    if (typeof _fsQueryEq_ === 'function') {
+      _fsQueryEq_('cargas', 'processoId', pid).forEach(function(c) {
+        var serv = String(c.obj.servidor || '').trim();
+        if (!serv) return;
+        var ehExt = _normText_(c.obj.fase).indexOf('ext') >= 0;
+        var ativo = c.obj.ativo === true;
+        if (ehExt) { if (!info.servidorExt || ativo) info.servidorExt = serv; }
+        else       { if (!info.servidorInt || ativo) info.servidorInt = serv; }
+      });
+    }
+    return info;
+  }
+
+  var shP = _ss_().getSheetByName(ABA_PROC);
+  if (shP) {
+    var lP = _lerAba_(shP, 'ProcessoID');
+    var h = lP.header;
+    var iId = h.indexOf('ProcessoID');
+    var iObj = h.indexOf('Objeto');
+    var iSuap = h.indexOf('N° SUAP');
+    var iLink = h.indexOf('Link SUAP');
+    var iSetor = h.indexOf('Setor Requisitante');
+    var iEmail = h.indexOf('EmailRequisitante');
+    for (var r = lP.hIdx + 1; r < lP.values.length; r++) {
+      if (String(lP.values[r][iId] || '').trim() !== pid) continue;
+      if (iObj >= 0)   info.objeto = String(lP.values[r][iObj] || '').trim();
+      if (iSuap >= 0)  info.num = String(lP.values[r][iSuap] || '').trim();
+      if (iLink >= 0)  info.linkSuap = String(lP.values[r][iLink] || '').trim();
+      if (iSetor >= 0) info.setorReq = String(lP.values[r][iSetor] || '').trim();
+      if (iEmail >= 0) info.emailReq = String(lP.values[r][iEmail] || '').trim();
+      break;
+    }
+  }
+  var shE = _ss_().getSheetByName(ABA_ETP);
+  if (shE) {
+    var lE = _lerAba_(shE, 'ProcessoID');
+    var hE = lE.header;
+    var iPid = hE.indexOf('ProcessoID');
+    var iFase = hE.indexOf('Fase');
+    var iAg = hE.indexOf('Agente Responsável');
+    for (var e = lE.hIdx + 1; e < lE.values.length && iAg >= 0; e++) {
+      if (String(lE.values[e][iPid] || '').trim() !== pid) continue;
+      var ag = String(lE.values[e][iAg] || '').trim();
+      if (!ag || _respNomeGenerico_(ag)) continue;
+      var ext = iFase >= 0 && _normText_(lE.values[e][iFase]).indexOf('ext') >= 0;
+      if (ext) { if (!info.servidorExt) info.servidorExt = ag; }
+      else     { if (!info.servidorInt) info.servidorInt = ag; }
+    }
+  }
+  return info;
+}
+
+// Rótulo de setor/equipe no campo Agente ("DIAD/DECOF", "Equipe de
+// Planejamento") não identifica pessoa: não vira responsável nem destinatário.
+function _respNomeGenerico_(nome) {
+  var n = _normText_(nome);
+  if (!n) return true;
+  return n.indexOf('equipe') >= 0 || n.indexOf('planejamento') >= 0
+    || n.indexOf('decof') >= 0 || n.indexOf('diad') >= 0 || n.indexOf('setor') >= 0;
+}
+
+function _procRefHtmlAviso_(info) {
+  var nome = '<b>' + _mailEsc_(info.objeto || info.id) + '</b>';
+  if (!info.num) return nome;
+  var num = _mailEsc_(info.num);
+  var link = String(info.linkSuap || '').trim();
+  var numHtml = /^https?:\/\//i.test(link)
+    ? '<a href="' + _mailEsc_(link) + '" style="color:#1d4ed8;text-decoration:none;font-weight:700;">' + num + '</a>'
+    : '<b>' + num + '</b>';
+  return nome + ' (N° SUAP ' + numHtml + ')';
+}
+
+// Ficha do processo repetida nos dois e-mails (identifica sem obrigar o
+// destinatário a abrir o sistema).
+function _fichaProcessoHtml_(info, linhasExtras) {
+  var linhas = [
+    ['Processo', info.objeto || info.id],
+    ['N° SUAP', info.num || '—'],
+    ['Setor requisitante', info.setorReq || '—']
+  ].concat(linhasExtras || []);
+  var html = '<table style="width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;">';
+  linhas.forEach(function(l) {
+    if (!l || !l[1]) return;
+    html += '<tr>'
+      + '<td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;color:#64748b;white-space:nowrap;width:38%;">' + _mailEsc_(l[0]) + '</td>'
+      + '<td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;">' + _mailEsc_(l[1]) + '</td>'
+      + '</tr>';
+  });
+  return html + '</table>';
+}
+
+function _blocoJustificativaHtml_(titulo, texto) {
+  return '<div style="margin:14px 0;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:13px;">'
+    + '<div style="font-weight:700;color:#92400e;margin-bottom:5px;">' + _mailEsc_(titulo) + '</div>'
+    + '<div style="color:#78350f;white-space:pre-wrap;">' + _mailTexto_(texto) + '</div>'
+    + '</div>';
+}
+
+function _blocoPainelHtml_() {
+  return '<p style="margin:14px 0 0;padding:12px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:13px;">'
+    + '💡 Para acompanhar as etapas e os prazos deste e dos demais processos de contratação, acesse o nosso '
+    + '<a href="' + _mailEsc_(_painelUrl_()) + '" style="color:#1d4ed8;font-weight:700;">Painel de Contratações — Reitoria / SEL</a>.'
+    + '</p>';
+}
+
+var _CONTATO_HTML_ = 'Em caso de dúvidas, entre em contato através do e-mail '
+  + '<a href="mailto:central@cp2.g12.br" style="color:#1d4ed8;text-decoration:none;font-weight:700;">central@cp2.g12.br</a>.';
+
+// Texto padrão de cada aviso — o app monta o MESMO texto na prévia, e só manda
+// `textoServidor`/`textoRequisitante` de volta quando a chefia edita.
+function _textoPadraoRetornoFila_(motivo, paraRequisitante) {
+  return paraRequisitante ? motivo.requisitante : motivo.servidor;
+}
+
+// ── _notificarRetornoFila_ ───────────────────────────────────────────────
+// Chamada por devolverProcessoFilaApp / fs_devolverProcessoFilaApp depois de a
+// escrita ter dado certo. Nunca lança: o retorno para a fila já aconteceu, e
+// falha de e-mail não pode desfazer nem travar a operação — o resultado volta
+// no payload para o app avisar a chefia do que saiu.
+// params: {pid, categoria, motivo, previsao, textoServidor, textoRequisitante,
+//          avisarServidor, avisarRequisitante, chefe}
+function _notificarRetornoFila_(params) {
+  var res = { enviados: 0, destinos: [], falhas: [] };
+  try {
+    params = params || {};
+    var info = _infoProcessoAviso_(params.pid);
+    var motivo = _motivoRetornoFila_(params.categoria);
+    var justificativa = String(params.motivo || '').trim();
+    var previsao = String(params.previsao || '').trim();
+    var refHtml = _procRefHtmlAviso_(info);
+    var assuntoBase = '↩ Processo retornado para a fila — ' + (info.objeto || info.id);
+    var extras = [['Motivo', motivo.rotulo]];
+    if (previsao) extras.push(['Previsão de retomada', _isoParaBR_(previsao)]);
+
+    // 1. Servidor responsável pela fase em curso (o interno responde pelo
+    // processo quando não há responsável externo definido).
+    if (params.avisarServidor !== false) {
+      var nomeServ = String(params.servidorAlvo || '').trim()
+        || info.servidorExt || info.servidorInt || '';
+      var emailServ = _respNomeGenerico_(nomeServ) ? '' : _emailDoServidor_(nomeServ);
+      if (_mailEmailValido_(emailServ)) {
+        var corpoServ = '<p style="margin:0;">Prezado(a) ' + _mailEsc_(nomeServ) + ',</p>'
+          + '<p style="margin:10px 0 0;">' + refHtml + '</p>'
+          + '<p style="margin:10px 0 0;">' + _mailTexto_(String(params.textoServidor || '').trim() || _textoPadraoRetornoFila_(motivo, false)) + '</p>'
+          + _fichaProcessoHtml_(info, extras)
+          + (justificativa ? _blocoJustificativaHtml_('Justificativa registrada pela chefia', justificativa) : '')
+          + '<p style="margin:12px 0 0;font-size:13px;color:#475569;">'
+          + 'Enquanto o processo estiver na fila, os pontos dele saem da sua capacidade e os avisos automáticos de prazo ficam suspensos. '
+          + 'Você será avisado por e-mail quando ele for retomado.</p>';
+        if (_mailEnviar_(emailServ, assuntoBase, _mailWrap_('Gestão de Etapas - SEL', motivo.emoji + ' Processo retornado para a fila · Colégio Pedro II', corpoServ))) {
+          res.enviados++; res.destinos.push(nomeServ + ' <' + emailServ + '>');
+        } else {
+          res.falhas.push('Não foi possível enviar para o servidor responsável.');
+        }
+      } else if (nomeServ && _respNomeGenerico_(nomeServ)) {
+        // "DIAD/DECOF", "Equipe de Planejamento": é setor, não pessoa — não há
+        // caixa de e-mail para avisar.
+        res.falhas.push('O responsável cadastrado ("' + nomeServ + '") é um setor, não uma pessoa: ninguém foi avisado pela equipe.');
+      } else if (nomeServ) {
+        res.falhas.push('Servidor ' + nomeServ + ' está sem e-mail cadastrado.');
+      } else {
+        res.falhas.push('Processo sem servidor responsável identificado.');
+      }
+    }
+
+    // 2. Setor requisitante.
+    if (params.avisarRequisitante !== false) {
+      if (_mailEmailValido_(info.emailReq)) {
+        var corpoReq = '<p style="margin:0;">Prezado(a),</p>'
+          + '<p style="margin:10px 0 0;">' + refHtml + '</p>'
+          + '<p style="margin:10px 0 0;">' + _mailTexto_(String(params.textoRequisitante || '').trim() || _textoPadraoRetornoFila_(motivo, true)) + '</p>'
+          + _fichaProcessoHtml_(info, extras)
+          + (justificativa ? _blocoJustificativaHtml_('Justificativa registrada', justificativa) : '')
+          + (motivo.cobraRequisitante
+              ? '<p style="margin:12px 0 0;font-size:13px;color:#991b1b;font-weight:600;">'
+                + 'A retomada depende de providência do setor de origem. Pedimos que a pendência seja regularizada o quanto antes.</p>'
+              : '')
+          + '<p style="margin:12px 0 0;font-size:13px;color:#475569;">' + _CONTATO_HTML_ + '</p>'
+          + _blocoPainelHtml_();
+        if (_mailEnviar_(info.emailReq, assuntoBase, _mailWrap_('Gestão de Etapas - SEL', motivo.emoji + ' Processo retornado para a fila · Colégio Pedro II', corpoReq))) {
+          res.enviados++; res.destinos.push('Setor requisitante <' + info.emailReq + '>');
+        } else {
+          res.falhas.push('Não foi possível enviar para o setor requisitante.');
+        }
+      } else {
+        res.falhas.push('Processo sem e-mail do setor requisitante cadastrado.');
+      }
+    }
+  } catch (e) {
+    res.falhas.push('Falha ao preparar os avisos: ' + (e && e.message ? e.message : e));
+  }
+  return res;
+}
+
+// ── _notificarRetomadaFila_ ──────────────────────────────────────────────
+// Par do aviso acima: sai quando um processo que estava na fila volta ao
+// andamento (botão "Iniciar/Reativar"). Só é chamado para processos que
+// estavam mesmo retornados — iniciar um processo novo não gera este e-mail.
+// params: {pid, servidorAlvo, etapa, observacao, chefe}
+function _notificarRetomadaFila_(params) {
+  var res = { enviados: 0, destinos: [], falhas: [] };
+  try {
+    params = params || {};
+    var info = _infoProcessoAviso_(params.pid);
+    var refHtml = _procRefHtmlAviso_(info);
+    var nomeServ = String(params.servidorAlvo || '').trim() || info.servidorInt || info.servidorExt || '';
+    var assunto = '▶ Processo retomado — ' + (info.objeto || info.id);
+    var subtitulo = '▶ Processo retomado · Colégio Pedro II';
+    var extras = [];
+    if (nomeServ && !_respNomeGenerico_(nomeServ)) extras.push(['Responsável', nomeServ]);
+    if (params.etapa) extras.push(['Etapa retomada', params.etapa]);
+    var obs = String(params.observacao || '').trim();
+
+    var emailServ = _respNomeGenerico_(nomeServ) ? '' : _emailDoServidor_(nomeServ);
+    if (_mailEmailValido_(emailServ)) {
+      var corpoServ = '<p style="margin:0;">Prezado(a) ' + _mailEsc_(nomeServ) + ',</p>'
+        + '<p style="margin:10px 0 0;">' + refHtml + ' voltou da fila para o andamento e está sob sua responsabilidade.</p>'
+        + _fichaProcessoHtml_(info, extras)
+        + (obs ? _blocoJustificativaHtml_('Observação da chefia', obs) : '')
+        + '<p style="margin:12px 0 0;font-size:13px;color:#475569;">'
+        + 'Os prazos voltam a ser contados a partir de agora e os pontos do processo voltam a contar na sua capacidade. '
+        + 'Os avisos automáticos de prazo foram reativados.</p>';
+      if (_mailEnviar_(emailServ, assunto, _mailWrap_('Gestão de Etapas - SEL', subtitulo, corpoServ))) {
+        res.enviados++; res.destinos.push(nomeServ + ' <' + emailServ + '>');
+      } else {
+        res.falhas.push('Não foi possível enviar para o servidor responsável.');
+      }
+    } else if (nomeServ && _respNomeGenerico_(nomeServ)) {
+      res.falhas.push('O responsável cadastrado ("' + nomeServ + '") é um setor, não uma pessoa: ninguém foi avisado pela equipe.');
+    } else if (nomeServ) {
+      res.falhas.push('Servidor ' + nomeServ + ' está sem e-mail cadastrado.');
+    }
+
+    if (_mailEmailValido_(info.emailReq)) {
+      var corpoReq = '<p style="margin:0;">Prezado(a),</p>'
+        + '<p style="margin:10px 0 0;">Informamos que ' + refHtml + ' foi <b>retomado</b> pelo setor de licitações e voltou ao andamento.</p>'
+        + _fichaProcessoHtml_(info, params.etapa ? [['Etapa retomada', params.etapa]] : [])
+        + (obs ? _blocoJustificativaHtml_('Observação do setor de licitações', obs) : '')
+        + '<p style="margin:12px 0 0;font-size:13px;color:#475569;">'
+        + 'A partir de agora o processo volta a ter prazos em contagem, e os avisos de acompanhamento serão retomados. ' + _CONTATO_HTML_ + '</p>'
+        + _blocoPainelHtml_();
+      if (_mailEnviar_(info.emailReq, assunto, _mailWrap_('Gestão de Etapas - SEL', subtitulo, corpoReq))) {
+        res.enviados++; res.destinos.push('Setor requisitante <' + info.emailReq + '>');
+      } else {
+        res.falhas.push('Não foi possível enviar para o setor requisitante.');
+      }
+    }
+  } catch (e) {
+    res.falhas.push('Falha ao preparar o aviso de retomada: ' + (e && e.message ? e.message : e));
+  }
+  return res;
+}
+
+function _isoParaBR_(iso) {
+  if (!iso) return '';
+  var p = String(iso).substring(0, 10).split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(iso);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// COBRANÇA DE PONTUAÇÃO PENDENTE
+//
+// A pontuação de carga é atribuída DEPOIS do cadastro, num segundo passo, e é
+// o passo que mais escapa. Enquanto ela não é lançada, o processo não entra na
+// conta da Capacidade: o setor aparece com folga que não tem, e a distribuição
+// de novos processos é feita sobre um número subestimado.
+//
+// Regra de envio (decisão da chefia): UM e-mail por processo pendente, no
+// máximo um por dia, repetido até a pontuação ser lançada — assim que a carga
+// é pontuada ela sai da varredura e a cobrança cessa sozinha. O teto por
+// execução protege a cota diária do MailApp.
+// ══════════════════════════════════════════════════════════════════════════
+var PONT_COBRANCA_HORA = 9;
+var PONT_COBRANCA_MINUTO = 30;
+var PONT_COBRANCA_LABEL = '9h30';
+var PONT_COBRANCA_MAX_POR_EXECUCAO = 20;
+
+// Espelho GS de pontuacoesPendentes() (appsel-firestore.js) — mantenha os dois
+// em sincronia. Devolve [{pid, objeto, num, fase, faseLabel, servidor, iniciado}].
+function _pontuacoesPendentes_() {
+  if (typeof _fsServerAtivo_ === 'function' && _fsServerAtivo_() && typeof _fsColecaoArray_ === 'function') {
+    return _pontuacoesPendentesFs_();
+  }
+  return _pontuacoesPendentesPlanilha_();
+}
+
+function _pontuacoesPendentesFs_() {
+  var cargas = _fsColecaoArray_('cargas');
+  var procs  = _fsColecaoArray_('processos');
+  var etapas = _fsColecaoArray_('etapas');
+
+  var concl = {}, retornado = {}, aplicavel = {}, acc = {};
+  etapas.forEach(function(e) {
+    var pid = String(e.processoId || '').trim();
+    if (!pid) return;
+    if (_normStatus_(e.status) === 'retornado' || _isRetornoFilaMotivo_(e.motivoAtraso)) retornado[pid] = true;
+    if (_isEtapaContratual_(e.fase, e.etapa)) return;
+    var st = _normStatus_(e.status);
+    if (st === 'na') return;
+    var kind = _normText_(e.fase).indexOf('ext') >= 0 ? 'ext' : 'int';
+    if (!aplicavel[pid]) aplicavel[pid] = {};
+    aplicavel[pid][kind] = true;
+    if (!acc[pid]) acc[pid] = { total: 0, ok: 0 };
+    acc[pid].total++;
+    if (st === 'ok') acc[pid].ok++;
+  });
+  Object.keys(acc).forEach(function(pid) {
+    concl[pid] = acc[pid].total > 0 && acc[pid].ok >= acc[pid].total;
+  });
+
+  var infoProc = {};
+  procs.forEach(function(p) {
+    var pid = String(p.id || p._id || '').trim();
+    if (!pid) return;
+    infoProc[pid] = {
+      objeto: String(p.objeto || '').trim(),
+      num: String(p.suap || '').trim(),
+      modalidade: String(p.modalidade || '').trim(),
+      iniciado: !!p.d0
+    };
+  });
+
+  var pendentes = [];
+  cargas.forEach(function(c) {
+    var pid = String(c.processoId || '').trim();
+    var info = infoProc[pid];
+    if (!pid || !info) return;
+    if (concl[pid] || retornado[pid]) return;
+    var kind = _normText_(c.fase).indexOf('ext') >= 0 ? 'ext' : 'int';
+    if (!aplicavel[pid] || !aplicavel[pid][kind]) return;
+    var total = (parseFloat(c.p1) || 0) + (parseFloat(c.p2) || 0) + (parseFloat(c.p3) || 0);
+    if (total > 0) return;
+    pendentes.push({
+      pid: pid,
+      objeto: info.objeto,
+      num: info.num,
+      modalidade: info.modalidade || String(c.modalidade || '').trim(),
+      fase: kind,
+      faseLabel: kind === 'ext' ? 'Fase Externa' : 'Fase Interna',
+      servidor: String(c.servidor || '').trim(),
+      iniciado: info.iniciado
+    });
+  });
+  pendentes.sort(function(a, b) {
+    if (a.iniciado !== b.iniciado) return a.iniciado ? 1 : -1;
+    return a.pid < b.pid ? -1 : (a.pid > b.pid ? 1 : 0);
+  });
+  return pendentes;
+}
+
+// Modo planilha (legado, antes do corte do Firestore): lê os registros da aba
+// Capacidade, onde a pontuação vive nas colunas 7/8/9.
+function _pontuacoesPendentesPlanilha_() {
+  var sh = _ss_().getSheetByName('📊 Capacidade');
+  if (!sh || sh.getLastRow() < 2) return [];
+  var data = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
+  var hIdx = -1;
+  for (var r = 0; r < data.length; r++) {
+    var rr = data[r].map(function(c){ return String(c).trim(); });
+    if (rr[0].indexOf('Servidor') >= 0 && rr[2] === 'ProcessoID') { hIdx = r; break; }
+  }
+  if (hIdx < 0) return [];
+  var h = data[hIdx].map(function(c){ return String(c).trim(); });
+  var iServ = 0, iObj = h.indexOf('Objeto'), iPid = 2, iFase = h.indexOf('Fase');
+  var iTotal = h.indexOf('Total');
+  var pendentes = [];
+  for (var i = hIdx + 1; i < data.length; i++) {
+    var row = data[i];
+    var pid = String(row[iPid] || '').trim();
+    if (!pid) continue;
+    var total = iTotal >= 0
+      ? (parseFloat(row[iTotal]) || 0)
+      : ((parseFloat(row[6]) || 0) + (parseFloat(row[7]) || 0) + (parseFloat(row[8]) || 0));
+    if (total > 0) continue;
+    var kind = _normText_(iFase >= 0 ? row[iFase] : '').indexOf('ext') >= 0 ? 'ext' : 'int';
+    pendentes.push({
+      pid: pid,
+      objeto: String(iObj >= 0 ? row[iObj] : '').trim(),
+      num: '',
+      modalidade: '',
+      fase: kind,
+      faseLabel: kind === 'ext' ? 'Fase Externa' : 'Fase Interna',
+      servidor: String(row[iServ] || '').trim(),
+      iniciado: true
+    });
+  }
+  return pendentes;
+}
+
+function _chaveAvisoPontuacao_(pid, fase) {
+  return _reqUni_() + '|pont|' + String(pid) + '|' + String(fase);
+}
+
+function _hojeIso_() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// ── enviarCobrancaPontuacao ──────────────────────────────────────────────
+// Um e-mail por processo pendente, para a chefia da unidade. Reaproveita o
+// mesmo armazenamento de deduplicação dos avisos de prazo, com a data do dia
+// como marca: repete no dia seguinte se continuar pendente, e cessa quando a
+// pontuação é lançada.
+function enviarCobrancaPontuacao() {
+  if (!_avisosPodeEnviarHoje_(new Date())) {
+    return 'Cobrança de pontuação não enviada: rotina limitada a ' + AVISOS_DIAS_LABEL + '.';
+  }
+  var chefia = _emailsDaChefia_();
+  if (!chefia.length) return 'Cobrança de pontuação: nenhuma chefia com e-mail cadastrado.';
+
+  var pendentes = _pontuacoesPendentes_();
+  if (!pendentes.length) return 'Cobrança de pontuação: nenhuma pendência.';
+
+  var estado = _avisosCarregarEstado_();
+  var hoje = _hojeIso_();
+  var enviados = 0, ignorados = 0, limitados = 0;
+
+  pendentes.forEach(function(p) {
+    var chave = _chaveAvisoPontuacao_(p.pid, p.fase);
+    if (estado[chave] === hoje) { ignorados++; return; }              // já cobrado hoje
+    if (enviados >= PONT_COBRANCA_MAX_POR_EXECUCAO) { limitados++; return; } // trava de cota
+    var info = _infoProcessoAviso_(p.pid);
+    if (!info.objeto) info.objeto = p.objeto;
+    if (!info.num) info.num = p.num;
+    var extras = [
+      ['Fase sem pontuação', p.faseLabel],
+      ['Responsável pela fase', p.servidor || '—'],
+      ['Situação', p.iniciado ? 'Em andamento' : 'Aguardando início (fila)']
+    ];
+    var corpo = '<p style="margin:0;">Prezada chefia,</p>'
+      + '<p style="margin:10px 0 0;">O processo ' + _procRefHtmlAviso_(info)
+      + ' está <b>sem pontuação de carga de trabalho</b> na ' + _mailEsc_(p.faseLabel.toLowerCase()) + '.</p>'
+      + _fichaProcessoHtml_(info, extras)
+      + '<div style="margin:14px 0;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:13px;color:#991b1b;">'
+      + '<b>Por que isso importa:</b> sem pontuação, o processo não entra no cálculo da Capacidade. '
+      + 'A carga do setor aparece menor do que realmente é, e a distribuição de novos processos passa a ser feita sobre um número subestimado.'
+      + '</div>'
+      + '<p style="margin:12px 0 0;font-size:13px;color:#475569;">'
+      + 'Para resolver: abra o App Gestão, vá em <b>Capacidade</b>, selecione a ' + _mailEsc_(p.faseLabel.toLowerCase())
+      + ' e clique em <b>✏️ Pontuar</b> no processo. Esta cobrança para automaticamente assim que a pontuação for lançada.</p>';
+    var assunto = '⚖️ Pontuação pendente — ' + (info.objeto || p.pid) + ' (' + p.faseLabel + ')';
+    var html = _mailWrap_('Gestão de Etapas - SEL', '⚖️ Pontuação de capacidade pendente · Colégio Pedro II', corpo);
+    var saiu = false;
+    chefia.forEach(function(dest) { if (_mailEnviar_(dest, assunto, html)) saiu = true; });
+    if (saiu) { _avisoMarcar_(chave, hoje); enviados++; }
+  });
+
+  return 'Cobrança de pontuação: ' + enviados + ' e-mail(s) enviado(s); '
+    + ignorados + ' já cobrado(s) hoje; ' + limitados + ' adiado(s) pelo limite de ' + PONT_COBRANCA_MAX_POR_EXECUCAO + ' por execução.';
+}
+
+// Handler do acionador de tempo — percorre todas as unidades ativas, como as
+// rotinas de prazo.
+function enviarCobrancaPontuacaoTodasUnidades() {
+  if (typeof _fsServerAtivo_ !== 'function' || !_fsServerAtivo_()) return enviarCobrancaPontuacao();
+  var unidades = (typeof _fsListarUnidadesAtivas_ === 'function') ? _fsListarUnidadesAtivas_() : [];
+  if (!unidades.length) return enviarCobrancaPontuacao();
+  var prev = (typeof _FS_UNIDADE_REQ === 'string') ? _FS_UNIDADE_REQ : '';
+  var resumo = [];
+  unidades.forEach(function(uid) {
+    _FS_UNIDADE_REQ = uid;
+    try { resumo.push(uid + ' → ' + enviarCobrancaPontuacao()); }
+    catch (e) { resumo.push(uid + ' → ERRO: ' + (e && e.message ? e.message : e)); }
+  });
+  _FS_UNIDADE_REQ = prev;
+  return resumo.join('\n');
+}
+
+// Envio manual pelo app (botão em Configurações), no escopo da unidade do chefe.
+function enviarCobrancaPontuacaoApp(authToken) {
+  _authRequire_(authToken, true);
+  return enviarCobrancaPontuacao();
+}
+
+// Lista para o sino do app (chefia). O front em modo Firestore calcula local
+// pelo módulo compartilhado; esta rota cobre o modo planilha e o refresh.
+function getPontuacoesPendentesApp(authToken) {
+  var sess = _authRequire_(authToken, false);
+  if (!sess.isChefe) return { ok: true, pendentes: [] };
+  return { ok: true, pendentes: _pontuacoesPendentes_() };
 }
 
 // ── Central de notificações (App) ─────────────────────────────────────────
@@ -4153,7 +4833,11 @@ function devolverProcessoFilaApp(params) {
       var nomeAlvo = String(lE.values[idxAlvo][iNome] || '').trim();
       var statusPreservado = _normStatus_(lE.values[idxAlvo][iStatus]);
       var motivoAnterior = String(lE.values[idxAlvo][iMotivo] || '').trim();
-      var motivoMarcado = 'RETORNO PARA FILA: ' + motivo;
+      // O rótulo da categoria entra no próprio motivo: é o que a Fila mostra e
+      // o que fica no histórico, sem exigir uma coluna nova.
+      var catRet = _motivoRetornoFila_(params.categoria);
+      var motivoRegistro = catRet.rotulo + ' — ' + motivo;
+      var motivoMarcado = 'RETORNO PARA FILA: ' + motivoRegistro;
       if (motivoAnterior && !_isRetornoFilaMotivo_(motivoAnterior)) {
         motivoMarcado += '\nMOTIVO ANTERIOR: ' + motivoAnterior;
       }
@@ -4166,12 +4850,26 @@ function devolverProcessoFilaApp(params) {
         pid: pid,
         etapa: nomeAlvo,
         servidor: servidor,
-        motivo: 'RETORNO PARA FILA: ' + motivo,
+        motivo: 'RETORNO PARA FILA: ' + motivoRegistro,
         dias: 0,
         dataRealiz: ''
       });
       _limparCacheCapacidade_();
-      return { ok: true, etapa: nomeAlvo, statusPreservado: statusPreservado, concluidasPreservadas: concluidas };
+
+      // Avisos: só depois de a escrita ter dado certo, e sem poder derrubá-la.
+      var avisosRet = _notificarRetornoFila_({
+        pid: pid,
+        categoria: params.categoria,
+        motivo: motivo,
+        previsao: params.previsao,
+        servidorAlvo: params.servidorAlvo,
+        textoServidor: params.textoServidor,
+        textoRequisitante: params.textoRequisitante,
+        avisarServidor: params.avisarServidor !== false,
+        avisarRequisitante: params.avisarRequisitante !== false,
+        chefe: servidor
+      });
+      return { ok: true, etapa: nomeAlvo, statusPreservado: statusPreservado, concluidasPreservadas: concluidas, avisos: avisosRet };
     } catch(e) {
       return { ok: false, erro: e.message };
     }
@@ -4468,7 +5166,8 @@ function salvarEmail(servidor, email, authToken) {
 function instalarTriggerAvisos(authToken) {
   return _withAppLock_('instalar trigger de avisos', function() {
     _authRequire_(authToken, true);
-    var handlersAviso = ['enviarAvisosPrazo', 'enviarAvisosPrazoProximos', 'enviarAvisosPrazoVencidos'];
+    var handlersAviso = ['enviarAvisosPrazo', 'enviarAvisosPrazoProximos', 'enviarAvisosPrazoVencidos',
+      'enviarCobrancaPontuacaoTodasUnidades'];
     ScriptApp.getProjectTriggers().forEach(function(t) {
       if (handlersAviso.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
     });
@@ -4492,8 +5191,17 @@ function instalarTriggerAvisos(authToken) {
         .atHour(AVISO_VENCIDOS_HORA)
         .nearMinute(AVISO_VENCIDOS_MINUTO)
         .create();
+      // Cobrança de pontuação: cedo, antes dos avisos de prazo, para a chefia
+      // resolver a pendência no começo do expediente.
+      ScriptApp.newTrigger('enviarCobrancaPontuacaoTodasUnidades')
+        .timeBased()
+        .onWeekDay(dia)
+        .atHour(PONT_COBRANCA_HORA)
+        .nearMinute(PONT_COBRANCA_MINUTO)
+        .create();
     });
     PropertiesService.getScriptProperties().setProperties({
+      SEL_TRIGGER_PONTUACAO_HORA: PONT_COBRANCA_LABEL,
       SEL_TRIGGER_AVISOS_INSTALADO_EM: new Date().toISOString(),
       SEL_TRIGGER_AVISOS_HORA: AVISO_HORARIOS_LABEL,
       SEL_TRIGGER_AVISOS_PROXIMOS_HORA: AVISO_PROXIMOS_LABEL,
@@ -4501,7 +5209,8 @@ function instalarTriggerAvisos(authToken) {
       SEL_TRIGGER_AVISOS_TZ: Session.getScriptTimeZone(),
       SEL_TRIGGER_AVISOS_DIAS: AVISOS_DIAS_LABEL
     });
-    return 'Triggers instalados. Prazos proximos: ' + AVISO_PROXIMOS_LABEL + '; etapas vencidas: ' + AVISO_VENCIDOS_LABEL + ', de ' + AVISOS_DIAS_LABEL + '.';
+    return 'Triggers instalados. Prazos proximos: ' + AVISO_PROXIMOS_LABEL + '; etapas vencidas: ' + AVISO_VENCIDOS_LABEL
+      + '; pontuacao pendente: ' + PONT_COBRANCA_LABEL + ', de ' + AVISOS_DIAS_LABEL + '.';
   });
 }
 
@@ -4514,16 +5223,23 @@ function verificarTriggerAvisos(authToken) {
     var props = PropertiesService.getScriptProperties();
     var temProximos = false;
     var temVencidos = false;
+    var temPontuacao = false;
     var temLegado = false;
     for (var i = 0; i < triggers.length; i++) {
       var handler = triggers[i].getHandlerFunction();
       if (handler === 'enviarAvisosPrazoProximos') temProximos = true;
       if (handler === 'enviarAvisosPrazoVencidos') temVencidos = true;
+      if (handler === 'enviarCobrancaPontuacaoTodasUnidades') temPontuacao = true;
       if (handler === 'enviarAvisosPrazo') temLegado = true;
     }
     if (temProximos && temVencidos) {
       return {
         instalado: true,
+        // Acionador novo (cobrança de pontuação): quem instalou os triggers
+        // antes desta versão continua com os avisos de prazo funcionando, mas
+        // precisa reinstalar para passar a receber a cobrança de pontuação.
+        pontuacao: temPontuacao,
+        pontuacaoHora: props.getProperty('SEL_TRIGGER_PONTUACAO_HORA') || PONT_COBRANCA_LABEL,
         hora: props.getProperty('SEL_TRIGGER_AVISOS_HORA') || AVISO_HORARIOS_LABEL,
         dias: props.getProperty('SEL_TRIGGER_AVISOS_DIAS') || AVISOS_DIAS_LABEL,
         timezone: props.getProperty('SEL_TRIGGER_AVISOS_TZ') || Session.getScriptTimeZone(),
