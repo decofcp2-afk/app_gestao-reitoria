@@ -60,6 +60,16 @@
     return 'pendente';
   }
   function isRetornoFilaMotivo(m) { return normText(m).indexOf('retorno para fila:') === 0; }
+  // Nome de responsável "genérico": rótulo de setor/equipe digitado no campo
+  // Agente da etapa (DIAD, DECOF, "Equipe de Planejamento"…). Não identifica
+  // pessoa, então não serve como responsável exibido nem como destinatário de
+  // e-mail. Espelha respGenerico_ do Code.gs (rotina de avisos de prazo).
+  function nomeRespGenerico(nome) {
+    var n = normText(nome);
+    if (!n) return true;
+    return n.indexOf('equipe') >= 0 || n.indexOf('planejamento') >= 0
+      || n.indexOf('decof') >= 0 || n.indexOf('diad') >= 0 || n.indexOf('setor') >= 0;
+  }
   function isEtapaContratual(fase, nome) {
     var f = normText(fase), n = normText(nome);
     return f.indexOf('contrat') >= 0 || n.indexOf('assinatura contrato') >= 0 ||
@@ -261,16 +271,24 @@
 
       var srvInt = servMap[p.id] ? (servMap[p.id].int || '') : '';
       var srvExt = servMap[p.id] ? (servMap[p.id].ext || '') : '';
+      // Fallback pelo Agente da etapa: só aceita nome de PESSOA. Rótulos de
+      // setor ("DIAD/DECOF", "Equipe de Planejamento") vinham para cá e eram
+      // exibidos como responsável do processo — principalmente nos concluídos,
+      // que não têm etapa atual e caíam sempre neste fallback.
       if (!srvInt && (!servMap[p.id] || !servMap[p.id].hasInt)) {
         for (var fi = 0; fi < etapas.length; fi++) {
-          if (normText(etapas[fi].fase).indexOf('ext') < 0 && etapas[fi].agente) { srvInt = etapas[fi].agente; break; }
+          if (normText(etapas[fi].fase).indexOf('ext') < 0 && !nomeRespGenerico(etapas[fi].agente)) { srvInt = etapas[fi].agente; break; }
         }
       }
       if (!srvExt && (!servMap[p.id] || !servMap[p.id].hasExt)) {
         for (var fe = 0; fe < etapas.length; fe++) {
-          if (normText(etapas[fe].fase).indexOf('ext') >= 0 && etapas[fe].agente) { srvExt = etapas[fe].agente; break; }
+          if (normText(etapas[fe].fase).indexOf('ext') >= 0 && !nomeRespGenerico(etapas[fe].agente)) { srvExt = etapas[fe].agente; break; }
         }
       }
+      // Quem de fato ENCERROU cada fase: usado no card do processo concluído,
+      // onde não há etapa atual para inferir a fase corrente. Fica no payload
+      // para a tela não ter de reprocessar as etapas.
+      var faseExtAplicavel = etapas.some(function (e) { return normText(e.fase).indexOf('ext') >= 0; });
 
       var etapaRetornada = etCalc.find(function (e) { return e.retornoFila; }) || null;
 
@@ -281,7 +299,7 @@
         execucao: execucao, status: st,
         retornoFila: retornoFila,
         motivoFila: etapaRetornada ? etapaRetornada.motivo : '',
-        servidor: srvInt, servidorExt: srvExt,
+        servidor: srvInt, servidorExt: srvExt, temFaseExterna: faseExtAplicavel,
         etapaAtualIdx: etapaAtualIdx,
         etapas: etCalc
       };
@@ -527,6 +545,102 @@
     return { resumoInt: resumoInt, resumoExt: resumoExt, registrosInt: registrosInt, registrosExt: registrosExt };
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  // PONTUAÇÃO PENDENTE
+  // Uma carga vale 0 ponto até a chefia pontuar. Enquanto isso, o processo
+  // existe nas Etapas mas NÃO entra na conta da Capacidade — a carga do setor
+  // aparece menor do que é, e a subestimação só é percebida muito depois.
+  // Esta varredura devolve as cargas que ainda esperam pontuação, para o sino
+  // do app e para a cobrança por e-mail (espelhada em _pontuacoesPendentes_,
+  // no Code.gs — mantenha as duas em sincronia).
+  //
+  // Fica de fora o que nunca vai ser pontuado (senão a cobrança nunca cessa):
+  //   • processo concluído ou devolvido para a fila;
+  //   • fase inteira "Não se aplica" — o caso típico é a fase externa de uma
+  //     contratação direta sem disputa, cuja carga é criada no cadastro e
+  //     ficaria pendente para sempre;
+  //   • carga órfã (processo excluído) ou sem servidor definido.
+  // Processos ainda não iniciados CONTAM: é justamente logo após o cadastro
+  // que a pontuação costuma ser esquecida.
+  // ════════════════════════════════════════════════════════════════════════
+  function pontuacoesPendentes(cargasRaw, processosRaw, etapasRaw) {
+    var fases = _capFasesProc(etapasRaw);
+    var retornados = _capRetornados(etapasRaw);
+
+    // Fases com ao menos uma etapa aplicável (nem 'na', nem contratual).
+    var faseAplicavel = {};
+    (etapasRaw || []).forEach(function (e) {
+      var pid = String(e.processoId || '').trim();
+      if (!pid) return;
+      if (isEtapaContratual(e.fase, e.etapa)) return;
+      if (normStatus(e.status) === 'na') return;
+      var kind = normText(e.fase).indexOf('ext') >= 0 ? 'ext' : 'int';
+      if (!faseAplicavel[pid]) faseAplicavel[pid] = {};
+      faseAplicavel[pid][kind] = true;
+    });
+
+    var procInfo = {};
+    (processosRaw || []).forEach(function (p) {
+      var pid = String(p.id || p._id || '').trim();
+      if (!pid) return;
+      procInfo[pid] = {
+        objeto: String(p.objeto || '').trim(),
+        num: String(p.suap || '').trim(),
+        modalidade: String(p.modalidade || '').trim(),
+        iniciado: !!parseTs(p.d0)
+      };
+    });
+
+    var pendentes = [];
+    (cargasRaw || []).forEach(function (c) {
+      var pid = String(c.processoId || '').trim();
+      if (!pid) return;
+      var info = procInfo[pid];
+      if (!info) return;                       // carga órfã
+      if (fases.concl[pid]) return;
+      if (retornados[pid]) return;
+      var kind = normText(c.fase).indexOf('ext') >= 0 ? 'ext' : 'int';
+      if (!faseAplicavel[pid] || !faseAplicavel[pid][kind]) return;
+      if (round1(num(c.p1) + num(c.p2) + num(c.p3)) > 0) return;
+      pendentes.push({
+        docId: c._id || null,
+        pid: pid,
+        objeto: info.objeto,
+        num: info.num,
+        modalidade: info.modalidade || String(c.modalidade || '').trim(),
+        fase: kind,
+        faseLabel: kind === 'ext' ? 'Fase Externa' : 'Fase Interna',
+        servidor: titleCase(String(c.servidor || '').trim()),
+        iniciado: info.iniciado
+      });
+    });
+
+    // Não iniciados primeiro (recém-cadastrados, o caso que mais escapa),
+    // depois por processo, para o sino agrupar de forma estável.
+    pendentes.sort(function (a, b) {
+      if (a.iniciado !== b.iniciado) return a.iniciado ? 1 : -1;
+      if (a.pid !== b.pid) return a.pid < b.pid ? -1 : 1;
+      return a.fase === b.fase ? 0 : (a.fase === 'int' ? -1 : 1);
+    });
+    return pendentes;
+  }
+
+  function carregarPontuacoesPendentes() {
+    var cfg = (root.APPSEL_CONFIG && root.APPSEL_CONFIG.firebase) || null;
+    if (!cfg || !root.firebase) return Promise.reject(new Error('Firebase nao configurado.'));
+    if (!root.firebase.apps || !root.firebase.apps.length) root.firebase.initializeApp(cfg);
+    var db = root.firebase.firestore();
+    var base = db.collection('unidades').doc(_unidadeId());
+    return Promise.all([
+      base.collection('cargas').get(),
+      base.collection('processos').get(),
+      base.collection('etapas').get()
+    ]).then(function (s) {
+      var map = function (snap) { return snap.docs.map(function (d) { var o = d.data(); o._id = d.id; return o; }); };
+      return pontuacoesPendentes(map(s[0]), map(s[1]), map(s[2]));
+    });
+  }
+
   function carregarCapacidade() {
     var cfg = (root.APPSEL_CONFIG && root.APPSEL_CONFIG.firebase) || null;
     if (!cfg || !root.firebase) return Promise.reject(new Error('Firebase nao configurado.'));
@@ -547,6 +661,8 @@
   root.AppselFirestore = {
     construir: construir, carregar: carregar, montarCalendario: montarCalendario,
     construirCapacidade: construirCapacidade, carregarCapacidade: carregarCapacidade,
+    pontuacoesPendentes: pontuacoesPendentes, carregarPontuacoesPendentes: carregarPontuacoesPendentes,
+    nomeRespGenerico: nomeRespGenerico,
     listarUnidades: listarUnidades, unidadeAtual: _unidadeId,
     carregarPrazosTodasUnidades: carregarPrazosTodasUnidades
   };

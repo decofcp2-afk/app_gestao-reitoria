@@ -237,6 +237,16 @@ function _fsQueryEq_(colecao, campo, valor) {
   });
 }
 
+// Coleção inteira da unidade como array de objetos, com `_id` do documento.
+// Usado pelas varreduras que precisam cruzar coleções (ex.: pontuação pendente).
+function _fsColecaoArray_(col) {
+  return _fs_().query(col).Execute().map(function(d){
+    var o = d.obj || {};
+    o._id = String(d.path || '').split('/').pop();
+    return o;
+  });
+}
+
 function _fsEtapasDoProc_(pid) {
   var lista = _fsQueryEq_('etapas', 'processoId', pid);
   lista.sort(function(a, b){ return Number(a.obj.ordem || 0) - Number(b.obj.ordem || 0); });
@@ -707,14 +717,32 @@ function fs_devolverProcessoFilaApp(params) {
       var nomeAlvo = String(alvo.obj.etapa || '').trim();
       var statusPreservado = _normStatus_(alvo.obj.status);
       var motivoAnterior = String(alvo.obj.motivoAtraso || '').trim();
-      var motivoMarcado = 'RETORNO PARA FILA: ' + motivo;
+      // O rótulo da categoria entra no próprio motivo: é o que a Fila mostra e
+      // o que fica no histórico, sem exigir uma coluna nova.
+      var cat = _motivoRetornoFila_(params.categoria);
+      var motivoRegistro = cat.rotulo + ' — ' + motivo;
+      var motivoMarcado = 'RETORNO PARA FILA: ' + motivoRegistro;
       if (motivoAnterior && !_isRetornoFilaMotivo_(motivoAnterior)) motivoMarcado += '\nMOTIVO ANTERIOR: ' + motivoAnterior;
       _fsUpdate_(alvo.path, { motivoAtraso: motivoMarcado });
 
       _fsSetCargaAtivo_(pid, 'interna', false);
       _fsSetCargaAtivo_(pid, 'externa', false);
-      _fsAppendHist_({ pid: pid, etapa: nomeAlvo, servidor: servidor, motivo: 'RETORNO PARA FILA: ' + motivo });
-      return { ok: true, etapa: nomeAlvo, statusPreservado: statusPreservado, concluidasPreservadas: concluidas };
+      _fsAppendHist_({ pid: pid, etapa: nomeAlvo, servidor: servidor, motivo: 'RETORNO PARA FILA: ' + motivoRegistro });
+
+      // Avisos: só depois de a escrita ter dado certo, e sem poder derrubá-la.
+      var avisos = _notificarRetornoFila_({
+        pid: pid,
+        categoria: params.categoria,
+        motivo: motivo,
+        previsao: params.previsao,
+        servidorAlvo: params.servidorAlvo,
+        textoServidor: params.textoServidor,
+        textoRequisitante: params.textoRequisitante,
+        avisarServidor: params.avisarServidor !== false,
+        avisarRequisitante: params.avisarRequisitante !== false,
+        chefe: servidor
+      });
+      return { ok: true, etapa: nomeAlvo, statusPreservado: statusPreservado, concluidasPreservadas: concluidas, avisos: avisos };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
 }
@@ -744,6 +772,7 @@ function fs_iniciarProcessos(params, authToken) {
       });
 
       var iniciados = 0;
+      var retomados = [];   // processos que estavam na fila por RETORNO (não os novos)
       validados.forEach(function(v){
         var item = v.item, pid = v.pid, extSeg = v.extSeg;
         var upd = { status: 'Em andamento' };
@@ -752,6 +781,7 @@ function fs_iniciarProcessos(params, authToken) {
 
         var etapas = _fsEtapasDoProc_(pid);
         var primeira = null;
+        var eraRetorno = false;
         etapas.forEach(function(e){
           var o = e.obj;
           var ext = String(o.fase || '').toLowerCase().indexOf('ext') >= 0;
@@ -759,7 +789,7 @@ function fs_iniciarProcessos(params, authToken) {
           var patch = { agente: agente };
           // Limpa qualquer marcador de retorno preso (inclusive em etapas 'na'):
           // senão o processo continua detectado como retornado e não sai da fila.
-          if (_isRetornoFilaMotivo_(o.motivoAtraso)) patch.motivoAtraso = '';
+          if (_isRetornoFilaMotivo_(o.motivoAtraso)) { patch.motivoAtraso = ''; eraRetorno = true; }
           _fsUpdate_(e.path, patch);
           if (!primeira && !_isEtapaContratual_(o.fase, o.etapa)) {
             var st = _normStatus_(o.status);
@@ -770,8 +800,37 @@ function fs_iniciarProcessos(params, authToken) {
         _fsSetCargaAtivo_(pid, 'interna', true);
         _fsSetCargaAtivo_(pid, 'externa', false);
         iniciados++;
+        if (eraRetorno && item.avisarRetomada !== false) {
+          // Avisa quem assume a etapa que voltou a andar: um processo pode ter
+          // parado já na fase externa, e aí o responsável não é o da interna.
+          var extPrimeira = primeira && String(primeira.obj.fase || '').toLowerCase().indexOf('ext') >= 0;
+          retomados.push({
+            pid: pid,
+            servidorAlvo: extPrimeira
+              ? (extSeg ? (item.servidorExt || '') : (item.servidorExt || item.servidor || ''))
+              : (item.servidor || item.servidorExt || ''),
+            etapa: primeira ? String(primeira.obj.etapa || '') : '',
+            observacao: String(item.obsRetomada || '')
+          });
+        }
       });
-      return { ok: true, iniciados: iniciados };
+
+      // Aviso de retomada: fecha o ciclo do e-mail de retorno para a fila —
+      // quem foi comunicado da parada precisa saber que o processo voltou a
+      // andar. Só para os retomados; iniciar processo novo não dispara e-mail.
+      var avisos = { enviados: 0, destinos: [], falhas: [] };
+      retomados.forEach(function(r){
+        var res = _notificarRetomadaFila_({
+          pid: r.pid,
+          servidorAlvo: r.servidorAlvo,
+          etapa: r.etapa,
+          observacao: r.observacao
+        });
+        avisos.enviados += res.enviados;
+        avisos.destinos = avisos.destinos.concat(res.destinos);
+        avisos.falhas = avisos.falhas.concat(res.falhas);
+      });
+      return { ok: true, iniciados: iniciados, retomados: retomados.length, avisos: avisos };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
 }
