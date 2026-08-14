@@ -2596,8 +2596,55 @@ function enviarAvisosPrazo(modo) {
 // Estes dois são chamados pelos TRIGGERS de tempo (sem contexto de unidade).
 // Antes rodavam só a unidade padrão (reitoria-sel), então os demais campi nunca
 // recebiam aviso automático de prazo. Agora percorrem TODAS as unidades ativas.
+// Dias em que as rotinas de aviso rodam. Compartilhado por quem instala
+// acionadores, para os três horários nunca divergirem de dia.
+function _diasUteisTrigger_() {
+  return [
+    ScriptApp.WeekDay.MONDAY,
+    ScriptApp.WeekDay.TUESDAY,
+    ScriptApp.WeekDay.WEDNESDAY,
+    ScriptApp.WeekDay.THURSDAY,
+    ScriptApp.WeekDay.FRIDAY
+  ];
+}
+
+// ── _garantirTriggerCobrancaPontuacao_ ───────────────────────────────────
+// Cria o acionador das 9h30 se ele ainda não existir. Um acionador só pode
+// ser criado de DENTRO do projeto (não há API externa para isso) e no app a
+// criação depende de a chefia clicar em "Reinstalar trigger" — então, em toda
+// instalação anterior a esta versão, o horário próprio nunca apareceria
+// sozinho. Rodando no começo da rotina das 10h30, que já existe em qualquer
+// instalação, o projeto se conserta na primeira execução seguinte.
+//
+// A cobrança em si NÃO depende disto: ela roda ao fim da rotina das 10h30 de
+// qualquer forma. Isto só antecipa o horário.
+function _garantirTriggerCobrancaPontuacao_() {
+  var handler = 'enviarCobrancaPontuacaoTodasUnidades';
+  try {
+    var triggers = ScriptApp.getProjectTriggers();
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === handler) return '';   // já existe
+    }
+    _diasUteisTrigger_().forEach(function(dia) {
+      ScriptApp.newTrigger(handler)
+        .timeBased()
+        .onWeekDay(dia)
+        .atHour(PONT_COBRANCA_HORA)
+        .nearMinute(PONT_COBRANCA_MINUTO)
+        .create();
+    });
+    PropertiesService.getScriptProperties().setProperty('SEL_TRIGGER_PONTUACAO_HORA', PONT_COBRANCA_LABEL);
+    return 'Acionador da cobranca de pontuacao criado para ' + PONT_COBRANCA_LABEL + '.';
+  } catch (e) {
+    // Sem permissão ou cota de acionadores: segue no horário das 10h30.
+    return 'Nao consegui criar o acionador de pontuacao: ' + (e && e.message ? e.message : e);
+  }
+}
+
 function enviarAvisosPrazoProximos() {
+  var reparo = _garantirTriggerCobrancaPontuacao_();
   var resumo = _enviarAvisosTodasUnidades_('proximos');
+  if (reparo) resumo += '\n' + reparo;
   // Rede de segurança da cobrança de pontuação. Ela tem acionador próprio
   // (9h30), mas ele só passa a existir depois de alguém clicar em "Reinstalar
   // trigger" — em projetos cujos acionadores foram instalados antes desta
@@ -5188,13 +5235,7 @@ function instalarTriggerAvisos(authToken) {
     ScriptApp.getProjectTriggers().forEach(function(t) {
       if (handlersAviso.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
     });
-    var diasUteis = [
-      ScriptApp.WeekDay.MONDAY,
-      ScriptApp.WeekDay.TUESDAY,
-      ScriptApp.WeekDay.WEDNESDAY,
-      ScriptApp.WeekDay.THURSDAY,
-      ScriptApp.WeekDay.FRIDAY
-    ];
+    var diasUteis = _diasUteisTrigger_();
     diasUteis.forEach(function(dia) {
       ScriptApp.newTrigger('enviarAvisosPrazoProximos')
         .timeBased()
