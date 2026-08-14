@@ -3131,6 +3131,23 @@ function _notificarRetomadaFila_(params) {
   return res;
 }
 
+// Texto da linha de histórico quando a chefia corrige o responsável de um
+// processo já concluído. Mostra "de → para" por fase, porque a pergunta que se
+// faz depois é sempre "quem estava aqui antes?".
+function _motivoCorrecaoResponsavel_(antesInt, depoisInt, antesExt, depoisExt, ehPE) {
+  function trecho(rotulo, antes, depois) {
+    antes = String(antes || '').trim();
+    depois = String(depois || '').trim();
+    if (antes === depois) return '';
+    return rotulo + ': ' + (antes || '(sem responsável)') + ' → ' + (depois || '(sem responsável)');
+  }
+  var partes = [trecho('fase interna', antesInt, depoisInt)];
+  if (ehPE) partes.push(trecho('fase externa', antesExt, depoisExt));
+  partes = partes.filter(function(t){ return !!t; });
+  return 'CORRECAO DE RESPONSAVEL (processo concluído): '
+    + (partes.length ? partes.join('; ') : 'sem alteração de nomes');
+}
+
 function _isoParaBR_(iso) {
   if (!iso) return '';
   var p = String(iso).substring(0, 10).split('-');
@@ -5379,6 +5396,7 @@ function atribuirResponsaveisApp(params) {
     var mNorm  = (params.modal || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
     var ehPE   = mNorm.indexOf('pregao') >= 0 || mNorm.indexOf('concorr') >= 0;
     var avisos = [];
+    var antesInt = '', antesExt = '';   // responsáveis anteriores, para a auditoria
     if (ehPE && servInt && servExt && servInt === servExt) {
       throw new Error('Fase interna e fase externa precisam ter responsáveis diferentes em Pregão/Concorrência.');
     }
@@ -5400,12 +5418,14 @@ function atribuirResponsaveisApp(params) {
           var cfase = String(capData[r][5]||'').trim().toLowerCase();
           if (cfase.indexOf('ext') >= 0) {
             foundExt = true;
+            if (!antesExt) antesExt = String(capData[r][0] || '').trim();   // para a auditoria
             var ce = shCap.getRange(r + 1, 1);
             var dve = ce.getDataValidation();
             ce.clearDataValidations().setValue(ehPE ? servExt : (servExt || servInt || ''));
             if (dve) ce.setDataValidation(dve);
           } else {
             foundInt = true;
+            if (!antesInt) antesInt = String(capData[r][0] || '').trim();
             var ci2 = shCap.getRange(r + 1, 1);
             var dvi = ci2.getDataValidation();
             ci2.clearDataValidations().setValue(servInt || '');
@@ -5420,6 +5440,7 @@ function atribuirResponsaveisApp(params) {
     }
 
     // ── 2. Etapas — Agente Responsável ────────────────────────────
+    var aplicaveis = 0, concluidas = 0;   // detecta processo concluído (auditoria)
     var shE = ss.getSheetByName(ABA_ETP);
     if (shE) {
       var lE   = _lerAba_(shE, 'ProcessoID');
@@ -5429,6 +5450,7 @@ function atribuirResponsaveisApp(params) {
       var iFas = hdr.indexOf('Fase');
       var iStat = hdr.indexOf('StatusEtapa ◄ EDITAR');
       var faseAtual = '';
+      var iNomeEt = hdr.indexOf('Etapa');
       if (iAg >= 0) {
         for (var j = lE.hIdx + 1; j < lE.values.length; j++) {
           var epid  = String(lE.values[j][iPid]||'').trim();
@@ -5436,18 +5458,41 @@ function atribuirResponsaveisApp(params) {
           var efase = String(lE.values[j][iFas]||'').trim().toLowerCase();
           var estat = iStat >= 0 ? _normStatus_(lE.values[j][iStat]) : 'pendente';
           if (!faseAtual && estat !== 'ok' && estat !== 'na') faseAtual = efase;
+          var enomeEt = iNomeEt >= 0 ? String(lE.values[j][iNomeEt] || '').trim() : '';
+          if (estat !== 'na' && !_isEtapaContratual_(efase, enomeEt)) {
+            aplicaveis++;
+            if (estat === 'ok') concluidas++;
+          }
           var novoAg = efase.indexOf('ext') >= 0
             ? (ehPE ? (servExt || '') : (servExt || servInt || ''))
             : (servInt || '');
           shE.getRange(j + 1, iAg + 1).setValue(novoAg);
         }
+        // Processo concluído não tem fase corrente: nada é ativado, então a
+        // atribuição não ressuscita carga na Capacidade.
         if (faseAtual) _setCapacidadeAtivo_(pid, faseAtual, 'Sim');
       }
     }
 
+    // Auditoria da correção retroativa: mexer no responsável de um processo já
+    // encerrado é reescrever registro histórico, e isso precisa de rastro —
+    // quem mudou, quando e de quem para quem.
+    var procConcluido = aplicaveis > 0 && concluidas >= aplicaveis;
+    if (procConcluido) {
+      _appendHist_({
+        ts: new Date(),
+        pid: pid,
+        etapa: '—',
+        servidor: String(params.servidor || '').trim() || '—',
+        motivo: _motivoCorrecaoResponsavel_(antesInt, servInt, antesExt, (ehPE ? servExt : (servExt || servInt || '')), ehPE),
+        dias: 0,
+        dataRealiz: ''
+      });
+    }
+
     _sincronizarCapacidadeComEtapas_();
     _limparCacheCapacidade_();
-    return { ok: true, avisos: avisos };
+    return { ok: true, avisos: avisos, retroativo: procConcluido };
     } catch(e) { return { ok: false, erro: e.message }; }
   });
 }
