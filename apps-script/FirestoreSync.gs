@@ -1337,6 +1337,10 @@ function fs_espelharServidores_(limpa, emailsMap) {
     _fsSet_('emails/' + mid, { matricula: mid, nome: s.nome, email: email });
   });
   _fsPodarServidoresOrfaos_(matriculas);
+  // Uma remoção de servidor também altera a agenda agregada do painel.
+  var agenda = _ausLer_();
+  _fsUpdate_('disponibilidade/agenda', { pendente: true });
+  _ausPublicar_(agenda, limpa);
 }
 
 // Poda (best-effort) das coleções `servidores`/`emails` da unidade corrente os

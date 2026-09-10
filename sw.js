@@ -1,4 +1,4 @@
-var CACHE_NAME = 'app-gestao-reitoria-v7';
+var CACHE_NAME = 'app-gestao-reitoria-v8';
 
 var CORE_ASSETS = [
   './',
@@ -6,6 +6,7 @@ var CORE_ASSETS = [
   './config.js',
   './manifest.json',
   './appsel-firestore.js',
+  './disponibilidade.js',
   './relatorio-prazos.js',
   './icon.svg',
   './painel-icon.svg',

@@ -2022,6 +2022,7 @@ function tagsResponsaveisHtml_(p, idx, permiteTroca) {
 // Aplica SERV_DATA aos globals derivados (SERV_CLS, CHEFES) e atualiza a UI
 function aplicarServidores_(lista) {
   SERV_DATA = lista;
+  if (typeof carregarAusencias_ === 'function' && AUTH_TOKEN) carregarAusencias_();
   SERV_CLS  = {};
   CHEFES    = [];
   lista.forEach(function(s) {
@@ -2099,7 +2100,7 @@ function renderEquipeConfig_() {
   var card = document.getElementById('cfg-equipe-card');
   if (!card) return;
   var isChefe = isChefeAtual_();
-  var h = '';
+  var h = '<div style="padding:12px"><button class="btn-cfg" onclick="abrirAusencias_()">Disponibilidade / férias da equipe</button></div>';
   SERV_DATA.forEach(function(s, i) {
     var p = PALETA_CORES.find(function(p){ return p.cor === s.cor; }) || PALETA_CORES[7];
     h += '<div class="cfg-row" style="gap:10px;">'
@@ -3271,6 +3272,9 @@ function capResumoServidor_(nome, fase) {
 }
 
 function capAvisoHtml_(nome, fase, acrescimo) {
+  if (typeof ausAtual_ === 'function' && ausAtual_(nome)) {
+    return '<p role="alert" style="background:#fffbeb;color:#92400e;padding:12px;border-radius:9px">' + esc(nome) + ': ' + esc(ausRotulo_(ausAtual_(nome))) + '. Verifique a disponibilidade antes de atribuir.</p>';
+  }
   var s = capResumoServidor_(nome, fase);
   if (!s) return '';
   var teto = s.teto || (fase === 'ext' ? 6 : 10);
@@ -3375,9 +3379,16 @@ function fecharTrocaServ() {
   document.getElementById('modal-serv').classList.remove('open');
 }
 
-function confirmarAtribuicao_() {
+function confirmarAtribuicao_(ausenciaConfirmada) {
   var p = DATA[SERV_IDX_ATI];
   if (!p) return;
+  if (p.status !== 'ok' && !ausenciaConfirmada && typeof ausAtual_ === 'function') {
+    var ausentes = [SERV_SEL.int, SERV_SEL.ext].filter(function(n) { return n && ausAtual_(n); });
+    if (ausentes.length) {
+      dialogoConfirmar_('Responsável ausente', ausentes.join(', ') + ': ausência em curso. Atribuir mesmo assim?', function() { confirmarAtribuicao_(true); });
+      return;
+    }
+  }
   var concluido = p.status === 'ok';
   var rotuloBtn = concluido ? 'Salvar correção' : 'Confirmar';
   var btn = document.querySelector('#serv-body button[onclick*="confirmarAtribuicao"]');
@@ -5449,7 +5460,7 @@ function renderCapacidade_() {
       + '</div>'
       + '<div class="cap-bar"><div class="cap-bar-fill" style="width:' + Math.min(pct, 100) + '%;background:' + cor + ';"></div></div>'
       + '<div class="cap-footer">'
-      + '<span style="color:' + cor + ';font-weight:600;">' + icon + ' ' + esc(s.status) + '</span>'
+      + '<span style="color:' + cor + ';font-weight:600;">' + (typeof ausAtual_ === 'function' && ausAtual_(s.servidor) ? esc(ausRotulo_(ausAtual_(s.servidor))) : icon + ' ' + esc(s.status)) + '</span>'
       + '<span style="color:var(--muted);">' + s.total + '/' + s.teto + ' pts</span>'
       + '</div>';
     if (s.futuros) {
@@ -6079,5 +6090,6 @@ function excluirUnidadeApp(){
   if(document.readyState!=='loading') init(); else document.addEventListener('DOMContentLoaded', init);
 })();
 </script>
+<script src="disponibilidade.js"></script>
 </body>
 </html>
