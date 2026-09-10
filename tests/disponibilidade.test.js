@@ -34,3 +34,11 @@ test('Gravação exige chefia e revisão atual; falha pública fica pendente e a
   const r = c.salvarDisponibilidadeApp([periodo()], 0, 'token');
   assert.equal(r.pendente, true); assert.equal(audits.length, 1); assert.equal(writes[0][0], 'disponibilidade/agenda');
 });
+test('Leitura antiga incompatível não entra em loop e exige recadastro', () => {
+  const c = runtime({ _authRequire_: () => ({}), _fsGet_: () => ({ revisao: 3, periodos: '[object Object]', pendente: true }) });
+  const r = c.getDisponibilidadeApp('token');
+  assert.equal(r.ok, true);
+  assert.equal(r.revisao, 3);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.periodos)), []);
+  assert.equal(r.incompativel, true);
+});

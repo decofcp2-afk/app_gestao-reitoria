@@ -1,4 +1,4 @@
-var CACHE_NAME = 'app-gestao-reitoria-v8';
+var CACHE_NAME = 'app-gestao-reitoria-v9';
 
 var CORE_ASSETS = [
   './',
