@@ -26,7 +26,7 @@
 #   scripts/deploy-apps-script.sh push       # envia o código (atualiza só o @HEAD)
 #   scripts/deploy-apps-script.sh release    # envia + versiona + publica em produção
 #
-# Requer `clasp` autenticado na conta institucional (`clasp login`).
+# Requer `clasp` 3.x autenticado na conta institucional (`clasp login`).
 # ════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -52,7 +52,10 @@ trap 'rm -rf "$TMP"' EXIT
 msg() { printf '%s\n' "$*"; }
 erro() { printf 'ERRO: %s\n' "$*" >&2; exit 1; }
 
-command -v clasp >/dev/null 2>&1 || erro 'clasp não encontrado. Instale com: npm install -g @google/clasp'
+command -v clasp >/dev/null 2>&1 || erro 'clasp não encontrado. Instale com: npm install -g @google/clasp@3.4.0'
+versao_clasp="$(clasp --version 2>/dev/null || true)"
+major_clasp="${versao_clasp%%.*}"
+[ "$major_clasp" = '3' ] || erro "versão do clasp não suportada: '${versao_clasp:-desconhecida}' (use 3.x)."
 case "$MODO" in check|push|release) ;; *) erro "modo inválido: '$MODO' (use check, push ou release)" ;; esac
 
 conta="$(clasp show-authorized-user 2>&1 | head -1)" || erro 'clasp não está autenticado. Rode: clasp login'
@@ -77,6 +80,10 @@ for par in "${ARQUIVOS[@]}"; do
   local_f="${par%%:*}"; remoto_f="${par#*:}"
   [ -f "$RAIZ/$local_f" ] || erro "arquivo do repositório não encontrado: $local_f"
   cp "$RAIZ/$local_f" "$ENVIO/$remoto_f"
+  # O checkout local pode usar CRLF (Windows), enquanto o Apps Script devolve
+  # LF. Normalize só a cópia temporária para a comparação não marcar todas as
+  # linhas como alteradas e para o envio ser idêntico em qualquer sistema.
+  sed -i 's/\r$//' "$ENVIO/$remoto_f"
 done
 
 # ── Baixa o estado atual do projeto e compara ──────────────────────────────
@@ -157,10 +164,29 @@ versao="$(printf '%s' "$saida" | grep -oE '[0-9]+' | tail -1)"
 [ -n "$versao" ] || erro 'não consegui identificar o número da versão criada.'
 
 msg "Apontando a implantação de produção para a versão $versao..."
-( cd "$ENVIO" && clasp redeploy "$PROD_DEPLOYMENT_ID" -V "$versao" -d 'Producao AppSEL' )
+( cd "$ENVIO" && clasp update-deployment "$PROD_DEPLOYMENT_ID" -V "$versao" -d 'Producao AppSEL' )
 
 msg ''
 msg 'Implantações agora:'
 ( cd "$ENVIO" && clasp list-deployments )
+
+# A implantação pode levar alguns segundos para servir a nova versão. Uma chamada
+# sem token deve chegar até a função nova e responder "Sessão expirada". Se ainda
+# vier "Funcao nao permitida", a URL /exec continua apontando para código antigo.
+command -v curl >/dev/null 2>&1 || erro 'curl não encontrado; não consigo validar a URL de produção.'
+smoke_url="https://script.google.com/macros/s/$PROD_DEPLOYMENT_ID/exec?route=appsel.call&method=getDisponibilidadeApp&args=%5B%22%22%5D&unidade=reitoria-sel"
+msg ''
+msg 'Confirmando a função nova na URL de produção...'
+smoke_ok=''
+for tentativa in 1 2 3 4 5 6 7 8; do
+  resposta="$(curl --fail --location --silent --show-error --max-time 30 "$smoke_url" 2>/dev/null || true)"
+  if printf '%s' "$resposta" | grep -qi 'sess.*expirada'; then
+    smoke_ok=1
+    break
+  fi
+  [ "$tentativa" -lt 8 ] && sleep 5
+done
+[ -n "$smoke_ok" ] || erro 'a URL de produção ainda não reconhece getDisponibilidadeApp após a publicação.'
+msg 'Validação concluída: a URL de produção já reconhece getDisponibilidadeApp.'
 msg ''
 msg "Publicado. A URL /exec do config.js não mudou — serve a versão $versao."

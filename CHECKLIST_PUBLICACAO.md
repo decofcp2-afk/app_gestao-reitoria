@@ -8,6 +8,34 @@ Aplicação **interna e protegida por login**. A equipe SEL/SEPMA faz toda a ges
 
 ### Atualizar o backend (projeto já existente)
 
+#### Automático após merge na `main` (recomendado)
+
+O workflow `.github/workflows/deploy-apps-script.yml` executa os testes e publica
+automaticamente quando `apps-script/`, `index.html` ou o script de implantação
+mudam. O GitHub Pages continua sendo atualizado pela própria branch `main`; o
+workflow cuida somente do backend Apps Script.
+
+Configuração única, feita pela conta institucional:
+
+1. Em uma máquina confiável, instalar `@google/clasp@3.4.0` e executar
+   `clasp login` com a conta dona da implantação "Producao AppSEL".
+2. Abrir o arquivo global `~/.clasprc.json` gerado pelo clasp.
+3. No GitHub, abrir `Settings > Secrets and variables > Actions` e criar o
+   secret de repositório `CLASP_AUTH_JSON` com o conteúdo integral desse arquivo.
+4. Executar uma vez o workflow **Publicar Apps Script** por
+   `Actions > Run workflow`. Depois disso, alterações relevantes na `main` são
+   publicadas automaticamente mantendo a mesma URL `/exec`.
+
+`CLASP_AUTH_JSON` equivale a uma credencial. Nunca o cole em issue, commit, log,
+mensagem ou arquivo do repositório. Se a conta perder acesso ou revogar a sessão,
+gere o arquivo novamente e substitua apenas o secret no GitHub.
+
+Sem o secret, o workflow ainda roda os testes e exibe um aviso, mas não tenta
+publicar. Isso permite incorporar a automação sem derrubar o sistema durante a
+configuração inicial.
+
+#### Manual (contingência)
+
 Use `scripts/deploy-apps-script.sh`, com o `clasp` autenticado na conta institucional:
 
 ```bash
