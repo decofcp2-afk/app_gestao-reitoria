@@ -1,0 +1,61 @@
+name: Publicar Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps-script/**"
+      - "index.html"
+      - "scripts/deploy-apps-script.sh"
+      - ".github/workflows/deploy-apps-script.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apps-script-producao
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLASP_AUTH_JSON: ${{ secrets.CLASP_AUTH_JSON }}
+
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Testar antes de publicar
+        run: npm test
+
+      - name: Avisar quando falta a credencial
+        if: env.CLASP_AUTH_JSON == ''
+        run: |
+          echo "::warning::Apps Script não publicado: configure o secret CLASP_AUTH_JSON conforme o CHECKLIST_PUBLICACAO.md."
+
+      - name: Instalar clasp
+        if: env.CLASP_AUTH_JSON != ''
+        run: npm install --global @google/clasp@3.4.0
+
+      - name: Preparar autenticação institucional
+        if: env.CLASP_AUTH_JSON != ''
+        run: |
+          AUTH_FILE="$RUNNER_TEMP/.clasprc.json"
+          printf '%s' "$CLASP_AUTH_JSON" > "$AUTH_FILE"
+          chmod 600 "$AUTH_FILE"
+          echo "clasp_config_auth=$AUTH_FILE" >> "$GITHUB_ENV"
+
+      - name: Publicar a mesma implantação de produção
+        if: env.CLASP_AUTH_JSON != ''
+        run: |
+          descricao="${GITHUB_SHA::7} $(git log -1 --pretty=%s)"
+          scripts/deploy-apps-script.sh release "$descricao"

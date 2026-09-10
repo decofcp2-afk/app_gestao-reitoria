@@ -33,6 +33,7 @@ google-services.json
 firebase-debug.log
 secrets.*
 credentials.*
+.clasprc.json
 
 # Configuracoes locais de editores
 .vscode/
