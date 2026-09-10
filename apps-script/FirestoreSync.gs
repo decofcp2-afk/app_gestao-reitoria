@@ -143,6 +143,8 @@ function _fsToVal_(v) {
   if (v instanceof Date) return { timestampValue: v.toISOString() };
   if (typeof v === 'boolean') return { booleanValue: v };
   if (typeof v === 'number') return (v % 1 === 0) ? { integerValue: String(v) } : { doubleValue: v };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(_fsToVal_) } };
+  if (typeof v === 'object') return { mapValue: { fields: _fsToFields_(v) } };
   return { stringValue: String(v) };
 }
 function _fsFromVal_(f) {

@@ -37,13 +37,31 @@ function _ausResumo_(lista, equipe) {
 }
 function _ausLer_() {
   var d = _fsGet_('disponibilidade/agenda') || {};
-  d.revisao = Number(d.revisao) || 0; d.periodos = d.periodos || [];
+  d.revisao = Number(d.revisao) || 0;
+  // A primeira versão do encoder REST transformava arrays de objetos em
+  // "[object Object]". JSON válido ainda pode ser recuperado; a string antiga
+  // não contém os campos originais, então é sinalizada para recadastro em vez
+  // de quebrar o cliente num carregamento infinito.
+  if (typeof d.periodos === 'string') {
+    try {
+      var legado = JSON.parse(d.periodos);
+      d.periodos = Array.isArray(legado) ? legado : [];
+      d.incompativel = !Array.isArray(legado);
+    } catch (e) {
+      d.periodos = [];
+      d.incompativel = true;
+    }
+  } else if (!Array.isArray(d.periodos)) {
+    d.periodos = [];
+    d.incompativel = true;
+  }
   return d;
 }
 function getDisponibilidadeApp(token) {
   _authRequire_(token, false);
   var d = _ausLer_();
-  return { ok: true, revisao: d.revisao, periodos: d.periodos || [], pendente: !!d.pendente };
+  return { ok: true, revisao: d.revisao, periodos: d.periodos || [], pendente: !!d.pendente,
+    incompativel: !!d.incompativel };
 }
 function _ausPublicar_(d, equipe) {
   _fsSet_('config/capacidadeDisponivel', _ausResumo_(d.periodos || [], equipe));
@@ -72,7 +90,9 @@ function salvarDisponibilidadeApp(lista, revisao, token) {
 function republicarDisponibilidadeApp(token) {
   return _withAppLockResult_('sincronizar disponibilidade', function() {
     _authRequire_(token, true);
-    _ausPublicar_(_ausLer_(), _getServidoresApp_());
+    var agenda = _ausLer_();
+    if (agenda.incompativel) throw new Error('O período salvo pela versão anterior precisa ser recadastrado antes da sincronização.');
+    _ausPublicar_(agenda, _getServidoresApp_());
     return getDisponibilidadeApp(token);
   });
 }

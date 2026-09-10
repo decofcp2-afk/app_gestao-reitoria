@@ -405,7 +405,7 @@
     .st-default { background:var(--bg); color:var(--muted); }
     /* ── Capacidade ──────────────────────────────────────────────── */
     .cap-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
-    .cap-card { background:var(--card); border-radius:12px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .cap-card { position:relative; overflow:hidden; background:var(--card); border-radius:12px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
     .cap-serv { font-weight:700; font-size:13px; margin-bottom:6px; }
     .cap-pbar { height:5px; background:var(--border); border-radius:4px; overflow:hidden; margin-bottom:4px; }
     .cap-fill { height:100%; border-radius:4px; }
@@ -424,13 +424,18 @@
     .cap-phase-btn { flex:1; padding:8px; border:none; background:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; color:var(--muted); transition:all .15s; }
     .cap-phase-btn.active { background:var(--navy); color:#fff; }
     /* ── Cap server card ───────────────────────────────────────── */
-    .cap-card { background:var(--card); border-radius:12px; padding:14px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .cap-card { position:relative; overflow:hidden; background:var(--card); border-radius:12px; padding:14px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
     .cap-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
     .cap-pct { font-size:16px; font-weight:800; line-height:1; }
     .cap-bar  { height:5px; background:var(--border); border-radius:4px; overflow:hidden; margin:6px 0 4px; }
     .cap-bar-fill { height:100%; border-radius:4px; }
     .cap-footer { display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-top:4px; }
     .cap-outros-row { display:flex; align-items:center; justify-content:space-between; margin-top:10px; padding-top:8px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); }
+    .cap-card.is-away > :not(.cap-away-stamp) { opacity:.32; }
+    .cap-card.is-away .cap-outros-row { pointer-events:none; }
+    .cap-away-stamp { position:absolute; z-index:2; left:50%; top:50%; transform:translate(-50%,-50%) rotate(-7deg); pointer-events:none; min-width:180px; padding:7px 18px; background:rgba(255,255,255,.95); border:2px solid #b45309; color:#92400e; text-align:center; text-transform:uppercase; letter-spacing:.08em; box-shadow:0 2px 8px rgba(146,64,14,.12); }
+    .cap-away-stamp strong { display:block; font-size:14px; line-height:1.1; }
+    .cap-away-stamp span { display:block; margin-top:3px; font-size:9px; font-weight:800; letter-spacing:.04em; }
     /* ── Cap process row ───────────────────────────────────────── */
     .cap-proc-row { background:var(--card); border-radius:10px; padding:10px 12px; box-shadow:0 1px 3px rgba(0,0,0,.05); display:flex; align-items:center; gap:10px; }
     .cap-proc-info { flex:1; min-width:0; }
@@ -438,6 +443,87 @@
     .cap-proc-nome { font-weight:600; font-size:13px; white-space:normal; word-break:break-word; }
     .cap-proc-meta { font-size:11px; color:var(--muted); margin-top:1px; }
     .cap-pts-badge { font-size:14px; font-weight:800; flex-shrink:0; }
+    /* ── Planejamento de férias e afastamentos ───────────────────── */
+    .aus-overlay { z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; }
+    .aus-dialog { width:min(920px,100%); max-height:min(90vh,780px); overflow:hidden; display:flex; flex-direction:column; background:var(--card); color:var(--text); border-radius:16px; box-shadow:0 24px 70px rgba(15,23,42,.28); }
+    .aus-dialog-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:22px 24px 14px; }
+    .aus-dialog-head h2 { margin-top:3px; font-size:21px; line-height:1.2; color:var(--navy); }
+    .aus-dialog-head p { max-width:620px; margin-top:6px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .aus-eyebrow { color:var(--blue); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.09em; }
+    .aus-close { flex:0 0 36px; width:36px; height:36px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:24px; line-height:1; cursor:pointer; }
+    .aus-sync-row { min-height:29px; padding:0 24px 9px; border-bottom:1px solid var(--border); }
+    .aus-sync { font-size:11px; color:var(--muted); }
+    .aus-sync.is-loading { color:var(--blue); }
+    .aus-sync.is-ok { color:var(--green); }
+    .aus-sync.is-error { color:var(--red); }
+    .aus-layout { min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 300px; overflow:hidden; }
+    #aus-lista { min-width:0; overflow-y:auto; padding:20px 24px 28px; }
+    .aus-form-panel { overflow-y:auto; padding:20px; background:#f8fafc; border-left:1px solid var(--border); }
+    .aus-summary { display:grid; grid-template-columns:repeat(3,1fr); margin-bottom:22px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+    .aus-summary div { padding:12px 10px; border-right:1px solid var(--border); }
+    .aus-summary div:last-child { border-right:0; }
+    .aus-summary span { display:block; color:var(--muted); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+    .aus-summary b { display:block; margin-top:4px; color:var(--navy); font-size:18px; }
+    .aus-group + .aus-group { margin-top:22px; }
+    .aus-group-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+    .aus-group-head h3 { color:var(--text2); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+    .aus-group-head > span { color:var(--muted); font-size:11px; font-weight:800; }
+    .aus-item { display:flex; align-items:center; gap:14px; min-height:70px; padding:11px 0 11px 13px; border-bottom:1px solid var(--border); border-left:3px solid var(--border); }
+    .aus-item.is-current { border-left-color:var(--amber); }
+    .aus-item.is-upcoming { border-left-color:var(--blue); }
+    .aus-item.is-past { opacity:.72; }
+    .aus-item-main { flex:1; min-width:0; }
+    .aus-item-top { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+    .aus-item-top strong { font-size:13px; color:var(--text); }
+    .aus-type, .aus-state { font-size:10px; font-weight:700; }
+    .aus-type { color:var(--navy); }
+    .aus-state { color:var(--muted); }
+    .aus-dates { margin-top:5px; color:var(--text2); font-size:12px; font-weight:600; }
+    .aus-item small { display:block; margin-top:2px; color:var(--muted); font-size:10px; }
+    .aus-item-actions { display:flex; align-items:center; gap:9px; flex-shrink:0; }
+    .aus-item-actions .btn-cfg { padding:5px 10px; font-size:11px; }
+    .aus-link-danger { border:0; background:transparent; color:#b02035; font-size:11px; font-weight:700; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+    .aus-group-empty, .aus-empty { color:var(--muted); font-size:12px; line-height:1.5; padding:11px 2px; }
+    .aus-empty { display:grid; gap:4px; padding:28px 8px; text-align:center; }
+    .aus-aside-copy h3, .aus-form-head h3, .aus-confirm h3 { color:var(--navy); font-size:16px; }
+    .aus-aside-copy p, .aus-confirm p { margin-top:8px; color:var(--muted); font-size:12px; line-height:1.55; }
+    .aus-add { margin-top:18px; padding:12px; font-size:13px; }
+    .aus-form-panel form { display:grid; gap:13px; }
+    .aus-form-head > span, .aus-confirm > span { color:var(--blue); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; }
+    .aus-form-head h3, .aus-confirm h3 { margin-top:3px; }
+    .aus-form-panel label > span { display:block; margin-bottom:5px; color:var(--text2); font-size:11px; font-weight:700; }
+    .aus-form-panel .field-input { width:100%; background:#fff; }
+    .aus-date-grid { display:grid; grid-template-columns:1fr; gap:12px; }
+    .aus-form-help { min-height:32px; color:var(--muted); font-size:11px; line-height:1.45; }
+    .aus-form-actions { display:grid; gap:7px; }
+    .aus-form-actions .btn-prim { padding:12px; font-size:13px; }
+    .aus-form-actions .btn-sec { margin-top:0; padding:9px; font-size:12px; }
+    .aus-alert { display:grid; grid-template-columns:1fr auto; align-items:center; gap:3px 12px; margin:14px 24px 0; padding:11px 12px; border-left:3px solid; font-size:11px; line-height:1.4; }
+    .aus-alert b { grid-column:1; }
+    .aus-alert span { grid-column:1; }
+    .aus-alert .btn-cfg { grid-column:2; grid-row:1 / span 2; }
+    .aus-alert.is-error { background:#fef2f2; border-color:var(--red); color:#991b1b; }
+    .aus-alert.is-warning { background:#fffbeb; border-color:var(--amber); color:#92400e; }
+    .aus-skeleton { display:grid; gap:12px; padding-top:6px; }
+    .aus-skeleton span { height:66px; background:#eef2f7; animation:aus-pulse 1.2s ease-in-out infinite alternate; }
+    .aus-skeleton span:nth-child(2) { animation-delay:.16s; }
+    .aus-skeleton span:nth-child(3) { animation-delay:.32s; }
+    @keyframes aus-pulse { to { opacity:.45; } }
+    @media (max-width:700px) {
+      .aus-overlay { align-items:flex-end; padding:0; }
+      .aus-dialog { width:100%; max-height:94vh; border-radius:16px 16px 0 0; }
+      .aus-dialog-head { padding:18px 18px 12px; }
+      .aus-sync-row { padding:0 18px 8px; }
+      .aus-layout { display:block; overflow-y:auto; }
+      #aus-lista, .aus-form-panel { overflow:visible; padding:16px 18px 22px; }
+      .aus-form-panel { border-left:0; border-top:1px solid var(--border); }
+      .aus-summary { grid-template-columns:1fr 1fr; }
+      .aus-summary div:nth-child(2) { border-right:0; }
+      .aus-summary div:last-child { grid-column:1 / -1; border-top:1px solid var(--border); }
+      .aus-item { align-items:flex-start; flex-direction:column; gap:8px; }
+      .aus-alert { margin:12px 18px 0; grid-template-columns:1fr; }
+      .aus-alert .btn-cfg { grid-column:1; grid-row:auto; margin-top:5px; }
+    }
     /* ── Pontuação guided modal ─────────────────────────────────── */
     .pont-section { margin-bottom:16px; }
     .pont-section-title { font-weight:700; font-size:13px; color:var(--navy); margin-bottom:8px; }
@@ -594,22 +680,6 @@
       </div>
     </div>
     <div class="cfg-section">
-      <div class="cfg-head">Avisos automáticos de prazo</div>
-      <div class="cfg-card">
-        <div class="cfg-row cfg-row-col">
-          <label>Avisos segunda a sexta</label>
-          <span class="note">Instala acionadores para prazos próximos às 10h30, etapas vencidas às 14h e cobrança de pontuação pendente às 9h30, no fuso do projeto. O requisitante acompanha o lote correspondente quando houver e-mail cadastrado. O remetente é a conta que instalou os acionadores.</span>
-          <div class="cfg-actions">
-            <button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar trigger</button>
-            <button class="btn-cfg" id="btn-trigger-test" onclick="testarEmailAvisos()">Testar e-mail</button>
-            <button class="btn-cfg" id="btn-trigger-run" onclick="executarAvisosAgora()">Enviar avisos agora</button>
-            <button class="btn-cfg" id="btn-pont-run" onclick="executarCobrancaPontuacaoAgora()">Cobrar pontuação agora</button>
-            <span id="trigger-ok"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="cfg-section">
       <div class="cfg-head">Dados da unidade</div>
       <div class="cfg-card">
         <div class="cfg-row cfg-row-col">
@@ -638,6 +708,16 @@
         <div class="cfg-head">E-mails dos servidores</div>
         <div class="cfg-card" id="cfg-emails-card">
           <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div>
+        </div>
+        <div class="cfg-card" style="margin-top:10px;">
+          <div class="cfg-row cfg-row-col">
+            <label>Automação de avisos</label>
+            <span class="note">Acionadores de segunda a sexta: pontuação às 9h30, prazos próximos às 10h30 e etapas vencidas às 14h. O remetente é a conta que instalou os acionadores.</span>
+            <div class="cfg-actions">
+              <button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar trigger</button>
+              <span id="trigger-ok"></span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -5453,14 +5533,18 @@ function renderCapacidade_() {
     var pct = s.pct || 0;
     var cor = corPct(pct);
     var icon = pct >= 90 ? '⛔' : pct >= 60 ? '⚠️' : '✅';
-    var card = '<div class="cap-card">'
+    var ausencia = typeof ausAtual_ === 'function' ? ausAtual_(s.servidor) : null;
+    var card = '<div class="cap-card' + (ausencia ? ' is-away' : '') + '">'
+      + (ausencia ? '<div class="cap-away-stamp" aria-label="' + esc(ausRotulo_(ausencia)) + '"><strong>'
+        + (ausencia.tipo === 'ferias' ? 'Férias' : 'Afastamento') + '</strong><span>'
+        + (ausencia.fim ? 'até ' + esc(ausDataBr_(ausencia.fim)) : 'sem previsão de retorno') + '</span></div>' : '')
       + '<div class="cap-card-header">'
       + servTagHtml_(s.servidor)
       + '<span class="cap-pct" style="color:' + cor + ';">' + Math.round(pct) + '%</span>'
       + '</div>'
       + '<div class="cap-bar"><div class="cap-bar-fill" style="width:' + Math.min(pct, 100) + '%;background:' + cor + ';"></div></div>'
       + '<div class="cap-footer">'
-      + '<span style="color:' + cor + ';font-weight:600;">' + (typeof ausAtual_ === 'function' && ausAtual_(s.servidor) ? esc(ausRotulo_(ausAtual_(s.servidor))) : icon + ' ' + esc(s.status)) + '</span>'
+      + '<span style="color:' + cor + ';font-weight:600;">' + (ausencia ? esc(ausRotulo_(ausencia)) : icon + ' ' + esc(s.status)) + '</span>'
       + '<span style="color:var(--muted);">' + s.total + '/' + s.teto + ' pts</span>'
       + '</div>';
     if (s.futuros) {
