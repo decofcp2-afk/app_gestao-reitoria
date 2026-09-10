@@ -1028,6 +1028,9 @@ function _apiCallAppSEL_(method, args) {
   args = Array.isArray(args) ? args : [];
   var fns = {
     getServidoresApp: getServidoresApp,
+    getDisponibilidadeApp: getDisponibilidadeApp,
+    salvarDisponibilidadeApp: salvarDisponibilidadeApp,
+    republicarDisponibilidadeApp: republicarDisponibilidadeApp,
     salvarServidoresApp: salvarServidoresApp,
     resetarSenhaServidorApp: resetarSenhaServidorApp,
     solicitarResetSenhaApp: solicitarResetSenhaApp,
