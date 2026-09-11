@@ -42,7 +42,11 @@
       root.SERVIDOR='Adm Geral'; root.SESSAO_CHEFE=true; root.SESSAO_ADMIN=true;
       var login=el('tela-login'), app=el('app'); if(login)login.hidden=true; if(app)app.hidden=false;
       if(el('hdr-nome'))el('hdr-nome').textContent='Adm Geral';
-      toggleEntradas(); atualizarAvisos(); root.switchTab('atas'); return;
+      toggleEntradas(); atualizarAvisos(); root.switchTab('atas');
+      if (/(?:\?|&)previewTrigger=1(?:&|$)/.test(location.search)) {
+        setTimeout(function(){ if(typeof root.aplicarTriggerStatus_==='function')root.aplicarTriggerStatus_({instalado:false}); }, 0);
+      }
+      return;
     }
     if (!root.AUTH_TOKEN || !root.google || !google.script) return;
     // Evita o item desaparecer no menu enquanto a consulta de habilitação ainda

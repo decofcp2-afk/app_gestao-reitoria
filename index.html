@@ -380,6 +380,14 @@
     .team-member-main { display:flex; align-items:center; gap:8px; flex:1; min-width:0; }
     .team-member-copy { min-width:0; }
     .team-member-actions { display:flex; gap:8px; flex-shrink:0; }
+    .trigger-required-ov { z-index:11000; background:rgba(15,23,42,.66); }
+    .trigger-required-card { position:fixed; z-index:11001; left:50%; top:50%; transform:translate(-50%,-50%) scale(.96); width:min(92vw,430px); background:var(--card); border-radius:16px; box-shadow:0 24px 70px rgba(15,23,42,.38); padding:22px; opacity:0; pointer-events:none; transition:opacity .18s,transform .18s; }
+    .trigger-required-card.open { opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1); }
+    .trigger-required-eyebrow { color:var(--blue); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+    .trigger-required-card h2 { margin-top:5px; color:var(--navy); font-size:20px; line-height:1.2; }
+    .trigger-required-card p { margin-top:9px; color:var(--text2); font-size:13px; line-height:1.55; }
+    .trigger-required-card .btn-cfg { width:100%; margin-top:18px; padding:12px 14px; }
+    .trigger-required-status { display:block; min-height:17px; margin-top:10px; color:var(--amber); font-size:12px; line-height:1.4; }
     @media (max-width:760px) {
       .team-layout { grid-template-columns:1fr; }
       .team-plan-stat { padding:13px 10px; }
@@ -723,13 +731,6 @@
         <div class="cfg-section" id="cfg-planejamento-section" style="margin-bottom:0;">
           <div class="cfg-head">Planejamento da equipe</div>
           <div class="cfg-card" id="cfg-planejamento-card"><div style="padding:18px 16px;font-size:12px;color:var(--muted);">Carregando disponibilidade…</div></div>
-          <div class="cfg-card" style="margin-top:10px;">
-            <div class="cfg-row cfg-row-col">
-              <label>Automação de avisos</label>
-              <span class="note">Acionadores de segunda a sexta. A Gestão de Atas envia um resumo diário consolidado com os marcos de 90, 60 e 30 dias.</span>
-              <div class="cfg-actions"><button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar trigger</button><span id="trigger-ok"></span></div>
-            </div>
-          </div>
         </div>
         <div class="cfg-section" id="cfg-equipe-section" style="margin-bottom:0;">
           <div class="cfg-head">Equipe SEL/SEPMA</div>
@@ -964,6 +965,17 @@
     <button class="btn-cfg" id="dlg-ok" onclick="fecharDialogo_(true)">Confirmar</button>
   </div>
 </div>
+
+<!-- Configuração obrigatória: só aparece quando o backend confirma que os
+     acionadores de avisos não estão instalados. Não possui ação de fechar. -->
+<div id="trigger-required-ov" class="overlay trigger-required-ov"></div>
+<section id="trigger-required-card" class="trigger-required-card" role="alertdialog" aria-modal="true" aria-labelledby="trigger-required-title" aria-describedby="trigger-required-desc">
+  <span class="trigger-required-eyebrow">Configuração necessária</span>
+  <h2 id="trigger-required-title">Ative os avisos automáticos</h2>
+  <p id="trigger-required-desc">Instale os acionadores para que os prazos próximos, as etapas vencidas e os marcos de 90, 60 e 30 dias das atas sejam enviados automaticamente.</p>
+  <button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar avisos automáticos</button>
+  <span class="trigger-required-status" id="trigger-ok" role="status" aria-live="polite"></span>
+</section>
 
 <div id="modal-pont" class="sheet" style="border-radius:0;top:0;max-height:100vh;">
   <div class="conc-topbar">
@@ -3182,7 +3194,6 @@ function renderEtapas(filtrado) {
   var html = '';
 
   // ── Banner dinâmico ───────────────────────────────────────────
-  var isChefe = isChefeAtual_();
   var urgentesVenc = lista.filter(function(p) {
     return p.status !== 'aguardando' && p.status !== 'paralisado' && temPrazoVencido(p);
   }).length;
@@ -3193,15 +3204,6 @@ function renderEtapas(filtrado) {
       var msgTodos = 'Atenção: ' + urgentesVenc + ' processo' + (urgentesVenc > 1 ? 's com etapas vencidas.' : ' com etapa vencida.');
       html += '<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:9px 13px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:12px;color:#92400e;">'
         + '<span style="font-size:14px;">⚠</span><span>' + msgTodos + '</span></div>';
-    }
-    // Prompt de trigger (apenas para chefes que ainda não instalaram)
-    if (isChefe && TRIGGER_STATUS === false) {
-      html += '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:9px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;font-size:12px;color:#1d4ed8;">'
-        + '<span style="font-size:14px;">🔔</span>'
-        + '<span style="flex:1;">Avisos automáticos de prazo ainda não configurados.</span>'
-        + '<button onclick="switchTab(\'equipe\');document.getElementById(\'btn-trigger\').scrollIntoView({behavior:\'smooth\'});" '
-        + 'style="background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Instalar</button>'
-        + '</div>';
     }
   } else {
     // ── Filtro individual ───────────────────────────────────────
@@ -5049,35 +5051,35 @@ function _iniciarSelecionadosEnviar_(selecionados, obsRetomada) {
 function aplicarTriggerStatus_(r) {
   var btn = document.getElementById('btn-trigger');
   var msg = document.getElementById('trigger-ok');
+  var ov = document.getElementById('trigger-required-ov');
+  var card = document.getElementById('trigger-required-card');
   var instalado = r && r.instalado === true;
   var naoInstalado = r && r.instalado === false;
   TRIGGER_STATUS = instalado ? true : (naoInstalado ? false : null);
-  if (!btn || !msg) return;
 
   if (instalado) {
-    btn.disabled = false;
-    btn.textContent = 'Reinstalar trigger';
-    // O acionador de pontuação é posterior aos de prazo. Quem instalou antes
-    // não fica sem a cobrança — ela roda junto com o aviso das 10h30 (ver
-    // enviarAvisosPrazoProximos) —, então aqui é só a dica do horário melhor,
-    // não um alerta de coisa quebrada.
-    msg.style.color = 'var(--green)';
-    msg.textContent = '✓ Trigger instalado'
-      + (r.hora ? ' · ' + r.hora : '')
-      + (r.pontuacao === false ? ' · pontuação junto com o aviso das 10h30 (reinstale para 9h30)'
-                               : (r.pontuacaoHora ? ' · pontuação ' + r.pontuacaoHora : ''))
-      + (r.dias ? ' · ' + r.dias : '')
-      + (r.timezone ? ' · fuso ' + r.timezone : '');
+    if (ov) ov.classList.remove('open');
+    if (card) card.classList.remove('open');
+    if (btn) { btn.disabled = false; btn.textContent = 'Instalar avisos automáticos'; }
+    if (msg) msg.textContent = '';
   } else if (naoInstalado) {
-    btn.disabled = false;
-    btn.textContent = 'Instalar trigger';
-    msg.style.color = 'var(--amber)';
-    msg.textContent = r.erro ? 'Não consegui verificar: ' + r.erro : 'Trigger não instalado';
+    // Somente a chefia pode instalar. A confirmação negativa abre um modal sem
+    // botão de fechar: depois da instalação bem-sucedida ele desaparece.
+    var podeInstalar = isChefeAtual_();
+    if (ov) ov.classList.toggle('open', podeInstalar);
+    if (card) card.classList.toggle('open', podeInstalar);
+    if (btn) { btn.disabled = false; btn.textContent = 'Instalar avisos automáticos'; }
+    if (msg) {
+      msg.style.color = 'var(--amber)';
+      msg.textContent = r.erro ? 'Não foi possível confirmar os acionadores: ' + r.erro : 'A instalação é necessária para continuar recebendo os avisos.';
+    }
+    if (podeInstalar && btn) setTimeout(function() { btn.focus(); }, 80);
   } else {
-    btn.disabled = true;
-    btn.textContent = 'Verificando…';
-    msg.style.color = 'var(--muted)';
-    msg.textContent = 'Verificando trigger…';
+    // Falha de rede ou verificação em andamento não deve bloquear a interface.
+    if (ov) ov.classList.remove('open');
+    if (card) card.classList.remove('open');
+    if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
+    if (msg) msg.textContent = '';
   }
 }
 
@@ -5089,24 +5091,25 @@ function verificarTriggerConfig_() {
       if (DATA.length || FILA.length) aplicarFiltros();
     })
     .withFailureHandler(function(e) {
-      aplicarTriggerStatus_({ instalado: false, erro: e && (e.message || e) });
+      aplicarTriggerStatus_({ instalado: null, erro: e && (e.message || e) });
     })
     .verificarTriggerAvisos(AUTH_TOKEN);
 }
 
 function instalarTrigger() {
   var btn = document.getElementById('btn-trigger');
-  btn.disabled = true; btn.textContent = 'Instalando…';
+  var msg = document.getElementById('trigger-ok');
+  if (btn) { btn.disabled = true; btn.textContent = 'Instalando…'; }
   google.script.run
-    .withSuccessHandler(function(msg) {
+    .withSuccessHandler(function() {
       aplicarTriggerStatus_({ instalado: true, hora: '10h30 prazos próximos; 14h etapas vencidas',
         pontuacao: true, pontuacaoHora: '9h30', dias: 'segunda a sexta-feira' });
-      document.getElementById('trigger-ok').textContent = '✓ ' + msg;
+      toast('✓ Avisos automáticos ativados.', 'ok');
       if (DATA.length || FILA.length) aplicarFiltros();
     })
     .withFailureHandler(function(e) {
-      document.getElementById('trigger-ok').textContent = '✗ ' + (e.message||e);
-      btn.disabled = false; btn.textContent = 'Instalar trigger';
+      if (msg) msg.textContent = '✗ ' + (e.message||e);
+      if (btn) { btn.disabled = false; btn.textContent = 'Tentar instalar novamente'; }
     })
     .instalarTriggerAvisos(AUTH_TOKEN);
 }

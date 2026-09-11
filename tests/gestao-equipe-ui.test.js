@@ -27,3 +27,14 @@ test('backend salva o e-mail antes de criar o primeiro acesso', () => {
   const criarAcesso = code.indexOf('_authSyncServidores_(listaPersistida, criados)');
   assert.ok(salvarEmail >= 0 && criarAcesso > salvarEmail);
 });
+
+test('automação de avisos aparece somente como modal obrigatório quando ausente', () => {
+  assert.match(html, /id="trigger-required-card"[^>]*role="alertdialog"[^>]*aria-modal="true"/);
+  const modal = html.match(/<section id="trigger-required-card"[\s\S]*?<\/section>/);
+  assert.ok(modal);
+  assert.doesNotMatch(modal[0], /fechar|onclick="[^\"]*close/i);
+  assert.doesNotMatch(html, /<h3>Automação de avisos<\/h3>/);
+  assert.match(html, /classList\.toggle\('open', podeInstalar\)/);
+  assert.match(html, /if \(instalado\)[\s\S]*?classList\.remove\('open'\)/);
+  assert.match(html, /withFailureHandler\(function\(e\) \{\s*aplicarTriggerStatus_\(\{ instalado: null/);
+});

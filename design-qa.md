@@ -33,6 +33,7 @@ The side-by-side comparison preserves the approved structure: horizontal institu
 - Gestão da Equipe opened with availability/férias and server e-mail areas.
 - Process notifications now expose only “Vencidos” and “Prazos próximos”; the Pontuação category is absent.
 - Gestão da Equipe shows the operational availability summary before the server list on mobile, and each server edit sheet exposes E-mail immediately after Matrícula.
+- A ausência confirmada dos acionadores abre um diálogo central obrigatório, sem fechar pelo fundo ou por botão; a instalação confirmada remove o diálogo e não deixa card permanente na Gestão da Equipe.
 - Browser console checked after the flows: no errors or warnings.
 
 ## Comparison history
@@ -41,6 +42,7 @@ The side-by-side comparison preserves the approved structure: horizontal institu
 2. Initial preview notification refresh tried to use a real unauthenticated backend session (interaction P1). Fixed by isolating preview notification refresh. Post-fix: Atas/Processos scope and Gestão da Equipe flows passed without logout or console errors.
 3. Production mobile capture showed the feature-gated Gestão de Atas item absent while its asynchronous permission check was still running (P1) and Histórico lacked its expected visual marker (P3). Fixed by immediately exposing the entry for the known `reitoria-sel` pilot while the backend confirms the flag, and by adding the approved menu markers. Post-fix evidence: `comparison-menu-mobile.jpg` at 390 × 844.
 4. The first compact server card placed the new e-mail beside both actions, causing awkward wrapping at 390 px (P2). Fixed by stacking the identity block above full-width Editar/Remover actions on mobile. The final capture keeps the e-mail readable and the actions comfortably tappable.
+5. The first automation entry occupied permanent space in Gestão da Equipe after configuration (P2). It was replaced by a centered blocking dialog shown only after a confirmed missing-trigger response. Both missing and installed preview states were inspected; the installed state leaves no automation card behind.
 
 ## Findings
 
