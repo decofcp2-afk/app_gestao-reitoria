@@ -75,6 +75,12 @@ function _atasHabilitada_() {
 
 // Função administrativa para execução manual no editor do Apps Script.
 function configurarGestaoAtasUnidade(unidade, ativa) {
+  // O editor do Apps Script não permite informar argumentos pelo botão
+  // Executar. Sem argumentos, a ação explícita equivale a habilitar o piloto.
+  if (arguments.length === 0) {
+    unidade = 'reitoria-sel';
+    ativa = true;
+  }
   var id = _atasNorm_(unidade).replace(/[^a-z0-9-]/g, '');
   if (!id) throw new Error('Unidade inválida.');
   var lista = _atasUnidadesHabilitadas_();
