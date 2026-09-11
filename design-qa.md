@@ -9,6 +9,7 @@
 - Corrected mobile menu: `menu-mobile-corrigido.jpg`; combined comparison: `comparison-menu-mobile.jpg`.
 - Team-management sources: `C:\Users\Samuel Gomes\Desktop\app_gestao-reitoria\.codex-remote-attachments\01a08d3a-2edf-7fc1-a0f8-c7f2eaefbe5c\c6c26736-b9bd-4d2f-ae42-b442f54f76d0\1-Photo-1.jpg` and `2-Photo-2.jpg`.
 - Team-management implementation: inspected in the in-app Browser at 390 × 844 CSS px with planning, complete server cards and the edit-server sheet open.
+- Navigation refinement source: `C:\Users\SAMUEL~1\AppData\Local\Temp\codex-clipboard-dbefbd83-5a21-4695-859e-984bf40bdd48.png` (680 × 104 px). The implementation was inspected in the in-app Browser in compact mode and through a normalized 1440 × 900 CSS px wide rendering.
 - State: local read-only preview with realistic CPII procurement data; Gestão de Atas selected.
 
 ## Full-view comparison evidence
@@ -34,6 +35,7 @@ The side-by-side comparison preserves the approved structure: horizontal institu
 - Process notifications now expose only “Vencidos” and “Prazos próximos”; the Pontuação category is absent.
 - Gestão da Equipe shows the operational availability summary before the server list on mobile, and each server edit sheet exposes E-mail immediately after Matrícula.
 - A ausência confirmada dos acionadores abre um diálogo central obrigatório, sem fechar pelo fundo ou por botão; a instalação confirmada remove o diálogo e não deixa card permanente na Gestão da Equipe.
+- The wide header exposes Painel de Contratações, Gestão de Atas, Visão Geral, Histórico and Tour de ajuda. Its open dropdown contains only Trocar usuário, Configurações and Sair; in compact mode, hidden header destinations remain available in the dropdown.
 - Browser console checked after the flows: no errors or warnings.
 
 ## Comparison history
@@ -43,6 +45,7 @@ The side-by-side comparison preserves the approved structure: horizontal institu
 3. Production mobile capture showed the feature-gated Gestão de Atas item absent while its asynchronous permission check was still running (P1) and Histórico lacked its expected visual marker (P3). Fixed by immediately exposing the entry for the known `reitoria-sel` pilot while the backend confirms the flag, and by adding the approved menu markers. Post-fix evidence: `comparison-menu-mobile.jpg` at 390 × 844.
 4. The first compact server card placed the new e-mail beside both actions, causing awkward wrapping at 390 px (P2). Fixed by stacking the identity block above full-width Editar/Remover actions on mobile. The final capture keeps the e-mail readable and the actions comfortably tappable.
 5. The first automation entry occupied permanent space in Gestão da Equipe after configuration (P2). It was replaced by a centered blocking dialog shown only after a confirmed missing-trigger response. Both missing and installed preview states were inspected; the installed state leaves no automation card behind.
+6. The first wide navigation capture still loaded the cached `atas.css`, so the dropdown repeated the visible header destinations (P2). The stylesheet URL was versioned (`atas.css?v=14`); the repeated wide capture then showed only Trocar usuário, Configurações and Sair, while the compact capture retained the hidden destinations.
 
 ## Findings
 

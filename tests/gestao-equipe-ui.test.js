@@ -38,3 +38,13 @@ test('automação de avisos aparece somente como modal obrigatório quando ausen
   assert.match(html, /if \(instalado\)[\s\S]*?classList\.remove\('open'\)/);
   assert.match(html, /withFailureHandler\(function\(e\) \{\s*aplicarTriggerStatus_\(\{ instalado: null/);
 });
+
+test('menu principal evita destinos duplicados no desktop', () => {
+  const css = fs.readFileSync(path.join(root, 'atas.css'), 'utf8');
+  assert.doesNotMatch(html, /id="desktop-equipe"/);
+  assert.match(html, /id="desktop-visaogeral"[^>]*>Visão Geral<\/button>/);
+  assert.match(html, /id="desktop-tour"[^>]*>Tour de ajuda<\/button>/);
+  assert.match(html, /hdr-menu-item hdr-menu-main-link/);
+  assert.match(css, /@media\(min-width:1120px\)\{\.atas-desktop-nav\{display:flex\}\.hdr-menu-main-link,\.hdr-menu-main-sep\{display:none\}\}/);
+  assert.match(html, /'hdr-visaogeral-item', 'hdr-visaogeral-sep', 'desktop-visaogeral'/);
+});

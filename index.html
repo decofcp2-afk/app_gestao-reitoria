@@ -588,7 +588,7 @@
     .empty p { font-size: 14px; }
     .section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 6px 2px; }
   </style>
-  <link rel="stylesheet" href="atas.css">
+  <link rel="stylesheet" href="atas.css?v=14">
   <script src="config.js"></script>
   <!-- Firebase (compat) — leitura direta do Firestore (Fase 3). A apiKey em config.js
        NAO e segredo; a protecao vem das regras do Firestore. Escrita/login seguem no Apps Script. -->
@@ -643,8 +643,9 @@
       <nav class="atas-desktop-nav" aria-label="Atalhos principais">
         <a id="desktop-painel" href="#" onclick="abrirPainel_(event);return false;">Painel de Contratações</a>
         <button id="desktop-atas" hidden onclick="switchTab('atas')">Gestão de Atas</button>
-        <button id="desktop-equipe" onclick="switchTab('equipe')">Gestão da Equipe</button>
+        <button id="desktop-visaogeral" hidden onclick="switchTab('visaogeral')">Visão Geral</button>
         <button id="desktop-historico" onclick="switchTab('historico')">Histórico</button>
+        <button id="desktop-tour" type="button" onclick="iniciarTour()">Tour de ajuda</button>
       </nav>
     </div>
     <div class="app-header-row app-header-row2">
@@ -655,19 +656,19 @@
       </button>
       <div class="user-chip" onclick="toggleHdrMenu_()">👤 <span id="hdr-nome"></span> ⋮
         <div id="hdr-menu" class="hdr-menu" hidden onclick="event.stopPropagation()">
-          <button type="button" class="hdr-menu-item" onclick="abrirPainel_(event);toggleHdrMenu_();return false;"><img src="painel-icon.svg" alt="" class="hdr-menu-icon">Painel de Contratações</button>
-          <div class="hdr-menu-sep"></div>
+          <button type="button" class="hdr-menu-item hdr-menu-main-link" onclick="abrirPainel_(event);toggleHdrMenu_();return false;"><img src="painel-icon.svg" alt="" class="hdr-menu-icon">Painel de Contratações</button>
+          <div class="hdr-menu-sep hdr-menu-main-sep"></div>
           <button class="hdr-menu-item" onclick="confirmarTroca();toggleHdrMenu_()">🔄 Trocar usuário</button>
-          <div class="hdr-menu-sep" id="hdr-visaogeral-sep" hidden></div>
-          <button class="hdr-menu-item" id="hdr-visaogeral-item" hidden onclick="switchTab('visaogeral');toggleHdrMenu_()">📊 Visão Geral</button>
-          <div class="hdr-menu-sep" id="hdr-atas-sep" hidden></div>
-          <button class="hdr-menu-item" id="hdr-atas-item" hidden onclick="switchTab('atas');toggleHdrMenu_()">📑 Gestão de Atas</button>
-          <div class="hdr-menu-sep" id="hdr-historico-sep"></div>
-          <button class="hdr-menu-item" id="hdr-historico-item" onclick="switchTab('historico');toggleHdrMenu_()">🕘 Histórico</button>
+          <div class="hdr-menu-sep hdr-menu-main-sep" id="hdr-visaogeral-sep" hidden></div>
+          <button class="hdr-menu-item hdr-menu-main-link" id="hdr-visaogeral-item" hidden onclick="switchTab('visaogeral');toggleHdrMenu_()">📊 Visão Geral</button>
+          <div class="hdr-menu-sep hdr-menu-main-sep" id="hdr-atas-sep" hidden></div>
+          <button class="hdr-menu-item hdr-menu-main-link" id="hdr-atas-item" hidden onclick="switchTab('atas');toggleHdrMenu_()">📑 Gestão de Atas</button>
+          <div class="hdr-menu-sep hdr-menu-main-sep" id="hdr-historico-sep"></div>
+          <button class="hdr-menu-item hdr-menu-main-link" id="hdr-historico-item" onclick="switchTab('historico');toggleHdrMenu_()">🕘 Histórico</button>
           <div class="hdr-menu-sep" id="hdr-config-sep"></div>
           <button class="hdr-menu-item" id="hdr-config-item" onclick="switchTab('config');toggleHdrMenu_()">⚙️ Configurações</button>
-          <div class="hdr-menu-sep"></div>
-          <button type="button" class="hdr-menu-item" onclick="iniciarTour();toggleHdrMenu_()">❔ Tour de ajuda</button>
+          <div class="hdr-menu-sep hdr-menu-main-sep"></div>
+          <button type="button" class="hdr-menu-item hdr-menu-main-link" onclick="iniciarTour();toggleHdrMenu_()">❔ Tour de ajuda</button>
           <div class="hdr-menu-sep"></div>
           <button type="button" class="hdr-menu-item" onclick="logout();toggleHdrMenu_()" style="color:var(--red,#b02035)">🚪 Sair</button>
         </div>
@@ -1600,7 +1601,7 @@ function setupHeaderScroll_() {
 
 function aplicarPerfilUI_() {
   var isChefe = isChefeAtual_();
-  ['nav-fila', 'nav-equipe', 'hdr-historico-item', 'hdr-historico-sep', 'desktop-equipe', 'desktop-historico'].forEach(function(id) {
+  ['nav-fila', 'nav-equipe', 'hdr-historico-item', 'hdr-historico-sep', 'desktop-historico'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.hidden = !isChefe;
   });
@@ -1617,7 +1618,7 @@ function aplicarPerfilUI_() {
   }
 
   // "Visão Geral" (relatório de prazos multiunidade): só o administrador geral.
-  ['hdr-visaogeral-item', 'hdr-visaogeral-sep'].forEach(function(id) {
+  ['hdr-visaogeral-item', 'hdr-visaogeral-sep', 'desktop-visaogeral'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.hidden = !SESSAO_ADMIN;
   });
