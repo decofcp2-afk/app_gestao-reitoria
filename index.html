@@ -277,6 +277,9 @@
     .sheet-footer { padding: 12px 16px; border-top: 1px solid var(--border); padding-bottom: calc(12px + env(safe-area-inset-bottom)); flex-shrink: 0; }
     .proc-header-top { display: flex; align-items: flex-start; gap: 10px; }
     .proc-header-text { flex: 1; min-width: 0; }
+    .proc-title-line { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .proc-title-line .sheet-title { min-width:0; }
+    .proc-return-btn { border:1px solid var(--amber); border-radius:7px; background:#fffbeb; color:#92400e; padding:4px 8px; font-size:10px; line-height:1.2; font-weight:700; white-space:nowrap; cursor:pointer; }
     .proc-back { border: 1.5px solid var(--border); background: var(--bg); color: var(--navy); border-radius: 10px; padding: 6px 11px 6px 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
     .proc-back:active { background: #e2e8f0; }
     /* Ícone do Voltar: seta branca em círculo azul (SVG inline) */
@@ -828,10 +831,6 @@
     <button id="btn-ata-proc" onclick="fecharProc();abrirCadastroAtaDoProcesso_(PROC_ATI)"
        style="margin-top:8px;width:100%;padding:11px;border:1.5px solid #93c5fd;border-radius:10px;background:#eff6ff;font-size:13px;font-weight:700;cursor:pointer;color:#1e3a8a;" hidden>
       Cadastrar ou consultar ata deste processo
-    </button>
-    <button id="btn-voltar-fila" onclick="devolverProcFilaAtual_()"
-       style="margin-top:8px;width:100%;padding:11px;border:1.5px solid var(--amber);border-radius:10px;background:#fffbeb;font-size:13px;font-weight:700;cursor:pointer;color:#92400e;" hidden>
-      ↩ Voltar processo para a fila
     </button>
     <button id="btn-reabrir-proc" onclick="reabrirProcConcluido_()"
        style="margin-top:8px;width:100%;padding:11px;border:1.5px solid var(--amber);border-radius:10px;background:#fffbeb;font-size:13px;font-weight:700;cursor:pointer;color:#92400e;" hidden>
@@ -3281,6 +3280,7 @@ function abrirProcesso(idx) {
   PROC_ATI = DATA[idx];
   var p    = PROC_ATI;
   var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var podeVoltarFila = isChefeAtual_() && p.status !== 'ok' && p.status !== 'planejamento' && !isRetornoFila_(p);
 
   var tagsRespModal = tagsResponsaveisHtml_(p, idx, isChefeAtual_());
   document.getElementById('proc-header').innerHTML =
@@ -3292,7 +3292,9 @@ function abrirProcesso(idx) {
     + '</svg>'
     + 'Voltar</button>'
     + '<div class="proc-header-text">'
-    + '<div class="sheet-title">' + esc(p.nome) + '</div>'
+    + '<div class="proc-title-line"><div class="sheet-title">' + esc(p.nome) + '</div>'
+    + (podeVoltarFila ? '<button id="btn-voltar-fila" class="proc-return-btn" onclick="devolverProcFilaAtual_()">↩ Voltar à fila</button>' : '')
+    + '</div>'
     + '<div class="sheet-sub">' + esc(p.num||p.id) + ' · ' + esc(p.modal||'') + ' · ' + esc(p.req||'') + '</div>'
     + (tagsRespModal ? '<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">' + tagsRespModal + '</div>' : '')
     + '</div></div>';
@@ -3366,10 +3368,6 @@ function abrirProcesso(idx) {
     document.getElementById('btn-email-proc-label').textContent =
       temEmail ? 'Editar e-mail do requisitante: ' + p.emailR : 'Adicionar e-mail do requisitante';
     btnEmailProc.style.color = temEmail ? 'var(--green)' : 'var(--amber)';
-  }
-  var btnVoltarFila = document.getElementById('btn-voltar-fila');
-  if (btnVoltarFila) {
-    btnVoltarFila.hidden = !(isChefeAtual_() && p.status !== 'ok' && p.status !== 'planejamento' && !isRetornoFila_(p));
   }
   // Processo concluído não tem etapa atual (etapaAtualIdx = -1), então nenhum
   // botão de etapa é desenhado — sem este atalho da chefia, uma conclusão feita

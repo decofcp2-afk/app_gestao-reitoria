@@ -10,6 +10,7 @@
 - Team-management sources: `C:\Users\Samuel Gomes\Desktop\app_gestao-reitoria\.codex-remote-attachments\01a08d3a-2edf-7fc1-a0f8-c7f2eaefbe5c\c6c26736-b9bd-4d2f-ae42-b442f54f76d0\1-Photo-1.jpg` and `2-Photo-2.jpg`.
 - Team-management implementation: inspected in the in-app Browser at 390 × 844 CSS px with planning, complete server cards and the edit-server sheet open.
 - Navigation refinement source: `C:\Users\SAMUEL~1\AppData\Local\Temp\codex-clipboard-dbefbd83-5a21-4695-859e-984bf40bdd48.png` (680 × 104 px). The implementation was inspected in the in-app Browser in compact mode and through a normalized 1440 × 900 CSS px wide rendering.
+- Process-header refinement sources: `C:\Users\SAMUEL~1\AppData\Local\Temp\codex-clipboard-e9e74da5-0145-490d-9aea-8af63f1979a2.png` (345 × 126 px) and `codex-clipboard-2a41f2c9-5239-4c11-92a9-d54d79c1a3b7.png` (714 × 267 px). Browser-rendered implementation: `http://127.0.0.1:4173/?previewAtas=1&previewProc=1`, inspected in the in-app Browser at 897 × 608 px, device scale 1.
 - State: local read-only preview with realistic CPII procurement data; Gestão de Atas selected.
 
 ## Full-view comparison evidence
@@ -36,6 +37,7 @@ The side-by-side comparison preserves the approved structure: horizontal institu
 - Gestão da Equipe shows the operational availability summary before the server list on mobile, and each server edit sheet exposes E-mail immediately after Matrícula.
 - A ausência confirmada dos acionadores abre um diálogo central obrigatório, sem fechar pelo fundo ou por botão; a instalação confirmada remove o diálogo e não deixa card permanente na Gestão da Equipe.
 - The wide header exposes Painel de Contratações, Gestão de Atas, Visão Geral, Histórico and Tour de ajuda. Its open dropdown contains only Trocar usuário, Configurações and Sair; in compact mode, hidden header destinations remain available in the dropdown.
+- The process-return action is now a compact amber-outline control immediately beside the process title. The former full-width footer action is absent, and activating the compact control opens the existing two-step return-to-queue flow.
 - Browser console checked after the flows: no errors or warnings.
 
 ## Comparison history
@@ -46,6 +48,7 @@ The side-by-side comparison preserves the approved structure: horizontal institu
 4. The first compact server card placed the new e-mail beside both actions, causing awkward wrapping at 390 px (P2). Fixed by stacking the identity block above full-width Editar/Remover actions on mobile. The final capture keeps the e-mail readable and the actions comfortably tappable.
 5. The first automation entry occupied permanent space in Gestão da Equipe after configuration (P2). It was replaced by a centered blocking dialog shown only after a confirmed missing-trigger response. Both missing and installed preview states were inspected; the installed state leaves no automation card behind.
 6. The first wide navigation capture still loaded the cached `atas.css`, so the dropdown repeated the visible header destinations (P2). The stylesheet URL was versioned (`atas.css?v=14`); the repeated wide capture then showed only Trocar usuário, Configurações and Sair, while the compact capture retained the hidden destinations.
+7. The return-to-queue action occupied an entire footer row, far from the process identity (P2). It was moved into the title line, reduced to a 10 px compact control, and rechecked with “Materiais Esportivos” open. The control wraps safely on narrow titles and its interaction still opens the return flow.
 
 ## Findings
 
