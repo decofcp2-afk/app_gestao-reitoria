@@ -359,6 +359,37 @@
     .cfg-actions .btn-cfg { width: 100%; padding-left: 10px; padding-right: 10px; }
     .cfg-actions #trigger-ok { grid-column: 1 / -1; line-height: 1.35; }
     #trigger-ok { font-size: 12px; color: var(--green); }
+    .team-layout { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr); gap:16px; align-items:start; }
+    .team-plan-summary { display:grid; grid-template-columns:repeat(3,1fr); border-bottom:1px solid var(--border); }
+    .team-plan-stat { padding:15px 16px; border-right:1px solid var(--border); }
+    .team-plan-stat:last-child { border-right:0; }
+    .team-plan-stat span { display:block; color:var(--muted); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+    .team-plan-stat b { display:block; margin-top:4px; color:var(--navy); font-size:20px; }
+    .team-plan-list { padding:4px 16px 8px; }
+    .team-plan-item { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+    .team-plan-item:last-child { border-bottom:0; }
+    .team-plan-mark { width:4px; align-self:stretch; border-radius:4px; background:var(--blue); }
+    .team-plan-mark.current { background:var(--amber); }
+    .team-plan-copy { flex:1; min-width:0; }
+    .team-plan-copy strong { display:block; color:var(--text); font-size:13px; }
+    .team-plan-copy span { display:block; margin-top:2px; color:var(--muted); font-size:11px; }
+    .team-plan-empty { padding:24px 16px; text-align:center; color:var(--muted); font-size:12px; line-height:1.5; }
+    .team-plan-actions { display:flex; gap:8px; padding:12px 16px 16px; border-top:1px solid var(--border); }
+    .team-plan-actions .btn-cfg { flex:1; }
+    .team-email { margin-top:3px; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+    .team-member-main { display:flex; align-items:center; gap:8px; flex:1; min-width:0; }
+    .team-member-copy { min-width:0; }
+    .team-member-actions { display:flex; gap:8px; flex-shrink:0; }
+    @media (max-width:760px) {
+      .team-layout { grid-template-columns:1fr; }
+      .team-plan-stat { padding:13px 10px; }
+      .team-plan-stat b { font-size:18px; }
+      .team-plan-actions { flex-direction:column; }
+      #cfg-equipe-card .cfg-row { align-items:stretch; flex-direction:column; }
+      .team-member-main { width:100%; }
+      .team-member-actions { width:100%; }
+      .team-member-actions .btn-cfg { flex:1; }
+    }
 
     /* ── Toast ─────────────────────────────────────────────────── */
     #toast { position: fixed; bottom: 82px; left: 50%; transform: translateX(-50%) translateY(12px); background: var(--text); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 500; opacity: 0; transition: opacity .2s, transform .2s; z-index: 600; pointer-events: none; white-space: nowrap; max-width: 90vw; }
@@ -651,15 +682,11 @@
       <button class="notif-scope active" id="notif-scope-processos" onclick="setNotifScope_('processos')">Processos</button>
     </div>
     <div class="notif-tabs">
-      <button class="notif-tab" id="notif-tab-venc" onclick="setNotifCat_('venc')" hidden>
+      <button class="notif-tab" id="notif-tab-venc" onclick="setNotifCat_('venc')">
         Vencidos <span class="notif-tab-count" id="notif-cnt-venc">0</span>
       </button>
       <button class="notif-tab" id="notif-tab-prox" onclick="setNotifCat_('prox')">
         Prazos próximos <span class="notif-tab-count" id="notif-cnt-prox">0</span>
-      </button>
-      <!-- Só para a chefia: processos sem pontuação de carga (ver renderNotif_). -->
-      <button class="notif-tab" id="notif-tab-pont" onclick="setNotifCat_('pont')" hidden>
-        Pontuação <span class="notif-tab-count" id="notif-cnt-pont">0</span>
       </button>
     </div>
     <div class="notif-body" id="notif-body"></div>
@@ -691,15 +718,11 @@
 
   <div id="tab-equipe" class="tab-content" hidden>
     <div style="padding:18px 16px 90px;max-width:1280px;margin:0 auto;">
-      <div style="margin-bottom:16px;"><div style="font-size:24px;font-weight:800;color:var(--navy);">Gestão da Equipe</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">Cadastro, disponibilidade, férias e e-mails da unidade.</div></div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
-        <div class="cfg-section" id="cfg-equipe-section" style="flex:1;min-width:300px;margin-bottom:0;">
-          <div class="cfg-head">Equipe SEL/SEPMA</div>
-          <div class="cfg-card" id="cfg-equipe-card"><div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div></div>
-        </div>
-        <div class="cfg-section" style="flex:1;min-width:300px;margin-bottom:0;">
-          <div class="cfg-head">E-mails dos servidores</div>
-          <div class="cfg-card" id="cfg-emails-card"><div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div></div>
+      <div style="margin-bottom:16px;"><div style="font-size:24px;font-weight:800;color:var(--navy);">Gestão da Equipe</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">Planejamento, disponibilidade e cadastro da equipe da unidade.</div></div>
+      <div class="team-layout">
+        <div class="cfg-section" id="cfg-planejamento-section" style="margin-bottom:0;">
+          <div class="cfg-head">Planejamento da equipe</div>
+          <div class="cfg-card" id="cfg-planejamento-card"><div style="padding:18px 16px;font-size:12px;color:var(--muted);">Carregando disponibilidade…</div></div>
           <div class="cfg-card" style="margin-top:10px;">
             <div class="cfg-row cfg-row-col">
               <label>Automação de avisos</label>
@@ -707,6 +730,10 @@
               <div class="cfg-actions"><button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar trigger</button><span id="trigger-ok"></span></div>
             </div>
           </div>
+        </div>
+        <div class="cfg-section" id="cfg-equipe-section" style="margin-bottom:0;">
+          <div class="cfg-head">Equipe SEL/SEPMA</div>
+          <div class="cfg-card" id="cfg-equipe-card"><div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div></div>
         </div>
       </div>
     </div>
@@ -866,6 +893,10 @@
     <div class="form-group">
       <label class="form-label">Matrícula <span class="req">*</span></label>
       <input type="text" class="field-input" id="edit-serv-mat" placeholder="Matrícula de login" maxlength="40">
+    </div>
+    <div class="form-group">
+      <label class="form-label">E-mail</label>
+      <input type="email" class="field-input" id="edit-serv-email" placeholder="nome@cp2.g12.br" maxlength="120" autocomplete="email">
     </div>
     <div class="form-group">
       <label class="form-label">Cor do avatar</label>
@@ -2167,6 +2198,11 @@ function aplicarServidores_(lista) {
   var mudouFiltroInicial = aplicarFiltroInicialUsuario_();
   renderPillsServ_();
   aplicarPerfilUI_();
+  var equipeTab = document.getElementById('tab-equipe');
+  if (equipeTab && !equipeTab.hidden) {
+    renderEquipeConfig_();
+    if (typeof renderPlanejamentoEquipe_ === 'function') renderPlanejamentoEquipe_();
+  }
   if (mudouFiltroInicial && (DATA.length || FILA.length)) aplicarFiltros();
 }
 
@@ -2225,17 +2261,18 @@ function renderEquipeConfig_() {
   var card = document.getElementById('cfg-equipe-card');
   if (!card) return;
   var isChefe = isChefeAtual_();
-  var h = '<div style="padding:12px"><button class="btn-cfg" onclick="abrirAusencias_()">Disponibilidade / férias da equipe</button></div>';
+  var h = '';
   SERV_DATA.forEach(function(s, i) {
     var p = PALETA_CORES.find(function(p){ return p.cor === s.cor; }) || PALETA_CORES[7];
     h += '<div class="cfg-row" style="gap:10px;">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex:1;">'
+      + '<div class="team-member-main">'
       + '<span class="avatar" style="background:'+s.cor+';width:30px;height:30px;font-size:12px;">'+esc(s.nome.substring(0,2).toUpperCase())+'</span>'
-      + '<div><div style="font-size:13px;font-weight:600;">'+esc(s.nome)+'</div>'
-      + '<div style="font-size:11px;color:var(--muted);">'+(s.isChefe?'🔑 Chefe':'Servidor')+' · matrícula '+esc(s.matricula||'')+'</div></div></div>'
+      + '<div class="team-member-copy"><div style="font-size:13px;font-weight:600;">'+esc(s.nome)+'</div>'
+      + '<div style="font-size:11px;color:var(--muted);">'+(s.isChefe?'🔑 Chefe':'Servidor')+' · matrícula '+esc(s.matricula||'')+'</div>'
+      + '<div class="team-email">'+esc(s.email || (EMAILS_CACHE && EMAILS_CACHE[s.nome]) || 'E-mail não cadastrado')+'</div></div></div>'
       + (isChefe
-        ? '<button class="btn-cfg" style="padding:4px 10px;font-size:11px;" onclick="abrirEditServ_('+i+')">Editar</button>'
-          + '<button class="btn-cfg" style="padding:4px 10px;font-size:11px;background:var(--red);" onclick="removerServConfirm_('+i+')">Remover</button>'
+        ? '<div class="team-member-actions"><button class="btn-cfg" style="padding:4px 10px;font-size:11px;" onclick="abrirEditServ_('+i+')">Editar</button>'
+          + '<button class="btn-cfg" style="padding:4px 10px;font-size:11px;background:var(--red);" onclick="removerServConfirm_('+i+')">Remover</button></div>'
         : '')
       + '</div>';
   });
@@ -2253,6 +2290,7 @@ function abrirEditServ_(idx) {
   document.getElementById('edit-serv-titulo').textContent = idx >= 0 ? 'Editar servidor' : 'Novo servidor';
   document.getElementById('edit-serv-nome').value = s.nome;
   document.getElementById('edit-serv-mat').value = s.matricula || '';
+  document.getElementById('edit-serv-email').value = s.email || (EMAILS_CACHE && EMAILS_CACHE[s.nome]) || '';
   document.getElementById('edit-serv-chefe').checked = !!s.isChefe;
   var resetBtn = document.getElementById('btn-reset-senha');
   if (resetBtn) resetBtn.hidden = idx < 0;
@@ -2288,12 +2326,14 @@ function salvarEditServ() {
   if (!nome) { toast('Informe o nome do servidor.', 'err'); return; }
   var matricula = (document.getElementById('edit-serv-mat').value || '').trim();
   if (!matricula) { toast('Informe a matrícula.', 'err'); return; }
+  var email = (document.getElementById('edit-serv-email').value || '').trim();
+  if (email && email.indexOf('@') < 1) { toast('Informe um e-mail válido.', 'err'); return; }
   var isChefe = document.getElementById('edit-serv-chefe').checked;
-  var novaLista = SERV_DATA.map(function(s){ return { nome:s.nome, matricula:s.matricula, cor:s.cor, isChefe:s.isChefe }; });
+  var novaLista = SERV_DATA.map(function(s){ return { nome:s.nome, matricula:s.matricula, email:s.email || (EMAILS_CACHE && EMAILS_CACHE[s.nome]) || '', cor:s.cor, isChefe:s.isChefe }; });
   if (EDIT_SERV_IDX >= 0) {
-    novaLista[EDIT_SERV_IDX] = { nome:nome, matricula:matricula, cor:EDIT_COR_SEL, isChefe:isChefe };
+    novaLista[EDIT_SERV_IDX] = { nome:nome, matricula:matricula, email:email, cor:EDIT_COR_SEL, isChefe:isChefe };
   } else {
-    novaLista.push({ nome:nome, matricula:matricula, cor:EDIT_COR_SEL, isChefe:isChefe });
+    novaLista.push({ nome:nome, matricula:matricula, email:email, cor:EDIT_COR_SEL, isChefe:isChefe });
   }
   fecharEditServ();
   google.script.run
@@ -2302,8 +2342,10 @@ function salvarEditServ() {
         var listaSalva = res.servidores && res.servidores.length ? res.servidores : novaLista;
         localStorage.setItem('selServidores', JSON.stringify(listaSalva));
         aplicarServidores_(listaSalva);
+        EMAILS_CACHE = {};
+        listaSalva.forEach(function(s){ EMAILS_CACHE[s.nome] = s.email || ''; });
         renderEquipeConfig_();
-        renderEmailsConfig_(EMAILS_CACHE);
+        if (typeof renderPlanejamentoEquipe_ === 'function') renderPlanejamentoEquipe_();
         CAP_CARREGADO = false;
         if (!document.getElementById('tab-capacidade').hidden) carregarCapacidade_();
         toast('✓ Servidor salvo!', 'ok');
@@ -2350,7 +2392,7 @@ function mostrarNovosAcessos_(novos) {
     if (n.emailEnviado) {
       return '• ' + n.nome + ' (matrícula ' + n.matricula + '): senha temporária enviada para ' + (n.email || 'o e-mail cadastrado') + '. Peça para conferir a caixa de entrada (e o spam).';
     }
-    return '• ' + n.nome + ' (matrícula ' + n.matricula + '): SEM e-mail cadastrado — anote e repasse a senha temporária: ' + (n.senhaTemp || '') + ' (não será exibida novamente). Dica: cadastre o e-mail na aba Config → E-mails.';
+    return '• ' + n.nome + ' (matrícula ' + n.matricula + '): SEM e-mail cadastrado — anote e repasse a senha temporária: ' + (n.senhaTemp || '') + ' (não será exibida novamente). Cadastre o e-mail ao editar o servidor em Gestão da Equipe.';
   });
   abrirDialogo_({
     titulo: 'Acesso do novo servidor',
@@ -2583,7 +2625,13 @@ function switchTab(tab) {
   if (tab === 'atas') { NOTIF_SCOPE = 'atas'; carregarGestaoAtas_(); }
   if (tab === 'equipe') {
     if (GESTAO_ATAS && GESTAO_ATAS.preview && typeof renderEquipePreview_ === 'function') renderEquipePreview_();
-    else { renderEquipeConfig_(); carregarEmails_(); verificarTriggerConfig_(); }
+    else {
+      renderEquipeConfig_();
+      carregarEmails_();
+      verificarTriggerConfig_();
+      if (typeof renderPlanejamentoEquipe_ === 'function') renderPlanejamentoEquipe_();
+      if (typeof carregarAusencias_ === 'function') carregarAusencias_({ silencioso:true });
+    }
   }
   if (tab === 'config') { carregarDadosUnidade_(); }
   if (tab === 'visaogeral') renderVisaoGeral_();
@@ -2616,7 +2664,7 @@ function toggleHdrMenu_() {
 // CENTRAL DE NOTIFICAÇÕES
 // ══════════════════════════════════════════════════════════════════════
 var NOTIF = { prox: [], venc: [], pont: [], atas: [] };
-var NOTIF_CAT = 'prox'; // processos: somente prazos futuros e pontuação
+var NOTIF_CAT = 'prox'; // processos: prazos próximos ou vencidos
 var NOTIF_SCOPE = 'processos'; // filtro primário: 'atas' | 'processos'
 var NOTIF_PILHA_ABERTA = {}; // chave "cat:processoId" → true quando a pilha está expandida
 
@@ -2717,7 +2765,6 @@ function carregarNotificacoes_() {
     })
     .withFailureHandler(function() { /* silencioso — central é auxiliar */ })
     .getAlertasApp(AUTH_TOKEN);
-  carregarPontuacoesPendentes_();
   if (GESTAO_ATAS && GESTAO_ATAS.enabled && typeof carregarAlertasAtas_ === 'function') carregarAlertasAtas_();
 }
 
@@ -2747,9 +2794,8 @@ function carregarPontuacoesPendentes_() {
 }
 
 function atualizarBadgeNotif_() {
-  var nPont = (NOTIF.pont || []).length;
   var nAtas = (NOTIF.atas || []).length;
-  var total = NOTIF.prox.length + nPont + nAtas;
+  var total = NOTIF.prox.length + NOTIF.venc.length + nAtas;
   var badge = document.getElementById('notif-badge');
   if (!badge) return;
   badge.textContent = total > 99 ? '99+' : String(total);
@@ -2758,11 +2804,6 @@ function atualizarBadgeNotif_() {
   document.getElementById('notif-cnt-prox').textContent = NOTIF.prox.length;
   var cntAtas = document.getElementById('notif-cnt-atas');
   if (cntAtas) cntAtas.textContent = nAtas;
-  var tabPont = document.getElementById('notif-tab-pont');
-  if (tabPont) {
-    tabPont.hidden = !isChefeAtual_();
-    document.getElementById('notif-cnt-pont').textContent = nPont;
-  }
 }
 
 function toggleNotif_() {
@@ -2771,10 +2812,8 @@ function toggleNotif_() {
 }
 
 function abrirNotif_() {
-  // Processos vencidos já aparecem nos KPIs e na tela principal. No sino,
-  // processos mostram somente eventos futuros/operacionais.
   NOTIF_CAT = NOTIF.prox.length ? 'prox'
-    : ((NOTIF.pont || []).length && isChefeAtual_() ? 'pont' : 'prox');
+    : (NOTIF.venc.length ? 'venc' : 'prox');
   NOTIF_PILHA_ABERTA = {}; // pilhas começam recolhidas a cada abertura
   var abaAtas = document.getElementById('tab-atas');
   NOTIF_SCOPE = abaAtas && !abaAtas.hidden && GESTAO_ATAS && GESTAO_ATAS.enabled ? 'atas' : 'processos';
@@ -2811,8 +2850,6 @@ function setNotifCat_(cat) {
   NOTIF_CAT = cat;
   document.getElementById('notif-tab-venc').classList.toggle('active', cat === 'venc');
   document.getElementById('notif-tab-prox').classList.toggle('active', cat === 'prox');
-  var tabPont = document.getElementById('notif-tab-pont');
-  if (tabPont) tabPont.classList.toggle('active', cat === 'pont');
   renderNotif_();
 }
 
@@ -2868,7 +2905,6 @@ function renderNotif_() {
     renderNotifAtas_();
     return;
   }
-  if (NOTIF_CAT === 'pont') { renderNotifPontuacao_(cont); return; }
   var lista = NOTIF_CAT === 'venc' ? NOTIF.venc : NOTIF.prox;
   var ehVenc = NOTIF_CAT === 'venc';
 
@@ -5882,7 +5918,6 @@ function salvarPontuacao_() {
         fecharPontuacao();
         toast('✓ Pontuação salva!', 'ok');
         CAP_CARREGADO = false; carregarCapacidade_();
-        carregarPontuacoesPendentes_();   // some do sino assim que a carga é pontuada
       } else {
         toast('Erro: '+(res&&res.erro?res.erro:'Tente novamente.'), 'err');
         if (btn) { btn.disabled=false; btn.textContent='✓ Salvar pontuação'; }
@@ -5901,16 +5936,13 @@ function salvarPontuacao_() {
 var EMAILS_CACHE = null;
 
 function carregarEmails_() {
-  var card = document.getElementById('cfg-emails-card');
-  if (!card) return;
   google.script.run
     .withSuccessHandler(function(emails) {
-      EMAILS_CACHE = emails;
-      renderEmailsConfig_(emails);
+      EMAILS_CACHE = emails || {};
+      SERV_DATA.forEach(function(s){ s.email = EMAILS_CACHE[s.nome] || s.email || ''; });
+      renderEquipeConfig_();
     })
-    .withFailureHandler(function(e) {
-      if (card) card.innerHTML = '<div style="padding:12px 16px;font-size:12px;color:var(--red);">Erro: ' + esc(e.message||e) + '</div>';
-    })
+    .withFailureHandler(function() { renderEquipeConfig_(); })
     .getEmails(AUTH_TOKEN);
 }
 

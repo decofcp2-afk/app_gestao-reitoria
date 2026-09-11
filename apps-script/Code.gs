@@ -5087,7 +5087,9 @@ function _getServidoresApp_() {
 
 // ── salvarServidoresApp ───────────────────────────────────────────────────────
 // Persiste a lista completa de servidores no PropertiesService.
-// lista: [{nome, cor, isChefe}] — e-mails são mantidos separadamente.
+// lista: [{nome, matricula, email?, cor, isChefe}]. O campo email é opcional
+// para manter compatibilidade com clientes antigos; quando informado, é salvo
+// junto com a edição do servidor antes da criação do primeiro acesso.
 function getServidoresApp(authToken) {
   _authRequire_(authToken, false);
   var lista = _getServidoresApp_();
@@ -5118,7 +5120,9 @@ function salvarServidoresApp(lista, authToken) {
     });
     var limpa = lista.map(function(s) {
       var nomeLimpo = s.nome.trim();
-      return { nome: nomeLimpo, matricula: _authNorm_(s.matricula || _authMatriculaPadrao_(nomeLimpo)), cor: s.cor || '#64748b', isChefe: !!s.isChefe };
+      return { nome: nomeLimpo, matricula: _authNorm_(s.matricula || _authMatriculaPadrao_(nomeLimpo)),
+        email: s.email == null ? null : String(s.email || '').trim(),
+        cor: s.cor || '#64748b', isChefe: !!s.isChefe };
     });
 
     var vistos = {};
@@ -5135,6 +5139,9 @@ function salvarServidoresApp(lista, authToken) {
     if (!limpa.some(function(s) { return !!s.isChefe; })) {
       throw new Error('Mantenha ao menos um servidor marcado como chefia.');
     }
+    limpa.forEach(function(s) {
+      if (s.email && s.email.indexOf('@') < 1) throw new Error('E-mail inválido para ' + s.nome + '.');
+    });
 
     var novos = {};
     limpa.forEach(function(s) { novos[_normServidorNome_(s.nome)] = true; });
@@ -5171,13 +5178,21 @@ function salvarServidoresApp(lista, authToken) {
       throw new Error('Não removi servidor com processo ativo: ' + bloqueados.join(', ') + '. Reatribua os processos antes de remover.');
     }
 
-    props.setProperty(_servKey_(), JSON.stringify(limpa));
-    if (_ehReitoria_()) _salvarServidoresConfigSheet_(limpa); // planilha é só da Reitoria
+    var listaPersistida = limpa.map(function(s) {
+      return { nome:s.nome, matricula:s.matricula, cor:s.cor, isChefe:s.isChefe };
+    });
+    props.setProperty(_servKey_(), JSON.stringify(listaPersistida));
+    // O e-mail precisa existir antes de _authSyncServidores_: assim um servidor
+    // novo já recebe a senha temporária no endereço informado no mesmo formulário.
+    limpa.forEach(function(s) {
+      if (s.email !== null) props.setProperty(_emailKey_(s.nome), s.email);
+    });
+    if (_ehReitoria_()) _salvarServidoresConfigSheet_(listaPersistida); // planilha é só da Reitoria
     // Usuários NOVOS nascem com senha temporária ALEATÓRIA (não mais "123456").
     // Enviamos por e-mail quando o servidor tem e-mail cadastrado; quando não
     // tem, a senha volta em `novosAcessos` para a chefia repassar manualmente.
     var criados = [];
-    _authSyncServidores_(limpa, criados);
+    _authSyncServidores_(listaPersistida, criados);
     var novosAcessos = criados.map(function(c) {
       var emailDest = _emailServidorPorNome_(c.nome);
       var enviado = false;
@@ -5219,7 +5234,7 @@ function salvarServidoresApp(lista, authToken) {
           && PropertiesService.getScriptProperties().getProperty('FS_PROJECT_ID')) {
         var emailsMap = {};
         limpa.forEach(function(s) { emailsMap[s.nome] = props.getProperty(_emailKey_(s.nome)) || ''; });
-        fs_espelharServidores_(limpa, emailsMap);
+        fs_espelharServidores_(listaPersistida, emailsMap);
       }
     } catch(eMirror) { /* espelho é best-effort; não bloqueia o salvar */ }
 
