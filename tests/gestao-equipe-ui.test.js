@@ -1,0 +1,29 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const root = path.join(__dirname, '..');
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const code = fs.readFileSync(path.join(root, 'apps-script', 'Code.gs'), 'utf8');
+
+test('notificações de processos mostram somente próximos e vencidos', () => {
+  assert.match(html, /id="notif-tab-venc"[^>]*>\s*Vencidos/);
+  assert.match(html, /id="notif-tab-prox"[^>]*>\s*Prazos próximos/);
+  assert.doesNotMatch(html, /id="notif-tab-pont"/);
+  assert.match(html, /NOTIF\.prox\.length \+ NOTIF\.venc\.length \+ nAtas/);
+});
+
+test('e-mail faz parte do formulário do servidor e a lista duplicada foi removida', () => {
+  const matricula = html.indexOf('id="edit-serv-mat"');
+  const email = html.indexOf('id="edit-serv-email"');
+  assert.ok(matricula >= 0 && email > matricula);
+  assert.doesNotMatch(html, /id="cfg-emails-card"/);
+  assert.match(html, /id="cfg-planejamento-card"/);
+});
+
+test('backend salva o e-mail antes de criar o primeiro acesso', () => {
+  const salvarEmail = code.indexOf("props.setProperty(_emailKey_(s.nome), s.email)");
+  const criarAcesso = code.indexOf('_authSyncServidores_(listaPersistida, criados)');
+  assert.ok(salvarEmail >= 0 && criarAcesso > salvarEmail);
+});

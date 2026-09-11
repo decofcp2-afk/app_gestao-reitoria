@@ -54,6 +54,7 @@ function ausErroCarregamento_(e) {
     var lista = document.getElementById('aus-lista');
     if (lista) lista.innerHTML = '<div class="aus-empty"><b>Não foi possível exibir os períodos.</b><span>Use “Tentar novamente” para refazer a consulta.</span></div>';
   }
+  renderPlanejamentoEquipe_(msg);
 }
 function carregarAusencias_(opts) {
   opts = opts || {};
@@ -80,6 +81,7 @@ function carregarAusencias_(opts) {
     d = ausNormalizarResposta_(d);
     if (!d.ok) { ausErroCarregamento_(new Error(d.erro || 'Não foi possível carregar a agenda.')); return; }
     AUS = d; AUS_UNIDADE = escopo; AUS_CARREGADO_EM = Date.now();
+    renderPlanejamentoEquipe_();
     renderAusencias_();
     if (CAP_DATA) renderCapacidade_();
   }).withFailureHandler(function(e) {
@@ -140,7 +142,66 @@ function ausRenderAside_() {
     + '<p>Registre férias e afastamentos para que a capacidade interna e o painel público considerem quantas pessoas estarão disponíveis em cada período.</p></div>'
     + '<button class="btn-prim aus-add" onclick="ausEditar_(-1)">Registrar período</button>';
 }
+
+function abrirNovoPeriodoEquipe_() {
+  abrirAusencias_();
+  setTimeout(function(){ ausEditar_(-1); }, 0);
+}
+
+// Resumo operacional dentro da aba Gestão da Equipe. O editor completo segue
+// no modal; esta visão mostra apenas disponibilidade e agenda, sem indicadores
+// de desempenho (reservados para uma etapa futura).
+function renderPlanejamentoEquipe_(erroMsg) {
+  var card = document.getElementById('cfg-planejamento-card');
+  if (!card) return;
+  if (erroMsg && !AUS_CARREGADO_EM) {
+    card.innerHTML = '<div class="team-plan-empty"><b>Planejamento indisponível.</b><br>' + esc(erroMsg)
+      + '<br><button class="btn-cfg" style="margin-top:12px" onclick="carregarAusencias_({force:true})">Tentar novamente</button></div>';
+    return;
+  }
+  if (AUS_UNIDADE !== ausEscopo_() || !AUS_CARREGADO_EM) {
+    card.innerHTML = '<div class="team-plan-empty">Carregando disponibilidade da equipe…</div>';
+    return;
+  }
+  var hoje = ausHoje_(), periodos = Array.isArray(AUS.periodos) ? AUS.periodos : [];
+  var atuais = [], futuros = [];
+  periodos.forEach(function(a) {
+    var s = SERV_DATA.find(function(x){ return String(x.matricula) === String(a.matricula); });
+    if (!s) return;
+    var item = { a:a, s:s };
+    if (a.inicio <= hoje && (!a.fim || a.fim >= hoje)) atuais.push(item);
+    else if (a.inicio > hoje) futuros.push(item);
+  });
+  futuros.sort(function(a,b){ return a.a.inicio.localeCompare(b.a.inicio); });
+  var ausentes = {};
+  atuais.forEach(function(x){ ausentes[String(x.a.matricula)] = true; });
+  var totalAusentes = Object.keys(ausentes).length;
+  var disponiveis = Math.max(0, SERV_DATA.length - totalAusentes);
+  var proximos = atuais.concat(futuros).slice(0, 5);
+  var html = '<div class="team-plan-summary" aria-label="Resumo da disponibilidade">'
+    + '<div class="team-plan-stat"><span>Disponíveis hoje</span><b>' + disponiveis + '/' + SERV_DATA.length + '</b></div>'
+    + '<div class="team-plan-stat"><span>Ausentes hoje</span><b>' + totalAusentes + '</b></div>'
+    + '<div class="team-plan-stat"><span>Programados</span><b>' + futuros.length + '</b></div></div>';
+  if (!proximos.length) {
+    html += '<div class="team-plan-empty"><b>Toda a equipe está disponível.</b><br>Nenhum período futuro registrado.</div>';
+  } else {
+    html += '<div class="team-plan-list">';
+    proximos.forEach(function(x) {
+      var atual = x.a.inicio <= hoje;
+      var periodo = x.a.fim ? ausDataBr_(x.a.inicio) + ' a ' + ausDataBr_(x.a.fim) : 'Desde ' + ausDataBr_(x.a.inicio);
+      html += '<div class="team-plan-item"><span class="team-plan-mark' + (atual ? ' current' : '') + '"></span>'
+        + '<div class="team-plan-copy"><strong>' + esc(x.s.nome) + ' · ' + esc(x.a.tipo === 'ferias' ? 'Férias' : 'Afastamento') + '</strong>'
+        + '<span>' + esc(atual ? 'Em curso · ' + periodo : 'Programado · ' + periodo) + '</span></div></div>';
+    });
+    html += '</div>';
+  }
+  html += '<div class="team-plan-actions"><button class="btn-cfg" onclick="abrirAusencias_()">Ver planejamento completo</button>'
+    + (isChefeAtual_() ? '<button class="btn-cfg" onclick="abrirNovoPeriodoEquipe_()">Registrar período</button>' : '') + '</div>';
+  card.innerHTML = html;
+}
+
 function renderAusencias_() {
+  renderPlanejamentoEquipe_();
   var el = document.getElementById('aus-lista'); if (!el) return;
   var erro = document.getElementById('aus-erro'); if (erro) erro.innerHTML = '';
   var chefe = isChefeAtual_(), hoje = ausHoje_();
@@ -223,7 +284,7 @@ function ausReceber_(d) {
   d = ausNormalizarResposta_(d);
   if (!d.ok) { ausErro_(new Error(d.erro || 'Não foi possível salvar.')); return; }
   AUS = d; AUS_UNIDADE = ausEscopo_(); AUS_CARREGADO_EM = Date.now();
-  renderAusencias_(); if (CAP_DATA) renderCapacidade_();
+  renderPlanejamentoEquipe_(); renderAusencias_(); if (CAP_DATA) renderCapacidade_();
   toast(d.pendente ? 'Salvo. Sincronização do painel pendente.' : 'Disponibilidade atualizada.', d.pendente ? 'err' : 'ok');
 }
 function ausPersistir_(lista) {
