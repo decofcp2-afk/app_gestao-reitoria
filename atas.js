@@ -11,6 +11,10 @@
   function el(id) { return document.getElementById(id); }
   function val(id) { return (el(id) && el(id).value || '').trim(); }
   function localPreview() { return /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /(?:\?|&)previewAtas=1(?:&|$)/.test(location.search); }
+  function unidadePilotoConhecida() {
+    return !!(root.AppselFirestore && root.AppselFirestore.unidadeAtual
+      && root.AppselFirestore.unidadeAtual() === 'reitoria-sel');
+  }
   function podeEditar(ata) { return !!(state.podeGerirTodas || (root.SERVIDOR && D.normalizarTexto(root.SERVIDOR) === D.normalizarTexto(ata.responsavel))); }
 
   function previewData() {
@@ -41,11 +45,15 @@
       toggleEntradas(); atualizarAvisos(); root.switchTab('atas'); return;
     }
     if (!root.AUTH_TOKEN || !root.google || !google.script) return;
+    // Evita o item desaparecer no menu enquanto a consulta de habilitação ainda
+    // está carregando em conexões móveis. O backend continua sendo a confirmação
+    // definitiva e volta a ocultá-lo se a unidade não estiver habilitada.
+    if (unidadePilotoConhecida()) { state.enabled=true; state.checking=true; toggleEntradas(); }
     google.script.run.withSuccessHandler(function (r) {
       state.enabled=!!(r&&r.enabled); state.loaded=true; state.atas=(r&&r.atas)||[]; state.alertas=(r&&r.alertas)||[];
-      state.podeGerirTodas=!!(r&&r.podeGerirTodas); state.consultadoEm=r&&r.consultadoEm; toggleEntradas();
+      state.checking=false; state.podeGerirTodas=!!(r&&r.podeGerirTodas); state.consultadoEm=r&&r.consultadoEm; toggleEntradas();
       if(state.enabled){atualizarAvisos(); if(el('tab-atas')&&!el('tab-atas').hidden)render();}
-    }).withFailureHandler(function(){state.enabled=false;toggleEntradas();}).getGestaoAtasApp(root.AUTH_TOKEN);
+    }).withFailureHandler(function(){state.checking=false;state.enabled=false;toggleEntradas();}).getGestaoAtasApp(root.AUTH_TOKEN);
   }
 
   function carregar(force) {

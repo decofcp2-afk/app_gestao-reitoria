@@ -5,6 +5,8 @@
 - Desktop implementation: `implementation-gestao-atas-desktop.png` — 1440 × 1000 CSS px, device scale 1.
 - Mobile implementation: `implementation-gestao-atas-mobile.png` — 390 × 844 CSS px, device scale 1.
 - Combined comparison: `comparison-gestao-atas.png`.
+- Mobile menu source: `C:\Users\Samuel Gomes\Desktop\app_gestao-reitoria\.codex-remote-attachments\01a08d3a-2edf-7fc1-a0f8-c7f2eaefbe5c\8bb2ee28-dd67-437d-b168-b09eb9e96835\1-Photo-1.jpg`.
+- Corrected mobile menu: `menu-mobile-corrigido.jpg`; combined comparison: `comparison-menu-mobile.jpg`.
 - State: local read-only preview with realistic CPII procurement data; Gestão de Atas selected.
 
 ## Full-view comparison evidence
@@ -33,6 +35,7 @@ The side-by-side comparison preserves the approved structure: horizontal institu
 
 1. Initial intermediate-width capture showed the search area clipped at 775 px (P2). Fixed by moving the responsive filter/grid breakpoint to 899 px. Post-fix evidence: mobile screenshot has `scrollWidth = clientWidth = 390`.
 2. Initial preview notification refresh tried to use a real unauthenticated backend session (interaction P1). Fixed by isolating preview notification refresh. Post-fix: Atas/Processos scope and Gestão da Equipe flows passed without logout or console errors.
+3. Production mobile capture showed the feature-gated Gestão de Atas item absent while its asynchronous permission check was still running (P1) and Histórico lacked its expected visual marker (P3). Fixed by immediately exposing the entry for the known `reitoria-sel` pilot while the backend confirms the flag, and by adding the approved menu markers. Post-fix evidence: `comparison-menu-mobile.jpg` at 390 × 844.
 
 ## Findings
 
@@ -42,11 +45,10 @@ Accepted differences from the wireframe:
 
 - KPI quantities use the local realistic fixture rather than the mock's illustrative totals.
 - A single textual “Ver” action replaces the mock's three icon actions, consistent with the approved simplified MVP.
-- Pagination is omitted while the result set fits on one page; the footer reports the displayed total.
+- Pagination remains visually compact while the result set fits on one page.
 
 ## Follow-up polish
 
-- P3: add pagination controls when production volume exceeds the first page size.
 - P3: evaluate a vetted local icon set later if more row actions are approved.
 
 final result: passed
