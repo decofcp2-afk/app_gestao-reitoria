@@ -48,3 +48,12 @@ test('menu principal evita destinos duplicados no desktop', () => {
   assert.match(css, /@media\(min-width:1120px\)\{\.atas-desktop-nav\{display:flex\}\.hdr-menu-main-link,\.hdr-menu-main-sep\{display:none\}\}/);
   assert.match(html, /'hdr-visaogeral-item', 'hdr-visaogeral-sep', 'desktop-visaogeral'/);
 });
+
+test('ação de voltar processo para a fila fica compacta junto ao título', () => {
+  const footer = html.match(/<div class="sheet-footer" id="proc-footer"[\s\S]*?<\/div>\s*<\/div>/);
+  assert.ok(footer);
+  assert.doesNotMatch(footer[0], /id="btn-voltar-fila"/);
+  assert.match(html, /class="proc-title-line"[\s\S]*?id="btn-voltar-fila" class="proc-return-btn"/);
+  assert.match(html, /podeVoltarFila = isChefeAtual_\(\) && p\.status !== 'ok'/);
+  assert.match(html, /\.proc-return-btn \{[^}]*padding:4px 8px;[^}]*font-size:10px/);
+});

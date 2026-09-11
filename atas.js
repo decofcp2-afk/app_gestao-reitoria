@@ -43,6 +43,11 @@
       var login=el('tela-login'), app=el('app'); if(login)login.hidden=true; if(app)app.hidden=false;
       if(el('hdr-nome'))el('hdr-nome').textContent='Adm Geral';
       toggleEntradas(); atualizarAvisos(); root.switchTab('atas');
+      if (/(?:\?|&)previewProc=1(?:&|$)/.test(location.search)) {
+        root.DATA=[{id:'23040.000201/2026-83',num:'23040.000201/2026-83',nome:'Materiais Esportivos',modal:'Pregão Eletrônico',req:'',status:'andamento',execucao:88,servidorExt:'Bruno',etapas:[{nome:'Fase externa — Pregão Eletrônico',fase:'externa',status:'andamento',agente:'Bruno'}]}];
+        root.switchTab('etapas');
+        setTimeout(function(){ if(typeof root.abrirProcesso==='function')root.abrirProcesso(0); }, 0);
+      }
       if (/(?:\?|&)previewTrigger=1(?:&|$)/.test(location.search)) {
         setTimeout(function(){ if(typeof root.aplicarTriggerStatus_==='function')root.aplicarTriggerStatus_({instalado:false}); }, 0);
       }
