@@ -549,6 +549,7 @@
     .empty p { font-size: 14px; }
     .section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 6px 2px; }
   </style>
+  <link rel="stylesheet" href="atas.css">
   <script src="config.js"></script>
   <!-- Firebase (compat) — leitura direta do Firestore (Fase 3). A apiKey em config.js
        NAO e segredo; a protecao vem das regras do Firestore. Escrita/login seguem no Apps Script. -->
@@ -556,6 +557,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="appsel-firestore.js"></script>
   <script src="relatorio-prazos.js"></script>
+  <script src="atas-domain.js"></script>
+  <script src="atas.js"></script>
   <!-- SortableJS: drag-and-drop da fila (degrada para as setas ▲▼ se não carregar) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
@@ -598,6 +601,12 @@
         <div class="app-header-title">Setor de Licitações · Gestão de Etapas</div>
         <div class="app-header-sub">Colégio Pedro II</div>
       </div>
+      <nav class="atas-desktop-nav" aria-label="Atalhos principais">
+        <a id="desktop-painel" href="#" onclick="abrirPainel_(event);return false;">Painel de Contratações</a>
+        <button id="desktop-atas" hidden onclick="switchTab('atas')">Gestão de Atas</button>
+        <button id="desktop-equipe" onclick="switchTab('equipe')">Gestão da Equipe</button>
+        <button id="desktop-historico" onclick="switchTab('historico')">Histórico</button>
+      </nav>
     </div>
     <div class="app-header-row app-header-row2">
       <span class="hdr-unidade-tag" id="hdr-unidade" hidden title="Unidade exibida em tela"></span>
@@ -612,6 +621,10 @@
           <button class="hdr-menu-item" onclick="confirmarTroca();toggleHdrMenu_()">🔄 Trocar usuário</button>
           <div class="hdr-menu-sep" id="hdr-visaogeral-sep" hidden></div>
           <button class="hdr-menu-item" id="hdr-visaogeral-item" hidden onclick="switchTab('visaogeral');toggleHdrMenu_()">📊 Visão Geral</button>
+          <div class="hdr-menu-sep" id="hdr-atas-sep" hidden></div>
+          <button class="hdr-menu-item" id="hdr-atas-item" hidden onclick="switchTab('atas');toggleHdrMenu_()">Gestão de Atas</button>
+          <div class="hdr-menu-sep" id="hdr-historico-sep"></div>
+          <button class="hdr-menu-item" id="hdr-historico-item" onclick="switchTab('historico');toggleHdrMenu_()">Histórico</button>
           <div class="hdr-menu-sep" id="hdr-config-sep"></div>
           <button class="hdr-menu-item" id="hdr-config-item" onclick="switchTab('config');toggleHdrMenu_()">⚙️ Configurações</button>
           <div class="hdr-menu-sep"></div>
@@ -633,8 +646,12 @@
       <span class="notif-title">Notificações</span>
       <button class="notif-close" onclick="fecharNotif_()" aria-label="Fechar">✕</button>
     </div>
+    <div class="notif-scope-tabs">
+      <button class="notif-scope" id="notif-scope-atas" onclick="setNotifScope_('atas')">Atas <span id="notif-cnt-atas">0</span></button>
+      <button class="notif-scope active" id="notif-scope-processos" onclick="setNotifScope_('processos')">Processos</button>
+    </div>
     <div class="notif-tabs">
-      <button class="notif-tab active" id="notif-tab-venc" onclick="setNotifCat_('venc')">
+      <button class="notif-tab" id="notif-tab-venc" onclick="setNotifCat_('venc')" hidden>
         Vencidos <span class="notif-tab-count" id="notif-cnt-venc">0</span>
       </button>
       <button class="notif-tab" id="notif-tab-prox" onclick="setNotifCat_('prox')">
@@ -663,12 +680,36 @@
   <div id="tab-fila"     class="tab-content" hidden></div>
   <div id="tab-historico" class="tab-content" hidden></div>
   <div id="tab-visaogeral" class="tab-content" hidden></div>
+  <div id="tab-atas" class="tab-content" hidden></div>
   <div id="tab-capacidade" class="tab-content" hidden>
     <div class="cap-toggle" style="margin-bottom:0;">
       <button id="cap-btn-int" class="cap-phase-btn active" onclick="switchCapPhase(this)">📊 Fase Interna</button>
       <button id="cap-btn-ext" class="cap-phase-btn" onclick="switchCapPhase(this)">⚖️ Fase Externa</button>
     </div>
     <div id="cap-content"></div>
+  </div>
+
+  <div id="tab-equipe" class="tab-content" hidden>
+    <div style="padding:18px 16px 90px;max-width:1280px;margin:0 auto;">
+      <div style="margin-bottom:16px;"><div style="font-size:24px;font-weight:800;color:var(--navy);">Gestão da Equipe</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">Cadastro, disponibilidade, férias e e-mails da unidade.</div></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+        <div class="cfg-section" id="cfg-equipe-section" style="flex:1;min-width:300px;margin-bottom:0;">
+          <div class="cfg-head">Equipe SEL/SEPMA</div>
+          <div class="cfg-card" id="cfg-equipe-card"><div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div></div>
+        </div>
+        <div class="cfg-section" style="flex:1;min-width:300px;margin-bottom:0;">
+          <div class="cfg-head">E-mails dos servidores</div>
+          <div class="cfg-card" id="cfg-emails-card"><div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div></div>
+          <div class="cfg-card" style="margin-top:10px;">
+            <div class="cfg-row cfg-row-col">
+              <label>Automação de avisos</label>
+              <span class="note">Acionadores de segunda a sexta. A Gestão de Atas envia um resumo diário consolidado com os marcos de 90, 60 e 30 dias.</span>
+              <div class="cfg-actions"><button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar trigger</button><span id="trigger-ok"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="tab-config"   class="tab-content" hidden>
@@ -693,30 +734,6 @@
           <div class="cfg-actions" style="margin-top:8px">
             <button class="btn-cfg" id="btn-uni-salvar" onclick="salvarDadosUnidade_()">Salvar dados da unidade</button>
             <span id="cfg-uni-msg" style="font-size:12px;min-height:14px"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
-      <div class="cfg-section" id="cfg-equipe-section" style="flex:1;min-width:260px;margin-bottom:0;">
-        <div class="cfg-head">Equipe SEL/SEPMA</div>
-        <div class="cfg-card" id="cfg-equipe-card">
-          <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div>
-        </div>
-      </div>
-      <div class="cfg-section" style="flex:1;min-width:260px;margin-bottom:0;">
-        <div class="cfg-head">E-mails dos servidores</div>
-        <div class="cfg-card" id="cfg-emails-card">
-          <div style="padding:12px 16px;font-size:12px;color:var(--muted);">Carregando…</div>
-        </div>
-        <div class="cfg-card" style="margin-top:10px;">
-          <div class="cfg-row cfg-row-col">
-            <label>Automação de avisos</label>
-            <span class="note">Acionadores de segunda a sexta: pontuação às 9h30, prazos próximos às 10h30 e etapas vencidas às 14h. O remetente é a conta que instalou os acionadores.</span>
-            <div class="cfg-actions">
-              <button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar trigger</button>
-              <span id="trigger-ok"></span>
-            </div>
           </div>
         </div>
       </div>
@@ -757,9 +774,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
       Capacidade
     </button>
-    <button class="nav-btn" id="nav-historico" onclick="switchTab('historico')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      Histórico
+    <button class="nav-btn" id="nav-equipe" onclick="switchTab('equipe')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      Gestão da Equipe
     </button>
   </nav>
 </div>
@@ -779,6 +796,10 @@
        style="margin-top:8px;width:100%;padding:11px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);font-size:13px;font-weight:600;cursor:pointer;color:var(--text2);">
       ✉️ <span id="btn-email-proc-label">E-mail do requisitante</span>
     </button>
+    <button id="btn-ata-proc" onclick="fecharProc();abrirCadastroAtaDoProcesso_(PROC_ATI)"
+       style="margin-top:8px;width:100%;padding:11px;border:1.5px solid #93c5fd;border-radius:10px;background:#eff6ff;font-size:13px;font-weight:700;cursor:pointer;color:#1e3a8a;" hidden>
+      Cadastrar ou consultar ata deste processo
+    </button>
     <button id="btn-voltar-fila" onclick="devolverProcFilaAtual_()"
        style="margin-top:8px;width:100%;padding:11px;border:1.5px solid var(--amber);border-radius:10px;background:#fffbeb;font-size:13px;font-weight:700;cursor:pointer;color:#92400e;" hidden>
       ↩ Voltar processo para a fila
@@ -789,6 +810,30 @@
     </button>
   </div>
 </div>
+
+<!-- Gestão de Atas: cadastro -->
+<div id="ov-ata-cad" class="overlay" onclick="fecharCadastroAta_()"></div>
+<div id="modal-ata-cad" class="sheet">
+  <div class="sheet-handle"></div><div class="sheet-header"><div class="sheet-title" id="ata-cad-titulo">Adicionar ata ao controle</div><div class="sheet-sub">Consulta oficial ou cadastro manual, sem escrever no Compras.gov.br.</div></div>
+  <div class="sheet-body">
+    <div class="atas-mode"><button id="ata-mode-compras" class="active" onclick="setModoCadastroAta_('compras')">Consultar Compras.gov.br</button><button id="ata-mode-manual" onclick="setModoCadastroAta_('manual')">Cadastro manual</button></div>
+    <div class="atas-grid">
+      <div class="form-group"><label class="form-label">UASG</label><input class="field-input" value="153167" disabled></div>
+      <div class="form-group"><label class="form-label">Responsável interno</label><input class="field-input" id="ata-responsavel" maxlength="120"></div>
+      <div class="form-group"><label class="form-label">Número da compra</label><input class="field-input" id="ata-compra" inputmode="numeric" maxlength="30" placeholder="Obrigatório na consulta oficial"></div>
+      <div class="form-group"><label class="form-label">Ano da compra</label><input class="field-input" id="ata-ano-compra" inputmode="numeric" maxlength="4"></div>
+      <div class="form-group full"><label class="form-label">Processo</label><input class="field-input" id="ata-processo" maxlength="120"></div>
+      <div class="form-group full"><label class="form-label">Objeto</label><input class="field-input" id="ata-objeto" maxlength="300"></div>
+    </div>
+    <div id="ata-form-compras"><button id="ata-consultar" class="atas-primary" onclick="consultarAtasCompras_()">Consultar</button><div id="ata-resultados" style="margin-top:14px"></div></div>
+    <div id="ata-form-manual" hidden><div class="atas-grid"><div class="form-group"><label class="form-label">Número da ata</label><input class="field-input" id="ata-manual-numero" maxlength="80"></div><div class="form-group"><label class="form-label">Ano</label><input class="field-input" id="ata-manual-ano" inputmode="numeric" maxlength="4"></div><div class="form-group"><label class="form-label">Assinatura</label><input type="date" class="field-input" id="ata-manual-assinatura"></div><div class="form-group"><label class="form-label">Vigência inicial</label><input type="date" class="field-input" id="ata-manual-inicio"></div><div class="form-group"><label class="form-label">Vigência final</label><input type="date" class="field-input" id="ata-manual-fim"></div></div></div>
+    <div class="form-group" style="margin-top:14px"><label class="form-label">Observação interna</label><textarea class="field-input" id="ata-observacao" rows="3" maxlength="1500"></textarea></div>
+  </div><div class="sheet-footer"><button class="btn-prim" id="ata-modal-save" onclick="salvarCadastroAta_()">Adicionar selecionadas</button><button class="btn-sec" onclick="fecharCadastroAta_()">Cancelar</button></div>
+</div>
+
+<!-- Gestão de Atas: detalhe -->
+<div id="ov-ata-det" class="overlay" onclick="fecharDetalheAta_()"></div>
+<div id="modal-ata-det" class="sheet"><div class="sheet-handle"></div><div class="sheet-header"><div class="sheet-title" id="ata-det-title">Detalhe da ata</div></div><div class="sheet-body" id="ata-det-body"></div><div class="sheet-footer"><button class="btn-prim" id="ata-det-save" onclick="salvarDetalheAta_()">Salvar alterações</button><button class="btn-sec" onclick="fecharDetalheAta_()">Fechar</button></div></div>
 
 <!-- ══════════════════════ MODAL: CONCLUSÃO GUIADA ════════════════════ -->
 <div id="ov-conc" class="overlay"></div>
@@ -1512,7 +1557,7 @@ function setupHeaderScroll_() {
 
 function aplicarPerfilUI_() {
   var isChefe = isChefeAtual_();
-  ['nav-fila', 'nav-historico'].forEach(function(id) {
+  ['nav-fila', 'nav-equipe', 'hdr-historico-item', 'hdr-historico-sep', 'desktop-equipe', 'desktop-historico'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.hidden = !isChefe;
   });
@@ -1534,7 +1579,7 @@ function aplicarPerfilUI_() {
     if (el) el.hidden = !SESSAO_ADMIN;
   });
 
-  var tabAbertaRestrita = ['tab-fila', 'tab-historico', 'tab-config'].some(function(id) {
+  var tabAbertaRestrita = ['tab-fila', 'tab-historico', 'tab-equipe', 'tab-config'].some(function(id) {
     var el = document.getElementById(id);
     return el && !el.hidden;
   });
@@ -2373,6 +2418,7 @@ function aplicarSessao_(sess) {
   aplicarFiltroInicialUsuario_();
   renderPillsServ_();
   aplicarPerfilUI_();
+  if (typeof inicializarGestaoAtas_ === 'function') inicializarGestaoAtas_();
   concluirBoot_();
   if (sess.mustChange) abrirTrocaSenhaObrigatoria_();
   else {
@@ -2520,12 +2566,13 @@ function abrirPainel_(ev) {
 // TABS
 // ══════════════════════════════════════════════════════════════════════
 function switchTab(tab) {
-  if (!isChefeAtual_() && ['fila', 'historico', 'config'].indexOf(tab) >= 0) {
+  if (!isChefeAtual_() && ['fila', 'historico', 'equipe', 'config'].indexOf(tab) >= 0) {
     tab = 'etapas';
   }
   // "Visão Geral" é exclusiva do Admin geral (relatório multiunidade).
   if (tab === 'visaogeral' && !SESSAO_ADMIN) tab = 'etapas';
-  ['etapas','fila','historico','capacidade','config','visaogeral'].forEach(function(t) {
+  if (tab === 'atas' && !(GESTAO_ATAS && GESTAO_ATAS.enabled)) tab = 'etapas';
+  ['etapas','fila','historico','capacidade','config','visaogeral','atas','equipe'].forEach(function(t) {
     document.getElementById('tab-'+t).hidden = t !== tab;
     var navEl = document.getElementById('nav-'+t);
     if (navEl) navEl.classList.toggle('active', t === tab);
@@ -2533,7 +2580,12 @@ function switchTab(tab) {
   document.getElementById('fab-novo').hidden = (tab !== 'etapas' || !isChefeAtual_());
   document.getElementById('fbar').hidden = (tab !== 'etapas');
   if (tab === 'historico'  && !HIST_CARREGADO) carregarHistorico();
-  if (tab === 'config') { renderEquipeConfig_(); carregarEmails_(); verificarTriggerConfig_(); carregarDadosUnidade_(); }
+  if (tab === 'atas') { NOTIF_SCOPE = 'atas'; carregarGestaoAtas_(); }
+  if (tab === 'equipe') {
+    if (GESTAO_ATAS && GESTAO_ATAS.preview && typeof renderEquipePreview_ === 'function') renderEquipePreview_();
+    else { renderEquipeConfig_(); carregarEmails_(); verificarTriggerConfig_(); }
+  }
+  if (tab === 'config') { carregarDadosUnidade_(); }
   if (tab === 'visaogeral') renderVisaoGeral_();
   if (tab === 'capacidade') {
     if (CAP_CARREGADO && CAP_DATA) renderCapacidade_();
@@ -2563,8 +2615,9 @@ function toggleHdrMenu_() {
 // ══════════════════════════════════════════════════════════════════════
 // CENTRAL DE NOTIFICAÇÕES
 // ══════════════════════════════════════════════════════════════════════
-var NOTIF = { prox: [], venc: [], pont: [] };
-var NOTIF_CAT = 'venc'; // categoria ativa: 'venc' | 'prox' | 'pont' (só chefia)
+var NOTIF = { prox: [], venc: [], pont: [], atas: [] };
+var NOTIF_CAT = 'prox'; // processos: somente prazos futuros e pontuação
+var NOTIF_SCOPE = 'processos'; // filtro primário: 'atas' | 'processos'
 var NOTIF_PILHA_ABERTA = {}; // chave "cat:processoId" → true quando a pilha está expandida
 
 function _normNomeNotif_(s) {
@@ -2625,8 +2678,10 @@ function sincronizarNotificacoesLocais_(salvar) {
     return;
   }
   var pontAtual = NOTIF.pont || [];
+  var atasAtual = NOTIF.atas || [];
   NOTIF = _coletarNotificacoesLocais_();
   NOTIF.pont = pontAtual;   // prazos são recalculados local; pontuação vem do Firestore/servidor
+  NOTIF.atas = atasAtual;
   atualizarBadgeNotif_();
   var panel = document.getElementById('notif-panel');
   if (panel && !panel.hidden) renderNotif_();
@@ -2639,6 +2694,12 @@ function refrescarAposMudancaEtapa_() {
 }
 
 function carregarNotificacoes_() {
+  if (GESTAO_ATAS && GESTAO_ATAS.preview) {
+    atualizarBadgeNotif_();
+    var previewPanel = document.getElementById('notif-panel');
+    if (previewPanel && !previewPanel.hidden) renderNotif_();
+    return;
+  }
   if (OFFLINE_MODE) {
     sincronizarNotificacoesLocais_(false);
     return;
@@ -2657,6 +2718,7 @@ function carregarNotificacoes_() {
     .withFailureHandler(function() { /* silencioso — central é auxiliar */ })
     .getAlertasApp(AUTH_TOKEN);
   carregarPontuacoesPendentes_();
+  if (GESTAO_ATAS && GESTAO_ATAS.enabled && typeof carregarAlertasAtas_ === 'function') carregarAlertasAtas_();
 }
 
 // Pontuação pendente: o mesmo alerta que a chefia recebe por e-mail, dentro do
@@ -2686,13 +2748,16 @@ function carregarPontuacoesPendentes_() {
 
 function atualizarBadgeNotif_() {
   var nPont = (NOTIF.pont || []).length;
-  var total = NOTIF.venc.length + NOTIF.prox.length + nPont;
+  var nAtas = (NOTIF.atas || []).length;
+  var total = NOTIF.prox.length + nPont + nAtas;
   var badge = document.getElementById('notif-badge');
   if (!badge) return;
   badge.textContent = total > 99 ? '99+' : String(total);
   badge.hidden = total === 0;
   document.getElementById('notif-cnt-venc').textContent = NOTIF.venc.length;
   document.getElementById('notif-cnt-prox').textContent = NOTIF.prox.length;
+  var cntAtas = document.getElementById('notif-cnt-atas');
+  if (cntAtas) cntAtas.textContent = nAtas;
   var tabPont = document.getElementById('notif-tab-pont');
   if (tabPont) {
     tabPont.hidden = !isChefeAtual_();
@@ -2706,15 +2771,35 @@ function toggleNotif_() {
 }
 
 function abrirNotif_() {
-  // Abre na categoria com itens; prioriza Vencidos
-  NOTIF_CAT = NOTIF.venc.length ? 'venc'
-    : (NOTIF.prox.length ? 'prox' : ((NOTIF.pont || []).length && isChefeAtual_() ? 'pont' : 'venc'));
+  // Processos vencidos já aparecem nos KPIs e na tela principal. No sino,
+  // processos mostram somente eventos futuros/operacionais.
+  NOTIF_CAT = NOTIF.prox.length ? 'prox'
+    : ((NOTIF.pont || []).length && isChefeAtual_() ? 'pont' : 'prox');
   NOTIF_PILHA_ABERTA = {}; // pilhas começam recolhidas a cada abertura
+  var abaAtas = document.getElementById('tab-atas');
+  NOTIF_SCOPE = abaAtas && !abaAtas.hidden && GESTAO_ATAS && GESTAO_ATAS.enabled ? 'atas' : 'processos';
   document.getElementById('notif-ov').hidden = false;
   document.getElementById('notif-panel').hidden = false;
   atualizarBadgeNotif_();
+  _aplicarNotifScopeUI_();
   renderNotif_();
   carregarNotificacoes_(); // refresca ao abrir
+}
+
+function _aplicarNotifScopeUI_() {
+  var atasAtivo = NOTIF_SCOPE === 'atas';
+  var a = document.getElementById('notif-scope-atas');
+  var p = document.getElementById('notif-scope-processos');
+  var cats = document.querySelector('#notif-panel .notif-tabs');
+  if (a) { a.hidden = !(GESTAO_ATAS && GESTAO_ATAS.enabled); a.classList.toggle('active', atasAtivo); }
+  if (p) p.classList.toggle('active', !atasAtivo);
+  if (cats) cats.hidden = atasAtivo;
+}
+
+function setNotifScope_(scope) {
+  NOTIF_SCOPE = scope === 'atas' && GESTAO_ATAS && GESTAO_ATAS.enabled ? 'atas' : 'processos';
+  _aplicarNotifScopeUI_();
+  renderNotif_();
 }
 
 function fecharNotif_() {
@@ -2779,6 +2864,10 @@ function toggleNotifPilha_(chave) {
 function renderNotif_() {
   var cont = document.getElementById('notif-body');
   if (!cont) return;
+  if (NOTIF_SCOPE === 'atas' && GESTAO_ATAS && GESTAO_ATAS.enabled) {
+    renderNotifAtas_();
+    return;
+  }
   if (NOTIF_CAT === 'pont') { renderNotifPontuacao_(cont); return; }
   var lista = NOTIF_CAT === 'venc' ? NOTIF.venc : NOTIF.prox;
   var ehVenc = NOTIF_CAT === 'venc';
@@ -3074,7 +3163,7 @@ function renderEtapas(filtrado) {
       html += '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:9px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px;font-size:12px;color:#1d4ed8;">'
         + '<span style="font-size:14px;">🔔</span>'
         + '<span style="flex:1;">Avisos automáticos de prazo ainda não configurados.</span>'
-        + '<button onclick="switchTab(\'config\');document.getElementById(\'btn-trigger\').scrollIntoView({behavior:\'smooth\'});" '
+        + '<button onclick="switchTab(\'equipe\');document.getElementById(\'btn-trigger\').scrollIntoView({behavior:\'smooth\'});" '
         + 'style="background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">Instalar</button>'
         + '</div>';
     }
@@ -3251,6 +3340,11 @@ function abrirProcesso(idx) {
     btnReabrir.hidden = !(isChefeAtual_() && processoConcluido
       && window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo);
   }
+  var btnAtaProc = document.getElementById('btn-ata-proc');
+  var temFaseExternaAta = (p.etapas || []).some(function(et) {
+    return et.status !== 'na' && String(et.fase || '').toLowerCase().indexOf('ext') >= 0;
+  });
+  if (btnAtaProc) btnAtaProc.hidden = !(GESTAO_ATAS && GESTAO_ATAS.enabled && temFaseExternaAta);
   footer.hidden = false;
 
   document.getElementById('ov-proc').classList.add('open');
@@ -5955,7 +6049,7 @@ if ('serviceWorker' in navigator) {
 <script>
 var TOUR_STEPS = [
   { e:'👋', t:'Bem-vindo(a)!', h:'Este é o <b>Sistema de Gestão de Etapas</b> das contratações da sua unidade. Ele organiza cada processo, seus prazos e responsáveis — e publica o andamento no Painel público (transparência).' },
-  { e:'⚙️', t:'1º passo: Configurações iniciais', h:'Comece pelo menu <b>⚙️ Configurações</b> (canto superior direito):<br>• <b>Equipe</b> — cadastre os servidores e marque quem é <b>chefe</b>.<br>• <b>E-mails</b> — cada servidor recebe os avisos de prazo.<br>• <b>Dados da unidade</b> — informe o <b>endereço</b> e o <b>e-mail do setor</b> (aparecem no rodapé do Painel público).<br>Os <b>prazos das etapas são contados em dias corridos</b> (conforme a portaria vigente), incluindo fins de semana e feriados.<br>Faça isso antes de tudo para o sistema funcionar como planejado.' },
+  { e:'⚙️', t:'1º passo: Configurações iniciais', h:'Use <b>Gestão da Equipe</b> para cadastrar servidores, férias/disponibilidade e e-mails. Em <b>Configurações</b>, informe os dados da unidade que aparecem no Painel público.<br>Os <b>prazos das etapas são contados em dias corridos</b> (conforme a portaria vigente), incluindo fins de semana e feriados.' },
   { e:'🔑', t:'Troque a senha temporária', h:'Se você entrou com a senha temporária do e-mail, o sistema pede para criar uma senha sua. Cada servidor cadastrado entra com a própria matrícula e uma <b>senha temporária aleatória</b>, enviada por e-mail no cadastro (ou repassada pela chefia, se não houver e-mail). No 1º acesso a troca por uma senha definitiva é obrigatória. Quem esquecer pode usar <b>“Esqueci minha senha”</b> na tela de login.' },
   { e:'➕', t:'Criar um processo', h:'Use o botão <b>+</b> (novo processo) para iniciar uma contratação: informe o objeto, o <b>D0</b> (data inicial) e os <b>responsáveis da fase interna e externa</b>. As 9 etapas são geradas automaticamente. Você pode <b>trocar os responsáveis depois</b> — veja o próximo passo.' },
   { e:'📋', t:'Acompanhar etapas e prazos', h:'Em <b>Etapas</b>, conclua ou regrida cada etapa conforme o andamento. Atrasos aparecem destacados; o sistema recalcula as datas em cascata.' },
@@ -5963,7 +6057,7 @@ var TOUR_STEPS = [
   { e:'🗂️', t:'Fila de prioridade', h:'Processos sem data entram na <b>Fila</b>. Lá você define a ordem de prioridade e inicia quando for a vez.' },
   { e:'↩️', t:'Devolver um processo à fila', h:'Precisou pausar e despriorizar um processo em andamento? Dentro do processo, use <b>↩ Voltar processo para a fila</b>. Ele retorna à <b>Fila</b> com o <b>status preservado</b> e o <b>motivo registrado</b> (sem perder o histórico) e sai da <b>capacidade ativa</b> até ser reiniciado.' },
   { e:'📊', t:'Painel público', h:'Tudo aparece no <b>Painel de Contratações</b> (somente leitura), por unidade — para o público e a gestão acompanharem.' },
-  { e:'✅', t:'Pronto para começar!', h:'Dica: comece pelas <b>Configurações</b> (equipe e e-mails). Você pode rever este tour quando quiser pelo menu <b>❔ Tour de ajuda</b>.' }
+  { e:'✅', t:'Pronto para começar!', h:'Dica: comece pela <b>Gestão da Equipe</b> (servidores, disponibilidade e e-mails). Você pode rever este tour quando quiser pelo menu <b>❔ Tour de ajuda</b>.' }
 ];
 var TOUR_I = 0;
 function _tourKey_(){

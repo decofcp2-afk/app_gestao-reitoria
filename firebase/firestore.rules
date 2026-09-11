@@ -22,6 +22,9 @@ service cloud.firestore {
     match /emails/{doc}       { allow read, write: if false; }
     match /historico/{doc}    { allow read, write: if false; }
     match /dispositivos/{doc} { allow read, write: if false; }
+    match /atas/{doc}         { allow read, write: if false; }
+    match /avisosAtas/{doc}   { allow read, write: if false; }
+    match /syncAtas/{doc}     { allow read, write: if false; }
 
     // ----- Bloqueio padrão para qualquer coleção não listada -----
     match /{document=**}      { allow read, write: if false; }

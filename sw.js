@@ -1,4 +1,4 @@
-var CACHE_NAME = 'app-gestao-reitoria-v9';
+var CACHE_NAME = 'app-gestao-reitoria-v10';
 
 var CORE_ASSETS = [
   './',
@@ -8,6 +8,9 @@ var CORE_ASSETS = [
   './appsel-firestore.js',
   './disponibilidade.js',
   './relatorio-prazos.js',
+  './atas-domain.js',
+  './atas.js',
+  './atas.css',
   './icon.svg',
   './painel-icon.svg',
   './cpii-logo.png',

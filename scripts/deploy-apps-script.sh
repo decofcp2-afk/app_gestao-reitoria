@@ -38,6 +38,7 @@ PROD_DEPLOYMENT_ID='AKfycbysFfbpofy4bf0qODi429gKX0dd621Si08_P9_e4nBajeuth1UV8cD4
 # "caminho no repositório : nome do arquivo no projeto do Apps Script"
 ARQUIVOS=(
   'apps-script/Code.gs:Código.js'
+  'apps-script/Atas.gs:Atas.js'
   'apps-script/FirestoreSync.gs:FirestoreSync.js'
   'apps-script/Disponibilidade.gs:Disponibilidade.js'
   'apps-script/appsscript.json:appsscript.json'
