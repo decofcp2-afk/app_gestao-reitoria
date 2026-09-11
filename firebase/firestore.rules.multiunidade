@@ -45,6 +45,9 @@ service cloud.firestore {
       match /emails/{doc}       { allow read, write: if false; }
       match /historico/{doc}    { allow read, write: if false; }
       match /dispositivos/{doc} { allow read, write: if false; }
+      match /atas/{doc}         { allow read, write: if false; }
+      match /avisosAtas/{doc}   { allow read, write: if false; }
+      match /syncAtas/{doc}     { allow read, write: if false; }
     }
 
     // collectionGroup 'resumo' (Painel do Diretor) — leitura pública.

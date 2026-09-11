@@ -179,3 +179,15 @@ O login no GitHub Pages usa desafio criptografico: a senha digitada nao e enviad
 - Se a cobranca de pontuacao nao chegar, confira se a chefia tem e-mail cadastrado em Equipe e se o acionador de 9h30 existe (reinstale o trigger).
 - Se o GitHub Pages nao atualizar, aguarde alguns minutos e confira a aba `Actions` do repositorio.
 - Se mudar o nome do repositorio, atualize tambem links do README e qualquer atalho salvo no navegador.
+# Gestão de Atas (feature flag)
+
+O módulo de Gestão de Atas acompanha vigências e responsáveis internos, consulta a API pública do Compras.gov.br somente para leitura e mantém os dados privados no Firestore da unidade.
+
+- A feature nasce desligada. Para o piloto, execute no editor do Apps Script: `configurarGestaoAtasUnidade('reitoria-sel', true)`.
+- Para desligar: `configurarGestaoAtasUnidade('reitoria-sel', false)`.
+- Depois de habilitar, reinstale os acionadores em **Gestão da Equipe → Automação de avisos**.
+- Os e-mails de atas são consolidados por destinatário, limitados aos marcos de 90, 60 e 30 dias e preservam uma reserva diária para os avisos de processos.
+- A central do sino continua funcionando mesmo quando a cota de e-mail estiver indisponível.
+- O número da compra é obrigatório na consulta oficial; o número do processo permanece como vínculo interno porque a API ARP não oferece esse filtro.
+
+Antes do piloto, publique as regras de `firebase/firestore.rules.multiunidade`, implante o Apps Script e somente então habilite a unidade. Não habilite a flag antes desses passos.

@@ -1062,7 +1062,15 @@ function _apiCallAppSEL_(method, args) {
     salvarOutrosCap: salvarOutrosCap,
     salvarPontuacaoCap: salvarPontuacaoCap,
     getEmails: getEmails,
-    salvarEmail: salvarEmail
+    salvarEmail: salvarEmail,
+    getGestaoAtasApp: getGestaoAtasApp,
+    consultarAtasComprasApp: consultarAtasComprasApp,
+    salvarAtaApp: salvarAtaApp,
+    atualizarAtaInternaApp: atualizarAtaInternaApp,
+    arquivarAtaApp: arquivarAtaApp,
+    getAlertasAtasApp: getAlertasAtasApp,
+    marcarAlertaAtaLidoApp: marcarAlertaAtaLidoApp,
+    sincronizarAtasApp: sincronizarAtasApp
   };
   // Fase 3 (corte): versões Firestore (FirestoreSync.gs). Aditivo — só são
   // chamadas quando o frontend está com firestoreAtivo=true.
@@ -5266,7 +5274,7 @@ function instalarTriggerAvisos(authToken) {
   return _withAppLock_('instalar trigger de avisos', function() {
     _authRequire_(authToken, true);
     var handlersAviso = ['enviarAvisosPrazo', 'enviarAvisosPrazoProximos', 'enviarAvisosPrazoVencidos',
-      'enviarCobrancaPontuacaoTodasUnidades'];
+      'enviarCobrancaPontuacaoTodasUnidades', 'enviarResumoAtasTodasUnidades'];
     ScriptApp.getProjectTriggers().forEach(function(t) {
       if (handlersAviso.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
     });
@@ -5292,6 +5300,16 @@ function instalarTriggerAvisos(authToken) {
         .atHour(PONT_COBRANCA_HORA)
         .nearMinute(PONT_COBRANCA_MINUTO)
         .create();
+      // Gestão de Atas: um único resumo diário por destinatário. A função sai
+      // sem enviar quando nenhuma unidade estiver habilitada pela feature flag.
+      if (typeof enviarResumoAtasTodasUnidades === 'function') {
+        ScriptApp.newTrigger('enviarResumoAtasTodasUnidades')
+          .timeBased()
+          .onWeekDay(dia)
+          .atHour(ATAS_TRIGGER_HORA)
+          .nearMinute(ATAS_TRIGGER_MINUTO)
+          .create();
+      }
     });
     PropertiesService.getScriptProperties().setProperties({
       SEL_TRIGGER_PONTUACAO_HORA: PONT_COBRANCA_LABEL,
