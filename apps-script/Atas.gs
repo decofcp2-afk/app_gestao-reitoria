@@ -85,6 +85,16 @@ function configurarGestaoAtasUnidade(unidade, ativa) {
   return { ok: true, unidades: lista };
 }
 
+// Atalhos sem argumentos para execução manual segura no editor do Apps Script.
+// Não são expostos pela API pública e exigem acesso de editor ao projeto.
+function habilitarGestaoAtasReitoriaSel() {
+  return configurarGestaoAtasUnidade('reitoria-sel', true);
+}
+
+function desabilitarGestaoAtasReitoriaSel() {
+  return configurarGestaoAtasUnidade('reitoria-sel', false);
+}
+
 function _atasRequireAtiva_() {
   if (!_atasHabilitada_()) throw new Error('Gestão de Atas ainda não está habilitada para esta unidade.');
 }
