@@ -576,6 +576,8 @@ function _atasEnviarResumoUnidade_(somenteChefia) {
 function enviarResumoAtasTodasUnidades() {
   var anterior = typeof _FS_UNIDADE_REQ === 'string' ? _FS_UNIDADE_REQ : '';
   var total = { enviados: 0, falhas: 0, pulados: 0, unidades: 0 };
+  // Um único trigger diário economiza acionadores; a função não envia no fim de semana.
+  if (typeof _avisosPodeEnviarHoje_ === 'function' && !_avisosPodeEnviarHoje_(new Date())) return total;
   try {
     _atasUnidadesHabilitadas_().forEach(function (unidade) {
       _FS_UNIDADE_REQ = unidade;

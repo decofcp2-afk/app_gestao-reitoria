@@ -89,6 +89,7 @@ test('responsável de outro setor não é cadastrado como membro da equipe', () 
   assert.match(atas, /responsavelTipo:val\('ata-responsavel-tipo'\)/);
   assert.doesNotMatch(html, /ata-responsavel-email[^>]*g12\.br/);
   assert.match(code, /onMonthDay\(1\)/);
+  assert.match(code, /enviarResumoAtasTodasUnidades'[\s\S]*?everyDays\(1\)/);
   assert.match(code, /enviarResumoMensalAtasChefiaTodasUnidades/);
   assert.match(code, /temProximos && temVencidos && temAtasResponsaveis && temAtasChefiaMensal/);
 });

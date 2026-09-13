@@ -5316,17 +5316,17 @@ function instalarTriggerAvisos(authToken) {
         .atHour(PONT_COBRANCA_HORA)
         .nearMinute(PONT_COBRANCA_MINUTO)
         .create();
-      // Gestão de Atas: responsáveis recebem os novos marcos em dias úteis.
-      // sem enviar quando nenhuma unidade estiver habilitada pela feature flag.
-      if (typeof enviarResumoAtasTodasUnidades === 'function') {
-        ScriptApp.newTrigger('enviarResumoAtasTodasUnidades')
-          .timeBased()
-          .onWeekDay(dia)
-          .atHour(ATAS_TRIGGER_HORA)
-          .nearMinute(ATAS_TRIGGER_MINUTO)
-          .create();
-      }
     });
+    // Um único acionador diário substitui cinco acionadores semanais; a própria
+    // rotina ignora fins de semana. Isso preserva espaço no limite do Apps Script.
+    if (typeof enviarResumoAtasTodasUnidades === 'function') {
+      ScriptApp.newTrigger('enviarResumoAtasTodasUnidades')
+        .timeBased()
+        .everyDays(1)
+        .atHour(ATAS_TRIGGER_HORA)
+        .nearMinute(ATAS_TRIGGER_MINUTO)
+        .create();
+    }
     // A chefia recebe somente um consolidado mensal para preservar a cota.
     if (typeof enviarResumoMensalAtasChefiaTodasUnidades === 'function') {
       ScriptApp.newTrigger('enviarResumoMensalAtasChefiaTodasUnidades')
