@@ -51,6 +51,9 @@
       if (/(?:\?|&)previewTrigger=1(?:&|$)/.test(location.search)) {
         setTimeout(function(){ if(typeof root.aplicarTriggerStatus_==='function')root.aplicarTriggerStatus_({instalado:false}); }, 0);
       }
+      if (/(?:\?|&)previewNovidades=1(?:&|$)/.test(location.search)) {
+        setTimeout(function(){ if(typeof root.maybeMostrarNovidades_==='function')root.maybeMostrarNovidades_(); }, 120);
+      }
       return;
     }
     if (!root.AUTH_TOKEN || !root.google || !google.script) return;

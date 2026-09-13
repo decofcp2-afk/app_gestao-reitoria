@@ -57,3 +57,20 @@ test('ação de voltar processo para a fila fica compacta junto ao título', () 
   assert.match(html, /podeVoltarFila = isChefeAtual_\(\) && p\.status !== 'ok'/);
   assert.match(html, /\.proc-return-btn \{[^}]*padding:4px 8px;[^}]*font-size:10px/);
 });
+
+test('tour explica as novas funções de atas, avisos e planejamento da equipe', () => {
+  assert.match(html, /t:'Gestão de Atas'/);
+  assert.match(html, /t:'Consultar o Compras\.gov\.br'/);
+  assert.match(html, /integração é <b>somente leitura<\/b>/);
+  assert.match(html, /marcos de <b>90, 60 e 30 dias<\/b>/);
+  assert.match(html, /t:'Planejamento da equipe'/);
+});
+
+test('novidades aparecem uma vez por usuário e versão e oferecem o tour atualizado', () => {
+  assert.match(html, /id="novidades-modal"[^>]*role="dialog"[^>]*aria-modal="true"/);
+  assert.match(html, /var APP_RELEASE_VERSION = '2026\.09\.13-1'/);
+  assert.match(html, /localStorage\.getItem\(_novidadesKey_\(\)\) === APP_RELEASE_VERSION/);
+  assert.match(html, /localStorage\.setItem\(_novidadesKey_\(\), APP_RELEASE_VERSION\)/);
+  assert.match(html, /fecharNovidades_\(true\)[^>]*>Ver tour atualizado<\/button>/);
+  assert.match(html, /setTimeout\(function\(\)\{ try \{ maybeMostrarNovidades_\(\);/);
+});
