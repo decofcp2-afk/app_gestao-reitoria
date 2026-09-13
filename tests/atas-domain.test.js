@@ -66,6 +66,15 @@ test('filtros pesquisam ata, processo, compra, objeto e responsável', () => {
   assert.equal(Atas.filtrarAtas(atas, { busca: 'Amanda' }, hoje).length, 0);
 });
 
+test('filtro de UASG separa a origem oficial sem inferir unidade responsável', () => {
+  const atas = [
+    { numeroAta: '1/2026', uasg: '153167', vigenciaFim: '2027-08-14' },
+    { numeroAta: '2/2026', uasg: '158485', vigenciaFim: '2027-08-14' }
+  ];
+  assert.deepEqual(Atas.filtrarAtas(atas, { uasg: '153167' }, hoje).map(a => a.numeroAta), ['1/2026']);
+  assert.equal(Atas.filtrarAtas(atas, { busca: '158485' }, hoje).length, 1);
+});
+
 test('KPIs separam ativas, vencendo, aguardando e vencidas', () => {
   assert.deepEqual(Atas.kpis([
     { vigenciaFim: '2027-01-11' }, { vigenciaFim: '2026-10-11' }, {}, { vigenciaFim: '2026-09-10' }
