@@ -154,10 +154,17 @@ function _atasSanitizarInterno_(d) {
     processoId: _atasTexto_(d.processoId, 120),
     processo: _atasTexto_(d.processo, 120),
     objeto: _atasTexto_(d.objeto, 300),
+    responsavelTipo: _atasNorm_(d.responsavelTipo) === 'externo' ? 'externo' : 'equipe',
     responsavel: _atasTexto_(d.responsavel, 120),
+    responsavelSetor: _atasTexto_(d.responsavelSetor, 160),
+    responsavelEmail: _atasTexto_(d.responsavelEmail, 254).toLowerCase(),
     observacao: _atasTexto_(d.observacao, 1500),
     unidade: _fsUnidade_()
   };
+}
+
+function _atasEmailValido_(email) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email || '').trim());
 }
 
 function _atasNormalizarOficial_(r) {
@@ -272,6 +279,14 @@ function salvarAtaApp(dados, authToken) {
       _atasRequireAtiva_();
       dados = dados || {};
       var interno = _atasSanitizarInterno_(dados);
+      if (interno.responsavelTipo === 'externo') {
+        if (!(sess.isChefe || sess.isAdmin)) throw new Error('Somente a chefia pode indicar um responsável de outro setor.');
+        if (!interno.responsavel) throw new Error('Informe o nome do responsável de outro setor.');
+        if (!_atasEmailValido_(interno.responsavelEmail)) throw new Error('Informe um e-mail válido para o responsável de outro setor.');
+      } else {
+        interno.responsavelSetor = '';
+        interno.responsavelEmail = '';
+      }
       var responsavelInformado = !!interno.responsavel;
       if (!interno.responsavel) interno.responsavel = sess.nome;
       if (!_atasPodeCriar_(sess, interno)) throw new Error('Você só pode cadastrar atas dos processos pelos quais responde na fase externa.');
@@ -326,9 +341,20 @@ function atualizarAtaInternaApp(dados, authToken) {
       if (!ata) throw new Error('Ata não encontrada.');
       if (!_atasPodeEditar_(sess, ata)) throw new Error('Você não tem permissão para editar esta ata.');
       var campos = {
+        responsavelTipo: _atasNorm_(dados.responsavelTipo || ata.responsavelTipo) === 'externo' ? 'externo' : 'equipe',
         responsavel: _atasTexto_(dados.responsavel || ata.responsavel, 120),
+        responsavelSetor: _atasTexto_(dados.responsavelSetor, 160),
+        responsavelEmail: _atasTexto_(dados.responsavelEmail, 254).toLowerCase(),
         observacao: _atasTexto_(dados.observacao, 1500), atualizadoEm: new Date(), atualizadoPor: sess.nome
       };
+      if (campos.responsavelTipo === 'externo') {
+        if (!(sess.isChefe || sess.isAdmin)) throw new Error('Somente a chefia pode indicar um responsável de outro setor.');
+        if (!campos.responsavel) throw new Error('Informe o nome do responsável de outro setor.');
+        if (!_atasEmailValido_(campos.responsavelEmail)) throw new Error('Informe um e-mail válido para o responsável de outro setor.');
+      } else {
+        campos.responsavelSetor = '';
+        campos.responsavelEmail = '';
+      }
       if (ata.origem === 'manual') {
         campos.dataAssinatura = _atasIso_(dados.dataAssinatura || ata.dataAssinatura);
         campos.vigenciaInicio = _atasIso_(dados.vigenciaInicio || ata.vigenciaInicio);
@@ -336,6 +362,15 @@ function atualizarAtaInternaApp(dados, authToken) {
         if (campos.vigenciaInicio && campos.vigenciaFim && campos.vigenciaFim < campos.vigenciaInicio) throw new Error('A vigência final não pode ser anterior à inicial.');
       }
       _fsUpdate_('atas/' + id, campos);
+      // Mantém avisos ainda não lidos alinhados quando a responsabilidade muda.
+      _fs_().query('avisosAtas').Execute().map(_atasFormatarDoc_).filter(function (a) {
+        return a.ataId === id;
+      }).forEach(function (a) {
+        _fsUpdate_('avisosAtas/' + a._id, {
+          responsavelTipo: campos.responsavelTipo, responsavel: campos.responsavel,
+          responsavelSetor: campos.responsavelSetor, responsavelEmail: campos.responsavelEmail
+        });
+      });
       return { ok: true };
     } catch (e) { return { ok: false, erro: e.message }; }
   });
@@ -369,6 +404,8 @@ function _atasGerarAvisos_() {
     _fsSet_('avisosAtas/' + id, {
       ataId: ata._id, numeroAta: ata.numeroAta || '', processo: ata.processo || '', objeto: ata.objeto || '',
       responsavel: ata.responsavel || '', vigenciaFim: ata.vigenciaFim || '', marcoDias: marco,
+      responsavelTipo: ata.responsavelTipo || 'equipe', responsavelSetor: ata.responsavelSetor || '',
+      responsavelEmail: ata.responsavelEmail || '',
       criadoEm: new Date(), lidoPor: [], emailEnviadoPara: [], unidade: _fsUnidade_()
     });
   });
@@ -470,7 +507,7 @@ function _atasEscHtml_(v) {
   return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c]; });
 }
 
-function _atasEnviarResumoUnidade_() {
+function _atasEnviarResumoUnidade_(somenteChefia) {
   if (!_atasHabilitada_()) return { enviados: 0, pulados: 0 };
   _atasGerarAvisos_();
   var avisos = _fs_().query('avisosAtas').Execute().map(_atasFormatarDoc_);
@@ -478,6 +515,7 @@ function _atasEnviarResumoUnidade_() {
   var servidores = _getServidoresApp_();
   var destinatarios = {};
   servidores.forEach(function (s) {
+    if (!!s.isChefe !== !!somenteChefia) return;
     var email = _emailServidorPorNome_(s.nome);
     if (!email) return;
     var elegiveis = avisos.filter(function (a) { return (a.emailEnviadoPara || []).indexOf(email) < 0; });
@@ -485,6 +523,15 @@ function _atasEnviarResumoUnidade_() {
     var itens = s.isChefe ? elegiveis : proprios;
     if (itens.length) destinatarios[email] = { nome: s.nome, chefe: !!s.isChefe, avisos: itens };
   });
+  if (!somenteChefia) {
+    avisos.forEach(function (a) {
+      if (a.responsavelTipo !== 'externo' || !_atasEmailValido_(a.responsavelEmail)) return;
+      var email = String(a.responsavelEmail).trim().toLowerCase();
+      if ((a.emailEnviadoPara || []).indexOf(email) >= 0) return;
+      if (!destinatarios[email]) destinatarios[email] = { nome: a.responsavel || 'Responsável', chefe: false, avisos: [] };
+      destinatarios[email].avisos.push(a);
+    });
+  }
   var quota = Math.max(0, MailApp.getRemainingDailyQuota() - ATAS_EMAIL_RESERVA_OUTROS_FLUXOS);
   function urgencia(d) {
     var vals = d.avisos.map(function (a) { return Number(a.marcoDias) === 0 ? -1 : Number(a.marcoDias || 999); });
@@ -533,7 +580,23 @@ function enviarResumoAtasTodasUnidades() {
     _atasUnidadesHabilitadas_().forEach(function (unidade) {
       _FS_UNIDADE_REQ = unidade;
       try { _atasSincronizarUnidade_(); } catch (eSync) {}
-      var r = _atasEnviarResumoUnidade_();
+      var r = _atasEnviarResumoUnidade_(false);
+      total.enviados += r.enviados || 0;
+      total.falhas += r.falhas || 0;
+      total.pulados += r.pulados || 0;
+      total.unidades++;
+    });
+  } finally { _FS_UNIDADE_REQ = anterior; }
+  return total;
+}
+
+function enviarResumoMensalAtasChefiaTodasUnidades() {
+  var anterior = typeof _FS_UNIDADE_REQ === 'string' ? _FS_UNIDADE_REQ : '';
+  var total = { enviados: 0, falhas: 0, pulados: 0, unidades: 0 };
+  try {
+    _atasUnidadesHabilitadas_().forEach(function (unidade) {
+      _FS_UNIDADE_REQ = unidade;
+      var r = _atasEnviarResumoUnidade_(true);
       total.enviados += r.enviados || 0;
       total.falhas += r.falhas || 0;
       total.pulados += r.pulados || 0;

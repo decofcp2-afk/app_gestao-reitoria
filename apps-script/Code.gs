@@ -5289,7 +5289,8 @@ function instalarTriggerAvisos(authToken) {
   return _withAppLock_('instalar trigger de avisos', function() {
     _authRequire_(authToken, true);
     var handlersAviso = ['enviarAvisosPrazo', 'enviarAvisosPrazoProximos', 'enviarAvisosPrazoVencidos',
-      'enviarCobrancaPontuacaoTodasUnidades', 'enviarResumoAtasTodasUnidades'];
+      'enviarCobrancaPontuacaoTodasUnidades', 'enviarResumoAtasTodasUnidades',
+      'enviarResumoMensalAtasChefiaTodasUnidades'];
     ScriptApp.getProjectTriggers().forEach(function(t) {
       if (handlersAviso.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
     });
@@ -5315,7 +5316,7 @@ function instalarTriggerAvisos(authToken) {
         .atHour(PONT_COBRANCA_HORA)
         .nearMinute(PONT_COBRANCA_MINUTO)
         .create();
-      // Gestão de Atas: um único resumo diário por destinatário. A função sai
+      // Gestão de Atas: responsáveis recebem os novos marcos em dias úteis.
       // sem enviar quando nenhuma unidade estiver habilitada pela feature flag.
       if (typeof enviarResumoAtasTodasUnidades === 'function') {
         ScriptApp.newTrigger('enviarResumoAtasTodasUnidades')
@@ -5326,6 +5327,15 @@ function instalarTriggerAvisos(authToken) {
           .create();
       }
     });
+    // A chefia recebe somente um consolidado mensal para preservar a cota.
+    if (typeof enviarResumoMensalAtasChefiaTodasUnidades === 'function') {
+      ScriptApp.newTrigger('enviarResumoMensalAtasChefiaTodasUnidades')
+        .timeBased()
+        .onMonthDay(1)
+        .atHour(ATAS_TRIGGER_HORA)
+        .nearMinute(ATAS_TRIGGER_MINUTO)
+        .create();
+    }
     PropertiesService.getScriptProperties().setProperties({
       SEL_TRIGGER_PONTUACAO_HORA: PONT_COBRANCA_LABEL,
       SEL_TRIGGER_AVISOS_INSTALADO_EM: new Date().toISOString(),
@@ -5350,15 +5360,19 @@ function verificarTriggerAvisos(authToken) {
     var temProximos = false;
     var temVencidos = false;
     var temPontuacao = false;
+    var temAtasResponsaveis = false;
+    var temAtasChefiaMensal = false;
     var temLegado = false;
     for (var i = 0; i < triggers.length; i++) {
       var handler = triggers[i].getHandlerFunction();
       if (handler === 'enviarAvisosPrazoProximos') temProximos = true;
       if (handler === 'enviarAvisosPrazoVencidos') temVencidos = true;
       if (handler === 'enviarCobrancaPontuacaoTodasUnidades') temPontuacao = true;
+      if (handler === 'enviarResumoAtasTodasUnidades') temAtasResponsaveis = true;
+      if (handler === 'enviarResumoMensalAtasChefiaTodasUnidades') temAtasChefiaMensal = true;
       if (handler === 'enviarAvisosPrazo') temLegado = true;
     }
-    if (temProximos && temVencidos) {
+    if (temProximos && temVencidos && temAtasResponsaveis && temAtasChefiaMensal) {
       return {
         instalado: true,
         // Acionador novo (cobrança de pontuação): quem instalou os triggers
@@ -5372,7 +5386,7 @@ function verificarTriggerAvisos(authToken) {
         instaladoEm: props.getProperty('SEL_TRIGGER_AVISOS_INSTALADO_EM') || ''
       };
     }
-    if (temLegado || temProximos || temVencidos) {
+    if (temLegado || temProximos || temVencidos || temAtasResponsaveis || temAtasChefiaMensal) {
       return {
         instalado: false,
         erro: 'Acionador antigo ou incompleto encontrado. Clique em Instalar/Reinstalar trigger.',
