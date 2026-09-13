@@ -2479,6 +2479,7 @@ function aplicarSessao_(sess) {
     carregarDados();
     preCarregarCapacidade_();
     try { if (window.maybeIniciarTour_) window.maybeIniciarTour_(); } catch(e) {}
+    setTimeout(function(){ try { maybeMostrarNovidades_(); } catch(e) {} }, 500);
   }
 }
 
@@ -6064,6 +6065,30 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
+<!-- ───────── Novidades por versão ───────── -->
+<div id="novidades-modal" style="display:none;position:fixed;inset:0;z-index:100001;background:rgba(8,18,33,.72);align-items:center;justify-content:center;padding:20px" role="dialog" aria-modal="true" aria-labelledby="novidades-titulo">
+  <div style="background:var(--card,#fff);color:var(--text,#0b1d33);max-width:480px;width:100%;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.45);overflow:hidden">
+    <div style="padding:20px 22px 8px">
+      <div style="font-size:32px" aria-hidden="true">✨</div>
+      <div id="novidades-titulo" style="font-size:19px;font-weight:800;margin-top:6px">Novidades no sistema</div>
+      <div style="font-size:12px;color:var(--muted,#5a6b80);margin-top:3px">Atualização de setembro de 2026</div>
+    </div>
+    <div style="padding:8px 22px 18px;font-size:14px;line-height:1.5">
+      <p style="margin:0 0 10px">Veja o que mudou nesta versão:</p>
+      <ul style="margin:0;padding-left:20px;display:grid;gap:7px">
+        <li><b>Gestão de Atas:</b> consulta somente leitura ao Compras.gov.br, cadastro manual e controle dos vencimentos.</li>
+        <li><b>Avisos de atas:</b> lembretes nos marcos de 90, 60 e 30 dias.</li>
+        <li><b>Gestão da Equipe:</b> e-mail no cadastro do servidor e planejamento de férias e afastamentos.</li>
+        <li><b>Navegação:</b> novos atalhos e ações de processo mais compactas.</li>
+      </ul>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 22px 20px;border-top:1px solid var(--border,rgba(0,0,0,.08));flex-wrap:wrap">
+      <button type="button" onclick="fecharNovidades_(true)" style="padding:9px 14px;border:1px solid var(--border,rgba(0,0,0,.2));background:var(--card,#fff);color:inherit;border-radius:8px;cursor:pointer;font-weight:700">Ver tour atualizado</button>
+      <button type="button" onclick="fecharNovidades_(false)" style="padding:9px 16px;border:none;background:var(--navy,#0b1d33);color:#fff;border-radius:8px;cursor:pointer;font-weight:700">Entendi</button>
+    </div>
+  </div>
+</div>
+
 <!-- ───────── Tour de primeiro acesso ───────── -->
 <div id="tour-modal" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(8,18,33,.72);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)tourFechar(false)">
   <div style="background:var(--card,#fff);color:var(--text,#0b1d33);max-width:460px;width:100%;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.45);overflow:hidden">
@@ -6082,18 +6107,42 @@ if ('serviceWorker' in navigator) {
 </div>
 <script>
 var TOUR_STEPS = [
-  { e:'👋', t:'Bem-vindo(a)!', h:'Este é o <b>Sistema de Gestão de Etapas</b> das contratações da sua unidade. Ele organiza cada processo, seus prazos e responsáveis — e publica o andamento no Painel público (transparência).' },
+  { e:'👋', t:'Bem-vindo(a)!', h:'Este é o <b>Sistema de Gestão de Etapas</b> das contratações da sua unidade. Ele organiza processos, prazos, responsáveis, equipe e atas — e publica o andamento no Painel público (transparência).' },
   { e:'⚙️', t:'1º passo: Configurações iniciais', h:'Use <b>Gestão da Equipe</b> para cadastrar servidores, férias/disponibilidade e e-mails. Em <b>Configurações</b>, informe os dados da unidade que aparecem no Painel público.<br>Os <b>prazos das etapas são contados em dias corridos</b> (conforme a portaria vigente), incluindo fins de semana e feriados.' },
   { e:'🔑', t:'Troque a senha temporária', h:'Se você entrou com a senha temporária do e-mail, o sistema pede para criar uma senha sua. Cada servidor cadastrado entra com a própria matrícula e uma <b>senha temporária aleatória</b>, enviada por e-mail no cadastro (ou repassada pela chefia, se não houver e-mail). No 1º acesso a troca por uma senha definitiva é obrigatória. Quem esquecer pode usar <b>“Esqueci minha senha”</b> na tela de login.' },
   { e:'➕', t:'Criar um processo', h:'Use o botão <b>+</b> (novo processo) para iniciar uma contratação: informe o objeto, o <b>D0</b> (data inicial) e os <b>responsáveis da fase interna e externa</b>. As 9 etapas são geradas automaticamente. Você pode <b>trocar os responsáveis depois</b> — veja o próximo passo.' },
   { e:'📋', t:'Acompanhar etapas e prazos', h:'Em <b>Etapas</b>, conclua ou regrida cada etapa conforme o andamento. Atrasos aparecem destacados; o sistema recalcula as datas em cascata.' },
   { e:'⚖️', t:'Capacidade e responsáveis', h:'Na aba <b>Capacidade</b> você acompanha a <b>carga de trabalho</b> de cada servidor e a <b>ocupação do setor</b> (🟢 disponível / 🟡 limitada / 🔴 máxima), que também aparece no Painel. Para <b>trocar o responsável</b> por um processo, clique no nome do responsável (ou em <b>+ Atribuir</b>) dentro do processo, em Etapas — a pontuação é ajustada automaticamente na Capacidade.' },
   { e:'🗂️', t:'Fila de prioridade', h:'Processos sem data entram na <b>Fila</b>. Lá você define a ordem de prioridade e inicia quando for a vez.' },
-  { e:'↩️', t:'Devolver um processo à fila', h:'Precisou pausar e despriorizar um processo em andamento? Dentro do processo, use <b>↩ Voltar processo para a fila</b>. Ele retorna à <b>Fila</b> com o <b>status preservado</b> e o <b>motivo registrado</b> (sem perder o histórico) e sai da <b>capacidade ativa</b> até ser reiniciado.' },
+  { e:'↩️', t:'Devolver um processo à fila', h:'Precisou pausar e despriorizar um processo em andamento? Ao lado do nome do processo, use <b>↩ Voltar à fila</b>. Ele retorna à <b>Fila</b> com o <b>status preservado</b> e o <b>motivo registrado</b> (sem perder o histórico) e sai da <b>capacidade ativa</b> até ser reiniciado.' },
+  { e:'📑', t:'Gestão de Atas', h:'Em <b>Gestão de Atas</b>, acompanhe as atas da unidade, seus responsáveis e datas de vigência. Você pode filtrar, pesquisar e abrir cada registro para conferir os dados internos e oficiais.' },
+  { e:'🔎', t:'Consultar o Compras.gov.br', h:'Ao cadastrar uma ata, informe o <b>número e o ano da compra</b> para consultar o Compras.gov.br. A integração é <b>somente leitura</b>: o sistema importa as atas selecionadas, mas nunca altera o Compras.gov.br. Se a ata ainda não estiver publicada, use o cadastro manual.' },
+  { e:'🔔', t:'Avisos de vencimento', h:'A central de notificações reúne <b>prazos próximos e vencidos</b> de processos e atas. Para atas, os avisos são gerados nos marcos de <b>90, 60 e 30 dias</b> antes do fim da vigência.' },
+  { e:'👥', t:'Planejamento da equipe', h:'Em <b>Gestão da Equipe</b>, mantenha matrícula e e-mail no mesmo cadastro e registre <b>férias ou afastamentos</b>. A disponibilidade reduz proporcionalmente a capacidade exibida para o período.' },
   { e:'📊', t:'Painel público', h:'Tudo aparece no <b>Painel de Contratações</b> (somente leitura), por unidade — para o público e a gestão acompanharem.' },
   { e:'✅', t:'Pronto para começar!', h:'Dica: comece pela <b>Gestão da Equipe</b> (servidores, disponibilidade e e-mails). Você pode rever este tour quando quiser pelo menu <b>❔ Tour de ajuda</b>.' }
 ];
 var TOUR_I = 0;
+var APP_RELEASE_VERSION = '2026.09.13-1';
+function _novidadesKey_(){
+  var u = (window.AppselFirestore && window.AppselFirestore.unidadeAtual) ? window.AppselFirestore.unidadeAtual() : 'reitoria-sel';
+  return 'sel_novidades_' + u + '_' + (typeof SERVIDOR!=='undefined'?SERVIDOR:'');
+}
+function maybeMostrarNovidades_(){
+  var preview = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /(?:\?|&)previewNovidades=1(?:&|$)/.test(location.search);
+  if (!preview && typeof AUTH_TOKEN !== 'undefined' && !AUTH_TOKEN) return;
+  try { if (localStorage.getItem(_novidadesKey_()) === APP_RELEASE_VERSION) return; } catch(e){}
+  var tour = document.getElementById('tour-modal');
+  if (tour && tour.style.display === 'flex') { setTimeout(maybeMostrarNovidades_, 700); return; }
+  var modal = document.getElementById('novidades-modal');
+  if (modal) modal.style.display = 'flex';
+}
+function fecharNovidades_(abrirTour){
+  try { localStorage.setItem(_novidadesKey_(), APP_RELEASE_VERSION); } catch(e){}
+  var modal = document.getElementById('novidades-modal');
+  if (modal) modal.style.display = 'none';
+  if (abrirTour) iniciarTour();
+}
 function _tourKey_(){
   var u = (window.AppselFirestore && window.AppselFirestore.unidadeAtual) ? window.AppselFirestore.unidadeAtual() : 'reitoria-sel';
   return 'sel_tour_v1_' + u + '_' + (typeof SERVIDOR!=='undefined'?SERVIDOR:'');
