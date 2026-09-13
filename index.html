@@ -972,7 +972,7 @@
 <section id="trigger-required-card" class="trigger-required-card" role="alertdialog" aria-modal="true" aria-labelledby="trigger-required-title" aria-describedby="trigger-required-desc">
   <span class="trigger-required-eyebrow">Configuração necessária</span>
   <h2 id="trigger-required-title">Ative os avisos automáticos</h2>
-  <p id="trigger-required-desc">Instale os acionadores para que os prazos próximos, as etapas vencidas e os marcos de 90, 60 e 30 dias das atas sejam enviados automaticamente.</p>
+  <p id="trigger-required-desc">Instale os acionadores para enviar os avisos automaticamente. Nas atas, a chefia recebe o resumo da unidade e cada servidor recebe somente as atas sob sua responsabilidade, usando o e-mail do cadastro da equipe.</p>
   <button class="btn-cfg" id="btn-trigger" onclick="instalarTrigger()">Instalar avisos automáticos</button>
   <span class="trigger-required-status" id="trigger-ok" role="status" aria-live="polite"></span>
 </section>
@@ -6078,7 +6078,7 @@ if ('serviceWorker' in navigator) {
       <ul style="margin:0;padding-left:20px;display:grid;gap:7px">
         <li><b>Gestão de Atas:</b> consulta somente leitura ao Compras.gov.br com escolha da UASG de origem, cadastro manual e controle dos vencimentos.</li>
         <li><b>Pesquisa de atas:</b> filtros por UASG, situação, responsável e ano, além da busca instantânea por ata, processo, compra ou objeto.</li>
-        <li><b>Avisos de atas:</b> lembretes nos marcos de 90, 60 e 30 dias.</li>
+        <li><b>Avisos de atas:</b> lembretes nos marcos de 90, 60 e 30 dias; a chefia recebe o resumo da unidade e cada servidor, somente suas atas.</li>
         <li><b>Gestão da Equipe:</b> e-mail no cadastro do servidor e planejamento de férias e afastamentos.</li>
         <li><b>Navegação:</b> novos atalhos e ações de processo mais compactas.</li>
       </ul>
@@ -6118,13 +6118,13 @@ var TOUR_STEPS = [
   { e:'↩️', t:'Devolver um processo à fila', h:'Precisou pausar e despriorizar um processo em andamento? Ao lado do nome do processo, use <b>↩ Voltar à fila</b>. Ele retorna à <b>Fila</b> com o <b>status preservado</b> e o <b>motivo registrado</b> (sem perder o histórico) e sai da <b>capacidade ativa</b> até ser reiniciado.' },
   { e:'📑', t:'Gestão de Atas', h:'Em <b>Gestão de Atas</b>, acompanhe as atas da unidade, seus responsáveis e datas de vigência. Você pode filtrar, pesquisar e abrir cada registro para conferir os dados internos e oficiais.' },
   { e:'🔎', t:'Consultar o Compras.gov.br', h:'Ao cadastrar uma ata, escolha a <b>UASG de origem</b> e informe o número e o ano da compra. A UASG 153167 (Reitoria) aparece apenas como sugestão. A integração é <b>somente leitura</b>: você seleciona quais atas entram no controle da unidade, e o sistema nunca distribui registros automaticamente nem altera o Compras.gov.br.' },
-  { e:'🔔', t:'Avisos de vencimento', h:'A central de notificações reúne <b>prazos próximos e vencidos</b> de processos e atas. Para atas, os avisos são gerados nos marcos de <b>90, 60 e 30 dias</b> antes do fim da vigência.' },
+  { e:'🔔', t:'Avisos de vencimento', h:'A central de notificações reúne <b>prazos próximos e vencidos</b> de processos e atas. Para atas, os avisos são gerados nos marcos de <b>90, 60 e 30 dias</b>: a <b>chefia recebe o resumo completo da unidade</b> e cada servidor comum recebe <b>somente as atas sob sua responsabilidade</b>, no e-mail informado em Gestão da Equipe. Sem e-mail cadastrado, o aviso continua disponível no sino do aplicativo.' },
   { e:'👥', t:'Planejamento da equipe', h:'Em <b>Gestão da Equipe</b>, mantenha matrícula e e-mail no mesmo cadastro e registre <b>férias ou afastamentos</b>. A disponibilidade reduz proporcionalmente a capacidade exibida para o período.' },
   { e:'📊', t:'Painel público', h:'Tudo aparece no <b>Painel de Contratações</b> (somente leitura), por unidade — para o público e a gestão acompanharem.' },
   { e:'✅', t:'Pronto para começar!', h:'Dica: comece pela <b>Gestão da Equipe</b> (servidores, disponibilidade e e-mails). Você pode rever este tour quando quiser pelo menu <b>❔ Tour de ajuda</b>.' }
 ];
 var TOUR_I = 0;
-var APP_RELEASE_VERSION = '2026.09.13-3';
+var APP_RELEASE_VERSION = '2026.09.13-4';
 function _novidadesKey_(){
   var u = (window.AppselFirestore && window.AppselFirestore.unidadeAtual) ? window.AppselFirestore.unidadeAtual() : 'reitoria-sel';
   return 'sel_novidades_' + u + '_' + (typeof SERVIDOR!=='undefined'?SERVIDOR:'');
