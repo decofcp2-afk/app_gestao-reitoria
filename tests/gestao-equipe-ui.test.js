@@ -68,7 +68,7 @@ test('tour explica as novas funções de atas, avisos e planejamento da equipe',
 
 test('novidades aparecem uma vez por usuário e versão e oferecem o tour atualizado', () => {
   assert.match(html, /id="novidades-modal"[^>]*role="dialog"[^>]*aria-modal="true"/);
-  assert.match(html, /var APP_RELEASE_VERSION = '2026\.09\.13-4'/);
+  assert.match(html, /var APP_RELEASE_VERSION = '2026\.09\.13-5'/);
   assert.match(html, /localStorage\.getItem\(_novidadesKey_\(\)\) === APP_RELEASE_VERSION/);
   assert.match(html, /localStorage\.setItem\(_novidadesKey_\(\), APP_RELEASE_VERSION\)/);
   assert.match(html, /fecharNovidades_\(true\)[^>]*>Ver tour atualizado<\/button>/);
@@ -76,9 +76,21 @@ test('novidades aparecem uma vez por usuário e versão e oferecem o tour atuali
 });
 
 test('tour explica para quem são enviados os avisos de atas', () => {
-  assert.match(html, /chefia recebe o resumo completo da unidade/);
-  assert.match(html, /somente as atas sob sua responsabilidade/);
+  assert.match(html, /chefia recebe um resumo mensal/);
+  assert.match(html, /cada responsável recebe os marcos/);
   assert.match(html, /Sem e-mail cadastrado, o aviso continua disponível no sino/);
+});
+
+test('responsável de outro setor não é cadastrado como membro da equipe', () => {
+  const atas = fs.readFileSync(path.join(root, 'atas.js'), 'utf8');
+  assert.match(html, /id="ata-responsavel-tipo"/);
+  assert.match(html, /id="ata-responsavel-setor"/);
+  assert.match(html, /id="ata-responsavel-email"[^>]*type="email"/);
+  assert.match(atas, /responsavelTipo:val\('ata-responsavel-tipo'\)/);
+  assert.doesNotMatch(html, /ata-responsavel-email[^>]*g12\.br/);
+  assert.match(code, /onMonthDay\(1\)/);
+  assert.match(code, /enviarResumoMensalAtasChefiaTodasUnidades/);
+  assert.match(code, /temProximos && temVencidos && temAtasResponsaveis && temAtasChefiaMensal/);
 });
 
 test('pesquisa de atas preserva foco e cursor durante a filtragem', () => {

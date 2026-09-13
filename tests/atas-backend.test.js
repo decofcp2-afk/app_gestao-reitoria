@@ -86,3 +86,16 @@ test('vínculo oficial encontra cadastro manual sem misturar atas distintas', ()
   );
   assert.equal(encontrado._id, 'manual-certo');
 });
+
+test('responsável externo aceita e-mail pessoal válido sem criar servidor', () => {
+  const { contexto } = carregarBackend({ resultado: [] });
+  contexto._fsUnidade_ = () => 'reitoria-sel';
+  const dados = contexto._atasSanitizarInterno_({
+    responsavelTipo: 'externo', responsavel: 'Maria', responsavelSetor: 'Almoxarifado',
+    responsavelEmail: 'Maria.Pessoal@gmail.com'
+  });
+  assert.equal(dados.responsavelTipo, 'externo');
+  assert.equal(dados.responsavelEmail, 'maria.pessoal@gmail.com');
+  assert.equal(contexto._atasEmailValido_(dados.responsavelEmail), true);
+  assert.equal(contexto._atasEmailValido_('email-invalido'), false);
+});
