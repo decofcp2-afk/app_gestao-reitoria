@@ -68,7 +68,7 @@ test('tour explica as novas funções de atas, avisos e planejamento da equipe',
 
 test('novidades aparecem uma vez por usuário e versão e oferecem o tour atualizado', () => {
   assert.match(html, /id="novidades-modal"[^>]*role="dialog"[^>]*aria-modal="true"/);
-  assert.match(html, /var APP_RELEASE_VERSION = '2026\.09\.13-2'/);
+  assert.match(html, /var APP_RELEASE_VERSION = '2026\.09\.13-3'/);
   assert.match(html, /localStorage\.getItem\(_novidadesKey_\(\)\) === APP_RELEASE_VERSION/);
   assert.match(html, /localStorage\.setItem\(_novidadesKey_\(\), APP_RELEASE_VERSION\)/);
   assert.match(html, /fecharNovidades_\(true\)[^>]*>Ver tour atualizado<\/button>/);
@@ -81,4 +81,13 @@ test('pesquisa de atas preserva foco e cursor durante a filtragem', () => {
   assert.match(atas, /var pos=input\.selectionStart, fim=input\.selectionEnd/);
   assert.match(atas, /novo\.focus\(\)/);
   assert.match(atas, /novo\.setSelectionRange\(pos,fim\)/);
+});
+
+test('gestão de atas distingue UASG de origem da unidade responsável', () => {
+  const atas = fs.readFileSync(path.join(root, 'atas.js'), 'utf8');
+  assert.match(html, /id="ata-uasg" value="153167"/);
+  assert.match(atas, /id="ata-f-uasg"/);
+  assert.match(atas, /uasg:uasg,numeroCompra/);
+  assert.match(atas, /Selecione apenas as que ficarão sob controle desta unidade/);
+  assert.doesNotMatch(atas, /consultarAtasComprasApp\(\{uasg:'153167'/);
 });

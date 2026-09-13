@@ -123,10 +123,11 @@
       if (filtros.situacao && filtros.situacao !== sit) return false;
       if (filtros.responsavel && normalizarTexto(ata.responsavel) !== normalizarTexto(filtros.responsavel)) return false;
       if (filtros.ano && texto(ata.anoAta) !== texto(filtros.ano)) return false;
+      if (filtros.uasg && apenasDigitos(ata.uasg) !== apenasDigitos(filtros.uasg)) return false;
       if (!busca) return true;
       return normalizarTexto([
         ata.numeroAta, ata.processo, ata.numeroCompra, ata.anoCompra,
-        ata.objeto, ata.responsavel, ata.fornecedor
+        ata.objeto, ata.responsavel, ata.fornecedor, ata.uasg
       ].join(' ')).indexOf(busca) >= 0;
     });
   }
