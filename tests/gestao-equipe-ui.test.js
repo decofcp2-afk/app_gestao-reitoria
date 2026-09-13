@@ -68,11 +68,17 @@ test('tour explica as novas funções de atas, avisos e planejamento da equipe',
 
 test('novidades aparecem uma vez por usuário e versão e oferecem o tour atualizado', () => {
   assert.match(html, /id="novidades-modal"[^>]*role="dialog"[^>]*aria-modal="true"/);
-  assert.match(html, /var APP_RELEASE_VERSION = '2026\.09\.13-3'/);
+  assert.match(html, /var APP_RELEASE_VERSION = '2026\.09\.13-4'/);
   assert.match(html, /localStorage\.getItem\(_novidadesKey_\(\)\) === APP_RELEASE_VERSION/);
   assert.match(html, /localStorage\.setItem\(_novidadesKey_\(\), APP_RELEASE_VERSION\)/);
   assert.match(html, /fecharNovidades_\(true\)[^>]*>Ver tour atualizado<\/button>/);
   assert.match(html, /setTimeout\(function\(\)\{ try \{ maybeMostrarNovidades_\(\);/);
+});
+
+test('tour explica para quem são enviados os avisos de atas', () => {
+  assert.match(html, /chefia recebe o resumo completo da unidade/);
+  assert.match(html, /somente as atas sob sua responsabilidade/);
+  assert.match(html, /Sem e-mail cadastrado, o aviso continua disponível no sino/);
 });
 
 test('pesquisa de atas preserva foco e cursor durante a filtragem', () => {
