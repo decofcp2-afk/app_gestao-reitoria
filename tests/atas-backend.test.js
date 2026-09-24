@@ -76,6 +76,18 @@ test('consulta e cadastro não assumem UASG da Reitoria em outras unidades', () 
   assert.equal(contexto._atasUasgSugerida_(), '153167');
 });
 
+test('aceita número/ano do PNCP sem colar o ano ao número da compra', () => {
+  const registro = {
+    numeroAtaRegistroPreco: '00107/2026', codigoUnidadeGerenciadora: '153167',
+    numeroCompra: '90007/2026', anoCompra: '2026',
+    dataVigenciaInicial: '2026-05-19', dataVigenciaFinal: '2027-05-19'
+  };
+  const { contexto } = carregarBackend({ resultado: [registro], totalPaginas: 1 });
+  assert.equal(contexto._atasBuscarOficiais_({ uasg: '153167', numeroCompra: '90007/2026', anoCompra: '2026' }).length, 1);
+  assert.equal(contexto._atasBuscarOficiais_({ uasg: '153167', numeroCompra: '90007', anoCompra: '2026' }).length, 1);
+  assert.throws(() => contexto._atasBuscarOficiais_({ uasg: '153167', numeroCompra: '90007/2026', anoCompra: '2025' }), /não confere/);
+});
+
 test('retirada e alteração da vigência removem avisos antigos da tela e do e-mail', () => {
   const { contexto } = carregarBackend({ resultado: [] });
   contexto._atasListar_ = () => [
