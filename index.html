@@ -591,7 +591,7 @@
     .empty p { font-size: 14px; }
     .section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 6px 2px; }
   </style>
-  <link rel="stylesheet" href="atas.css?v=14">
+  <link rel="stylesheet" href="atas.css?v=15">
   <script src="config.js"></script>
   <!-- Firebase (compat) — leitura direta do Firestore (Fase 3). A apiKey em config.js
        NAO e segredo; a protecao vem das regras do Firestore. Escrita/login seguem no Apps Script. -->
@@ -600,7 +600,7 @@
   <script src="appsel-firestore.js"></script>
   <script src="relatorio-prazos.js"></script>
   <script src="atas-domain.js"></script>
-  <script src="atas.js"></script>
+  <script src="atas.js?v=15"></script>
   <!-- SortableJS: drag-and-drop da fila (degrada para as setas ▲▼ se não carregar) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
@@ -846,7 +846,7 @@
   <div class="sheet-body">
     <div class="atas-mode"><button id="ata-mode-compras" class="active" onclick="setModoCadastroAta_('compras')">Consultar Compras.gov.br</button><button id="ata-mode-manual" onclick="setModoCadastroAta_('manual')">Cadastro manual</button></div>
     <div class="atas-grid">
-      <div class="form-group"><label class="form-label">UASG de origem</label><input class="field-input" id="ata-uasg" value="153167" inputmode="numeric" maxlength="12" placeholder="Ex.: 153167"><small class="atas-muted">Informe a UASG que cadastrou a ata no Compras.gov.br. 153167 é a Reitoria.</small></div>
+      <div class="form-group"><label class="form-label">UASG de origem</label><input class="field-input" id="ata-uasg" inputmode="numeric" maxlength="12" placeholder="Ex.: 153167"><small class="atas-muted">Informe a UASG que cadastrou a ata no Compras.gov.br. Você pode acompanhar atas de outras unidades e órgãos.</small></div>
       <div class="form-group"><label class="form-label">Tipo de responsável</label><select class="field-input" id="ata-responsavel-tipo" onchange="alternarResponsavelAta_()"><option value="equipe">Servidor da equipe</option><option value="externo">Pessoa de outro setor</option></select></div>
       <div class="form-group"><label class="form-label">Responsável pela gestão</label><input class="field-input" id="ata-responsavel" maxlength="120"></div>
       <div class="form-group ata-resp-externo" hidden><label class="form-label">Setor/unidade do responsável</label><input class="field-input" id="ata-responsavel-setor" maxlength="160"></div>
@@ -864,7 +864,7 @@
 
 <!-- Gestão de Atas: detalhe -->
 <div id="ov-ata-det" class="overlay" onclick="fecharDetalheAta_()"></div>
-<div id="modal-ata-det" class="sheet"><div class="sheet-handle"></div><div class="sheet-header"><div class="sheet-title" id="ata-det-title">Detalhe da ata</div></div><div class="sheet-body" id="ata-det-body"></div><div class="sheet-footer"><button class="btn-prim" id="ata-det-save" onclick="salvarDetalheAta_()">Salvar alterações</button><button class="btn-sec" onclick="fecharDetalheAta_()">Fechar</button></div></div>
+<div id="modal-ata-det" class="sheet"><div class="sheet-handle"></div><div class="sheet-header"><div class="sheet-title" id="ata-det-title">Detalhe da ata</div></div><div class="sheet-body" id="ata-det-body"></div><div class="sheet-footer"><button class="btn-sec atas-danger" id="ata-det-archive" onclick="arquivarAta_()" hidden>Retirar do acompanhamento</button><button class="btn-prim" id="ata-det-save" onclick="salvarDetalheAta_()">Salvar alterações</button><button class="btn-sec" onclick="fecharDetalheAta_()">Fechar</button></div></div>
 
 <!-- ══════════════════════ MODAL: CONCLUSÃO GUIADA ════════════════════ -->
 <div id="ov-conc" class="overlay"></div>
