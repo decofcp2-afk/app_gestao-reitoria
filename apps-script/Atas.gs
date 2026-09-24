@@ -6,7 +6,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 var ATAS_API_BASE = 'https://dadosabertos.compras.gov.br/modulo-arp';
-var ATAS_UASG_PADRAO = '153167';
+// Sugestão apenas para o piloto; outras unidades informam sua UASG de origem.
+var ATAS_UASG_REITORIA = '153167';
 var ATAS_MARCOS = [30, 60, 90];
 var ATAS_EMAIL_MAX_DESTINATARIOS_PILOTO = 20;
 var ATAS_EMAIL_RESERVA_OUTROS_FLUXOS = 50;
@@ -105,6 +106,10 @@ function _atasRequireAtiva_() {
   if (!_atasHabilitada_()) throw new Error('Gestão de Atas ainda não está habilitada para esta unidade.');
 }
 
+function _atasUasgSugerida_() {
+  return _fsUnidade_() === 'reitoria-sel' ? ATAS_UASG_REITORIA : '';
+}
+
 function _atasDocId_(ata) {
   var pncp = _atasTexto_(ata.idAtaPNCP || ata.identificadorPncp);
   var base = pncp || [ata.uasg, ata.numeroAta, ata.anoAta].join('-');
@@ -201,10 +206,11 @@ function _atasExtrairListaApi_(json) {
 
 function _atasBuscarOficiais_(params) {
   params = params || {};
-  var uasg = String(params.uasg || ATAS_UASG_PADRAO).replace(/\D/g, '').slice(0, 12);
+  var uasg = String(params.uasg || '').replace(/\D/g, '').slice(0, 12);
   var compra = String(params.numeroCompra || '').replace(/\D/g, '').slice(0, 30);
   var ano = String(params.anoCompra || '').replace(/\D/g, '').slice(0, 4);
   if (!compra) throw new Error('Informe o número da compra. A API oficial não oferece busca pelo número do processo.');
+  if (!uasg) throw new Error('Informe a UASG de origem da ata.');
   var agoraAno = Number(Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy'));
   var baseAno = Number(ano || agoraAno);
   var anosConsulta = ano ? [baseAno, baseAno + 1, baseAno + 2] : [agoraAno - 1, agoraAno, agoraAno + 1];
@@ -295,7 +301,7 @@ function salvarAtaApp(dados, authToken) {
       var manualAnterior = oficial ? _atasLocalizarManualCorrespondente_(oficial, interno) : null;
       var ata = oficial || {
         origem: 'manual', numeroAta: _atasTexto_(dados.numeroAta, 80), anoAta: _atasTexto_(dados.anoAta, 4),
-        uasg: String(dados.uasg || ATAS_UASG_PADRAO).replace(/\D/g, '').slice(0, 12),
+        uasg: String(dados.uasg || '').replace(/\D/g, '').slice(0, 12),
         numeroCompra: _atasTexto_(dados.numeroCompra, 30), anoCompra: _atasTexto_(dados.anoCompra, 4),
         dataAssinatura: _atasIso_(dados.dataAssinatura), vigenciaInicio: _atasIso_(dados.vigenciaInicio),
         vigenciaFim: _atasIso_(dados.vigenciaFim)
@@ -309,10 +315,11 @@ function salvarAtaApp(dados, authToken) {
       }
       Object.keys(interno).forEach(function (k) { if (interno[k]) ata[k] = interno[k]; });
       if (!ata.numeroAta) throw new Error('Informe o número da ata.');
+      if (!ata.uasg) throw new Error('Informe a UASG de origem da ata.');
       if (ata.vigenciaInicio && ata.vigenciaFim && ata.vigenciaFim < ata.vigenciaInicio) throw new Error('A vigência final não pode ser anterior à inicial.');
       var idDoc = _atasDocId_(ata);
       var existente = _fsGet_('atas/' + idDoc);
-      if (existente && !dados.confirmarAtualizacao) throw new Error('Esta ata já está no controle da unidade.');
+      if (existente && !existente.arquivada && !dados.confirmarAtualizacao) throw new Error('Esta ata já está no controle da unidade.');
       var agora = new Date();
       ata.criadoEm = existente && existente.criadoEm ? existente.criadoEm : (manualAnterior && manualAnterior.criadoEm || agora);
       ata.criadoPor = existente && existente.criadoPor ? existente.criadoPor : (manualAnterior && manualAnterior.criadoPor || sess.nome);
@@ -339,10 +346,11 @@ function atualizarAtaInternaApp(dados, authToken) {
       var id = _atasTexto_(dados.id, 180).replace(/[^a-zA-Z0-9_-]/g, '');
       var ata = id ? _fsGet_('atas/' + id) : null;
       if (!ata) throw new Error('Ata não encontrada.');
+      if (ata.arquivada) throw new Error('Esta ata já foi retirada do acompanhamento.');
       if (!_atasPodeEditar_(sess, ata)) throw new Error('Você não tem permissão para editar esta ata.');
       var campos = {
         responsavelTipo: _atasNorm_(dados.responsavelTipo || ata.responsavelTipo) === 'externo' ? 'externo' : 'equipe',
-        responsavel: _atasTexto_(dados.responsavel || ata.responsavel, 120),
+        responsavel: _atasTexto_(Object.prototype.hasOwnProperty.call(dados, 'responsavel') ? dados.responsavel : ata.responsavel, 120),
         responsavelSetor: _atasTexto_(dados.responsavelSetor, 160),
         responsavelEmail: _atasTexto_(dados.responsavelEmail, 254).toLowerCase(),
         observacao: _atasTexto_(dados.observacao, 1500), atualizadoEm: new Date(), atualizadoPor: sess.nome
@@ -355,10 +363,18 @@ function atualizarAtaInternaApp(dados, authToken) {
         campos.responsavelSetor = '';
         campos.responsavelEmail = '';
       }
+      if (!campos.responsavel) throw new Error('Informe o responsável pela gestão da ata.');
       if (ata.origem === 'manual') {
-        campos.dataAssinatura = _atasIso_(dados.dataAssinatura || ata.dataAssinatura);
-        campos.vigenciaInicio = _atasIso_(dados.vigenciaInicio || ata.vigenciaInicio);
-        campos.vigenciaFim = _atasIso_(dados.vigenciaFim || ata.vigenciaFim);
+        ['dataAssinatura', 'vigenciaInicio', 'vigenciaFim'].forEach(function (campo) {
+          if (Object.prototype.hasOwnProperty.call(dados, campo)) {
+            campos[campo] = _atasIso_(dados[campo]);
+            if (dados[campo] && !campos[campo]) throw new Error('Data inválida: ' + campo + '.');
+          } else campos[campo] = _atasIso_(ata[campo]);
+        });
+        ['processo', 'objeto', 'numeroCompra', 'anoCompra'].forEach(function (campo) {
+          if (Object.prototype.hasOwnProperty.call(dados, campo))
+            campos[campo] = _atasTexto_(dados[campo], campo === 'objeto' ? 300 : (campo === 'processo' ? 120 : (campo === 'anoCompra' ? 4 : 30)));
+        });
         if (campos.vigenciaInicio && campos.vigenciaFim && campos.vigenciaFim < campos.vigenciaInicio) throw new Error('A vigência final não pode ser anterior à inicial.');
       }
       _fsUpdate_('atas/' + id, campos);
@@ -382,8 +398,9 @@ function arquivarAtaApp(id, authToken) {
       var sess = _authRequire_(authToken, true);
       _atasRequireAtiva_();
       id = _atasTexto_(id, 180).replace(/[^a-zA-Z0-9_-]/g, '');
-      if (!_fsGet_('atas/' + id)) throw new Error('Ata não encontrada.');
-      _fsUpdate_('atas/' + id, { arquivada: true, arquivadaEm: new Date(), arquivadaPor: sess.nome });
+      var ata = _fsGet_('atas/' + id);
+      if (!ata || ata.arquivada) throw new Error('Ata não encontrada no acompanhamento.');
+      _fsUpdate_('atas/' + id, { arquivada: true, arquivadaEm: new Date(), arquivadaPor: sess.nome, atualizadoEm: new Date(), atualizadoPor: sess.nome });
       return { ok: true };
     } catch (e) { return { ok: false, erro: e.message }; }
   });
@@ -411,9 +428,18 @@ function _atasGerarAvisos_() {
   });
 }
 
+function _atasAvisosAtivos_(avisos) {
+  var atas = {};
+  _atasListar_().forEach(function (ata) { if (!ata.arquivada) atas[ata._id] = ata; });
+  return avisos.filter(function (a) {
+    var ata = atas[a.ataId];
+    return ata && _atasIso_(ata.vigenciaFim) && _atasIso_(ata.vigenciaFim) === _atasIso_(a.vigenciaFim);
+  });
+}
+
 function _atasAvisosVisiveis_(sess) {
   _atasGerarAvisos_();
-  var todos = _fs_().query('avisosAtas').Execute().map(_atasFormatarDoc_);
+  var todos = _atasAvisosAtivos_(_fs_().query('avisosAtas').Execute().map(_atasFormatarDoc_));
   if (!(sess.isChefe || sess.isAdmin)) {
     todos = todos.filter(function (a) { return _atasNorm_(a.responsavel) === _atasNorm_(sess.nome); });
   }
@@ -453,7 +479,7 @@ function getGestaoAtasApp(authToken) {
   var sync = _fsGet_('syncAtas/estado') || {};
   return {
     ok: true, enabled: true, somenteLeituraCompras: true, unidade: _fsUnidade_(),
-    uasg: ATAS_UASG_PADRAO, podeGerirTodas: !!(sess.isChefe || sess.isAdmin),
+    uasg: _atasUasgSugerida_(), podeGerirTodas: !!(sess.isChefe || sess.isAdmin),
     atas: _atasListar_(), alertas: _atasAvisosVisiveis_(sess),
     consultadoEm: sync.ultimoSucessoEm || sync.ultimaTentativaEm || ''
   };
@@ -467,7 +493,7 @@ function _atasSincronizarUnidade_() {
   _fsUpdate_('syncAtas/estado', { ultimaTentativaEm: new Date(), status: 'executando' });
   _atasListar_().forEach(function (ata) {
     if (ata.arquivada || ata.origem !== 'compras' || !ata.numeroCompra || !ata.anoCompra) return;
-    var chave = ata.numeroCompra + '/' + ata.anoCompra;
+    var chave = ata.uasg + '/' + ata.numeroCompra + '/' + ata.anoCompra;
     try {
       if (!cache[chave]) cache[chave] = _atasBuscarOficiais_({ uasg: ata.uasg, numeroCompra: ata.numeroCompra, anoCompra: ata.anoCompra });
       var oficial = cache[chave].filter(function (o) {
@@ -510,7 +536,7 @@ function _atasEscHtml_(v) {
 function _atasEnviarResumoUnidade_(somenteChefia) {
   if (!_atasHabilitada_()) return { enviados: 0, pulados: 0 };
   _atasGerarAvisos_();
-  var avisos = _fs_().query('avisosAtas').Execute().map(_atasFormatarDoc_);
+  var avisos = _atasAvisosAtivos_(_fs_().query('avisosAtas').Execute().map(_atasFormatarDoc_));
   if (!avisos.length) return { enviados: 0, pulados: 0 };
   var servidores = _getServidoresApp_();
   var destinatarios = {};

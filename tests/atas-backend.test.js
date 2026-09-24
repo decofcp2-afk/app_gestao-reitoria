@@ -66,6 +66,46 @@ test('consulta oficial exige número da compra porque a API não filtra processo
   assert.equal(chamadas.length, 0);
 });
 
+test('consulta e cadastro não assumem UASG da Reitoria em outras unidades', () => {
+  const { contexto, chamadas } = carregarBackend({ resultado: [], totalPaginas: 1 });
+  contexto._fsUnidade_ = () => 'campus-centro';
+  assert.equal(contexto._atasUasgSugerida_(), '');
+  assert.throws(() => contexto._atasBuscarOficiais_({ numeroCompra: '1234' }), /UASG/);
+  assert.equal(chamadas.length, 0);
+  contexto._fsUnidade_ = () => 'reitoria-sel';
+  assert.equal(contexto._atasUasgSugerida_(), '153167');
+});
+
+test('retirada e alteração da vigência removem avisos antigos da tela e do e-mail', () => {
+  const { contexto } = carregarBackend({ resultado: [] });
+  contexto._atasListar_ = () => [
+    { _id: 'a1', vigenciaFim: '2026-12-31' },
+    { _id: 'a2', vigenciaFim: '2026-12-31', arquivada: true }
+  ];
+  const avisos = [
+    { ataId: 'a1', vigenciaFim: '2026-12-31' },
+    { ataId: 'a1', vigenciaFim: '2026-10-31' },
+    { ataId: 'a2', vigenciaFim: '2026-12-31' }
+  ];
+  assert.equal(contexto._atasAvisosAtivos_(avisos).length, 1);
+});
+
+test('edição manual ajusta os campos e permite limpar datas sem mudar a identidade da ata', () => {
+  const { contexto } = carregarBackend({ resultado: [] });
+  const updates = [];
+  contexto._withAppLockResult_ = (_, fn) => fn();
+  contexto._authRequire_ = () => ({ nome: 'Maria', isChefe: true });
+  contexto._atasRequireAtiva_ = () => {};
+  contexto._fsGet_ = () => ({ origem: 'manual', responsavel: 'Maria', numeroAta: '10/2026', vigenciaFim: '2026-12-31' });
+  contexto._fsUpdate_ = (path, value) => updates.push({ path, value });
+  contexto._fs_ = () => ({ query: () => ({ Execute: () => [] }) });
+  const r = contexto.atualizarAtaInternaApp({ id: 'ata10', responsavel: 'Maria', processo: 'P2', objeto: 'Livros', numeroCompra: '91', vigenciaFim: '' }, 'token');
+  assert.equal(r.ok, true);
+  assert.equal(updates[0].value.objeto, 'Livros');
+  assert.equal(updates[0].value.vigenciaFim, '');
+  assert.equal('numeroAta' in updates[0].value, false);
+});
+
 test('marco atual escolhe uma única urgência entre 90, 60, 30 e vencida', () => {
   const { contexto } = carregarBackend({ resultado: [] });
   assert.equal(contexto._atasMarcoAtual_({ vigenciaFim: '2026-12-10' }, '2026-09-11'), 90);
