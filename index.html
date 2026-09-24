@@ -600,7 +600,7 @@
   <script src="appsel-firestore.js"></script>
   <script src="relatorio-prazos.js"></script>
   <script src="atas-domain.js"></script>
-  <script src="atas.js?v=15"></script>
+  <script src="atas.js?v=16"></script>
   <!-- SortableJS: drag-and-drop da fila (degrada para as setas ▲▼ se não carregar) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
@@ -851,8 +851,7 @@
       <div class="form-group"><label class="form-label">Responsável pela gestão</label><input class="field-input" id="ata-responsavel" maxlength="120"></div>
       <div class="form-group ata-resp-externo" hidden><label class="form-label">Setor/unidade do responsável</label><input class="field-input" id="ata-responsavel-setor" maxlength="160"></div>
       <div class="form-group ata-resp-externo" hidden><label class="form-label">E-mail do responsável</label><input class="field-input" id="ata-responsavel-email" type="email" maxlength="254" placeholder="Pode ser institucional ou pessoal"></div>
-      <div class="form-group"><label class="form-label">Número da compra</label><input class="field-input" id="ata-compra" inputmode="numeric" maxlength="30" placeholder="Obrigatório na consulta oficial"></div>
-      <div class="form-group"><label class="form-label">Ano da compra</label><input class="field-input" id="ata-ano-compra" inputmode="numeric" maxlength="4"></div>
+      <div class="form-group full"><label class="form-label" for="ata-compra">Compra (número/ano)</label><input class="field-input" id="ata-compra" maxlength="35" placeholder="Ex.: 90007/2026"><small class="atas-muted">Cole aqui o número exibido na consulta de atas do painel. Obrigatório na consulta oficial.</small></div>
       <div class="form-group full"><label class="form-label">Processo</label><input class="field-input" id="ata-processo" maxlength="120"></div>
       <div class="form-group full"><label class="form-label">Objeto</label><input class="field-input" id="ata-objeto" maxlength="300"></div>
     </div>
