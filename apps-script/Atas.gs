@@ -204,11 +204,26 @@ function _atasExtrairListaApi_(json) {
   return [];
 }
 
+function _atasCompraNormalizada_(numero, ano) {
+  var texto = String(numero == null ? '' : numero).trim();
+  var anoInformado = String(ano == null ? '' : ano).trim();
+  var comAno = /^(\d+)\s*\/\s*(\d{4})$/.exec(texto);
+  if (comAno) {
+    if (anoInformado && anoInformado !== comAno[2]) throw new Error('O ano informado não confere com o número da compra.');
+    texto = comAno[1];
+    anoInformado = comAno[2];
+  }
+  if (texto && !/^\d+$/.test(texto)) throw new Error('Informe o número da compra no formato 90007 ou 90007/2026.');
+  if (anoInformado && !/^\d{4}$/.test(anoInformado)) throw new Error('Informe o ano da compra com quatro dígitos.');
+  return { numero: texto.replace(/^0+(?=\d)/, '').slice(0, 30), ano: anoInformado };
+}
+
 function _atasBuscarOficiais_(params) {
   params = params || {};
   var uasg = String(params.uasg || '').replace(/\D/g, '').slice(0, 12);
-  var compra = String(params.numeroCompra || '').replace(/\D/g, '').slice(0, 30);
-  var ano = String(params.anoCompra || '').replace(/\D/g, '').slice(0, 4);
+  var compraInformada = _atasCompraNormalizada_(params.numeroCompra, params.anoCompra);
+  var compra = compraInformada.numero;
+  var ano = compraInformada.ano;
   if (!compra) throw new Error('Informe o número da compra. A API oficial não oferece busca pelo número do processo.');
   if (!uasg) throw new Error('Informe a UASG de origem da ata.');
   var agoraAno = Number(Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy'));
@@ -233,8 +248,11 @@ function _atasBuscarOficiais_(params) {
       var json = JSON.parse(resp.getContentText() || '{}');
       totalPaginas = Math.max(1, Number(json.totalPaginas || 1));
       _atasExtrairListaApi_(json).map(_atasNormalizarOficial_).forEach(function (ata) {
-        if (String(ata.numeroCompra).replace(/\D/g, '') !== compra) return;
-        if (ano && String(ata.anoCompra) !== ano) return;
+        var compraDaAta;
+        try { compraDaAta = _atasCompraNormalizada_(ata.numeroCompra, ata.anoCompra); }
+        catch (ignorarRegistroInconsistente) { return; }
+        if (compraDaAta.numero !== compra) return;
+        if (ano && compraDaAta.ano !== ano) return;
         porId[_atasDocId_(ata)] = ata;
       });
       pagina++;
