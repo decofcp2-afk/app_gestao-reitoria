@@ -25,7 +25,7 @@ function montarTela() {
   };
   vm.createContext(contexto);
   vm.runInContext(fs.readFileSync('atas.js', 'utf8'), contexto);
-  return { window, elemento };
+  return { window, elemento, contexto };
 }
 
 test('lista agrupa por objeto, preserva origem diversa e abre edição manual', () => {
@@ -48,4 +48,21 @@ test('lista agrupa por objeto, preserva origem diversa e abre edição manual', 
   window.GESTAO_ATAS.podeGerirTodas = false;
   window.abrirDetalheAta_('a2');
   assert.equal(elemento('ata-det-archive').hidden, true);
+});
+
+test('formulário separa número e ano quando a compra é colada como no PNCP', () => {
+  const { window, elemento, contexto } = montarTela();
+  let consulta;
+  const runner = {
+    withSuccessHandler(fn) { this.sucesso = fn; return this; },
+    withFailureHandler() { return this; },
+    consultarAtasComprasApp(dados) { consulta = dados; this.sucesso({ atas: [] }); }
+  };
+  contexto.google = { script: { run: runner } };
+  elemento('ata-uasg').value = '153167';
+  elemento('ata-compra').value = '90007/2026';
+  window.consultarAtasCompras_();
+  assert.equal(consulta.numeroCompra, '90007');
+  assert.equal(consulta.anoCompra, '2026');
+  assert.equal(elemento('ata-compra').value, '90007/2026');
 });
