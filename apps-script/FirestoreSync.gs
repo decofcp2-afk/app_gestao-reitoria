@@ -545,7 +545,7 @@ function _fsTransicaoFase_(pid, docEtapaConcluida) {
     var st = _normStatus_(o.status);
     var ehAtual = (e.path === 'etapas/' + docEtapaConcluida);
     // Fase externa só conta se realmente se aplica (não 'na'). Em Contratação
-    // Direta sem disputa / inexigibilidade / adesão a fase externa fica 'na' —
+    // Direta por inexigibilidade / adesão a fase externa fica 'na' —
     // não há transição de fase nem pontos ao próximo servidor.
     if (ext) { if (st !== 'na') hasExt = true; }
     else { hasInt = true; if (!ehAtual && st !== 'ok' && st !== 'na') allIntOk = false; }
@@ -634,7 +634,7 @@ function fs_reabrirProcessoConcluido(params) {
       if (!procDoc) throw new Error('Processo não encontrado.');
 
       // Etapas que a leitura deriva como "Não se aplica" (IRP, TR em adesão,
-      // fase externa em CD sem disputa) continuam gravadas como 'Pendente'. Sem
+      // fase externa em inexigibilidade) continuam gravadas como 'Pendente'. Sem
       // considerá-las, um processo que o app mostra 100% concluído seria
       // rejeitado aqui como "não concluído" — mesmo cuidado de
       // fs_devolverProcessoFilaApp.
@@ -1029,14 +1029,14 @@ function _fsCondicionais_(cfg) {
   var ehCD       = norm(cfg.modalidade).indexOf('direta') >= 0;
   var tipo       = norm(cfg.tipoCD);
   var ehAdesao   = ehCD && tipo.indexOf('adesao') >= 0;
-  // "com disputa" (não apenas "disputa", que também aparece em "sem disputa")
-  var temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+  // Ambas as dispensas mantêm a fase externa; inexigibilidade e adesão não.
+  var semFaseExterna = ehCD && tipo.indexOf('dispensa') < 0;
   var semIRP     = (cfg.temIRP !== 'Sim') || ehAdesao;
   var semProc    = ehCD && (cfg.procuradoria === 'Não');
   var na = {};
   if (semIRP) na[4] = true;
   if (ehAdesao) { na[3] = true; na[6] = true; }
-  if (ehCD && !temDisputa) na[8] = true;   // fase externa só em CD com disputa
+  if (semFaseExterna) na[8] = true;   // inexigibilidade e adesão não têm fase externa
   na[9] = true;                            // contratual (fora do SEL) — sempre na
   return { na: na, procuradoriaNao: semProc };
 }

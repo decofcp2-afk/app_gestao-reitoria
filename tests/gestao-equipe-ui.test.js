@@ -104,7 +104,10 @@ test('pesquisa de atas preserva foco e cursor durante a filtragem', () => {
 
 test('gestão de atas distingue UASG de origem da unidade responsável', () => {
   const atas = fs.readFileSync(path.join(root, 'atas.js'), 'utf8');
-  assert.match(html, /id="ata-uasg" value="153167"/);
+  const uasgInput = html.match(/<input[^>]*id="ata-uasg"[^>]*>/);
+  assert.ok(uasgInput, 'formulário permite informar a UASG de origem');
+  assert.match(uasgInput[0], /inputmode="numeric"/);
+  assert.doesNotMatch(uasgInput[0], /\bvalue="153167"/);
   assert.match(atas, /id="ata-f-uasg"/);
   assert.match(atas, /uasg:uasg,numeroCompra/);
   assert.match(atas, /Selecione apenas as que ficarão sob controle desta unidade/);

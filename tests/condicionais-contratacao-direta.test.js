@@ -8,32 +8,25 @@
 //  - etapas com status "Não se aplica" continuam FORA do prazo total.
 //
 // A tabela-verdade da derivação (quais etapas viram "Não se aplica" conforme o
-// tipo) é aplicada no backend GAS (Code.gs / FirestoreSync.gs). Aqui replicamos
-// a mesma função pura para travar as regras contra regressão.
+// tipo) é aplicada no backend GAS (Code.gs / FirestoreSync.gs). Executamos
+// a função real do FirestoreSync para travar as regras contra regressão.
 // ════════════════════════════════════════════════════════════════════════
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { construir } = require('../appsel-firestore.js');
 const { etapa, processo } = require('./helpers.js');
 
-// ── Réplica da lógica de _fsCondicionais_ (backend) para travar as regras ──
-// Ordens do template: 3=Minuta TR, 4=IRP, 5=Adequações/Procuradoria,
-// 6=Versão Final TR, 8=Fase externa, 9=Assinatura (sempre na).
+// Executa a função real do backend, evitando testar uma cópia da regra.
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(require.resolve('../apps-script/FirestoreSync.gs'), 'utf8');
+const inicio = source.indexOf('function _fsCondicionais_(cfg)');
+const fim = source.indexOf('function fs_cadastrarProcesso(params)', inicio);
+const backend = {};
+vm.runInNewContext(source.slice(inicio, fim), backend);
 function condicionais(cfg) {
-  cfg = cfg || {};
-  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const ehCD = norm(cfg.modalidade).indexOf('direta') >= 0;
-  const tipo = norm(cfg.tipoCD);
-  const ehAdesao = ehCD && tipo.indexOf('adesao') >= 0;
-  const temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
-  const semIRP = (cfg.temIRP !== 'Sim') || ehAdesao;
-  const semProc = ehCD && (cfg.procuradoria === 'Não');
-  const na = {};
-  if (semIRP) na[4] = true;
-  if (ehAdesao) { na[3] = true; na[6] = true; }
-  if (ehCD && !temDisputa) na[8] = true;
-  na[9] = true;
-  return { na: Object.keys(na).map(Number).sort((a, b) => a - b), procuradoriaNao: semProc };
+  const result = backend._fsCondicionais_(cfg);
+  return { na: Object.keys(result.na).map(Number).sort((a, b) => a - b), procuradoriaNao: result.procuradoriaNao };
 }
 
 test('tipoCD e procuradoria são propagados ao card de processo (com D0)', () => {
@@ -111,7 +104,7 @@ test('Tabela-verdade das condicionais (derivação de "Não se aplica")', () => 
     ['Pregão sem IRP', { modalidade: 'Pregão Eletrônico', temIRP: 'Não' }, [4, 9]],
     ['Pregão com IRP', { modalidade: 'Pregão Eletrônico', temIRP: 'Sim' }, [9]],
     ['CD dispensa com disputa', { modalidade: 'Contratação Direta', tipoCD: 'Dispensa com disputa', temIRP: 'Sim' }, [9]],
-    ['CD dispensa sem disputa', { modalidade: 'Contratação Direta', tipoCD: 'Dispensa sem disputa', temIRP: 'Não' }, [4, 8, 9]],
+    ['CD dispensa sem disputa', { modalidade: 'Contratação Direta', tipoCD: 'Dispensa sem disputa', temIRP: 'Não' }, [4, 9]],
     ['CD inexigibilidade', { modalidade: 'Contratação Direta', tipoCD: 'Inexigibilidade', temIRP: 'Não' }, [4, 8, 9]],
     ['CD adesão', { modalidade: 'Contratação Direta', tipoCD: 'Adesão', temIRP: 'Sim' }, [3, 4, 6, 8, 9]]
   ];
@@ -122,3 +115,17 @@ test('Tabela-verdade das condicionais (derivação de "Não se aplica")', () => 
   assert.equal(condicionais({ modalidade: 'Contratação Direta', tipoCD: 'Dispensa sem disputa', procuradoria: 'Não' }).procuradoriaNao, true);
   assert.equal(condicionais({ modalidade: 'Contratação Direta', tipoCD: 'Dispensa sem disputa', procuradoria: 'Sim' }).procuradoriaNao, false);
 });
+
+for (const tipoCD of ['Inexigibilidade', 'Dispensa com disputa', 'Dispensa sem disputa']) {
+  test(`Leitura de ${tipoCD}: fase externa e conclusão seguem o subtipo`, () => {
+    const inexigivel = tipoCD === 'Inexigibilidade';
+    const procs = [processo({ id: 'PCD', d0: '2026-01-02', modalidade: 'Contratação Direta', tipoCD })];
+    const etapas = [
+      etapa({ processoId: 'PCD', etapa: 'Envio ao SEL/SEPMA', ordem: 7, status: 'Concluída', prazoDias: 3 }),
+      etapa({ processoId: 'PCD', etapa: 'Fase externa — Contratação Direta', fase: 'Externa', ordem: 8, status: inexigivel ? 'Não iniciada' : 'Não se aplica', prazoDias: 30 })
+    ];
+    const p = construir(procs, etapas, [], { isChefe: true }).processos[0];
+    assert.equal(p.etapas.some(e => /Fase externa/.test(e.nome) && e.status !== 'na'), !inexigivel);
+    assert.equal(p.status === 'ok', inexigivel);
+  });
+}

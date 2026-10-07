@@ -101,7 +101,7 @@
     var ehCD       = normText(base.modal).indexOf('direta') >= 0;
     var tipo       = normText(base.tipoCD);
     var ehAdesao   = ehCD && tipo.indexOf('adesao') >= 0;
-    var temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+    var semFaseExterna = ehCD && tipo.indexOf('dispensa') < 0;
     var semIRP     = !base.temIRP || ehAdesao;
     var semProc    = ehCD && base.procuradoria === false;
     etapas.forEach(function (et) {
@@ -113,7 +113,7 @@
       var gerenciada = ehIRP || ehMinuta || ehVersao || ehFaseE;
       var deveNA = (ehIRP && semIRP)
         || (ehAdesao && (ehMinuta || ehVersao))
-        || (ehFaseE && ehCD && !temDisputa);
+        || (ehFaseE && semFaseExterna);
       // Nunca ocultar uma etapa que carrega o marcador de retorno para fila —
       // senão o retorno "some" e o processo não reaparece na fila. Se já estiver
       // gravada como 'na', reexibe (senão o filtro de leitura a remove e o

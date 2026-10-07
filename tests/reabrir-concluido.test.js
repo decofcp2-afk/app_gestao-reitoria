@@ -42,11 +42,11 @@ function naDerivadas(proc) {
   const ehCD = normText(proc.modalidade).indexOf('direta') >= 0;
   const tipo = normText(proc.tipoCD);
   const ehAdesao = ehCD && tipo.indexOf('adesao') >= 0;
-  const temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+  const semFaseExterna = ehCD && tipo.indexOf('dispensa') < 0;
   const na = {};
   if (proc.temIrp !== true || ehAdesao) na[4] = true;
   if (ehAdesao) { na[3] = true; na[6] = true; }
-  if (ehCD && !temDisputa) na[8] = true; // fase externa só em CD com disputa
+  if (semFaseExterna) na[8] = true; // inexigibilidade e adesão
   na[9] = true;                          // contratual (fora do SEL)
   return na;
 }
@@ -85,12 +85,12 @@ test('Etapas "Não se aplica" e contratuais são ignoradas na escolha do alvo', 
   assert.equal(alvoReabertura(etapas), 'Pesquisa de preços');
 });
 
-test('CD sem disputa: fase externa derivada "na" não bloqueia a reabertura', () => {
+test('Inexigibilidade: fase externa derivada "na" não bloqueia a reabertura', () => {
   // Regressão do próprio fix: a fase externa (ordem 8) fica gravada como
   // 'Pendente' e só é ocultada em tempo de leitura. Sem aplicar as condicionais
   // do processo, este caso — que o app mostra como 100% concluído — seria
   // recusado com "Este processo não está concluído".
-  const proc = { modalidade: 'Contratação Direta', tipoCD: 'Dispensa sem disputa', temIrp: false };
+  const proc = { modalidade: 'Contratação Direta', tipoCD: 'Inexigibilidade', temIrp: false };
   const etapas = [
     etapa({ etapa: 'DFD', status: 'Concluída', ordem: 1 }),
     etapa({ etapa: 'ETP', status: 'Concluída', ordem: 2 }),

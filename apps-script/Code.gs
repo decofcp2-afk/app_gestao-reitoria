@@ -591,7 +591,7 @@ function _derivarCondicionaisLeitura_(proc, etapas) {
   var ehCD       = _normText_(proc.modal).indexOf('direta') >= 0;
   var tipo       = _normText_(proc.tipoCD);
   var ehAdesao   = ehCD && tipo.indexOf('adesao') >= 0;
-  var temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+  var semFaseExterna = ehCD && tipo.indexOf('dispensa') < 0;
   var semIRP     = !proc.temIRP || ehAdesao;
   var semProc    = ehCD && proc.procuradoria === false;
   etapas.forEach(function(et) {
@@ -603,7 +603,7 @@ function _derivarCondicionaisLeitura_(proc, etapas) {
     var gerenciada = ehIRP || ehMinuta || ehVersao || ehFaseE;
     var deveNA = (ehIRP && semIRP)
       || (ehAdesao && (ehMinuta || ehVersao))
-      || (ehFaseE && ehCD && !temDisputa);
+      || (ehFaseE && semFaseExterna);
     // Nunca ocultar uma etapa que carrega o marcador de retorno para fila —
     // senão o retorno "some" e o processo não reaparece na fila. Se já estiver
     // gravada como 'na', reexibe (senão o filtro de leitura a remove).
@@ -1977,7 +1977,7 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
 
     if (efase.indexOf('ext') >= 0) {
       // Só conta como "tem fase externa" se ela realmente se aplica. Em
-      // Contratação Direta sem disputa / inexigibilidade / adesão a etapa de
+      // Contratação Direta por inexigibilidade / adesão a etapa de
       // fase externa existe mas fica 'na' (não se aplica) — nesses casos não há
       // transição de fase nem atribuição de pontos ao próximo servidor.
       if (estat !== 'na') hasExterna = true;
@@ -4580,8 +4580,8 @@ function _localizarBlocoEtapas_(pid) {
 //
 // Regras (contratação direta):
 //  - Adesão            → Minuta do TR, Versão Final do TR, IRP e Fase externa = na
-//  - Dispensa s/ disputa / Inexigibilidade → Fase externa = na
-//  - Dispensa c/ disputa → mantém a Fase externa
+//  - Inexigibilidade → Fase externa = na
+//  - Dispensa com ou sem disputa → mantém a Fase externa
 //  - Sem IRP           → etapa IRP = na (Art. 35 §único; minuta do TR permanece)
 //  - Procuradoria = Não → renomeia a etapa de adequações (mantém prazo, Art. 37)
 function _aplicarCondicionaisEtapas_(shE, sepRow, hE, cfg, opts) {
@@ -4618,8 +4618,8 @@ function _aplicarCondicionaisEtapas_(shE, sepRow, hE, cfg, opts) {
   var ehCD       = norm(cfg.modalidade).indexOf('direta') >= 0;
   var tipo       = norm(cfg.tipoCD);
   var ehAdesao   = ehCD && tipo.indexOf('adesao') >= 0;
-  // "com disputa" (não apenas "disputa", que também aparece em "sem disputa")
-  var temDisputa = ehCD && tipo.indexOf('com disputa') >= 0;
+  // Ambas as dispensas mantêm a fase externa; inexigibilidade e adesão não.
+  var semFaseExterna = ehCD && tipo.indexOf('dispensa') < 0;
   var semIRP     = (cfg.temIRP !== 'Sim') || ehAdesao;
   var semProc    = ehCD && (cfg.procuradoria === 'Não');
 
@@ -4636,10 +4636,9 @@ function _aplicarCondicionaisEtapas_(shE, sepRow, hE, cfg, opts) {
     if (idxMinuta >= 0) naSet[idxMinuta] = true;
     if (idxVersao >= 0) naSet[idxVersao] = true;
   }
-  // Fase externa só se aplica: (a) modalidades com fase externa própria
-  // (Pregão/Concorrência), ou (b) contratação direta COM disputa. Nos demais
-  // casos de contratação direta (sem disputa, inexigibilidade, adesão) → na.
-  if (idxFaseE >= 0 && ehCD && !temDisputa) naSet[idxFaseE] = true;
+  // Fase externa se aplica às dispensas com e sem disputa.
+  // Inexigibilidade e adesão dispensam essa etapa.
+  if (idxFaseE >= 0 && semFaseExterna) naSet[idxFaseE] = true;
 
   for (var k = 0; k < N; k++) {
     if (norm(stats[k]).indexOf('conclu') >= 0) continue;     // nunca mexe em concluída
@@ -4893,13 +4892,13 @@ function devolverProcessoFilaApp(params) {
         var eh = _normText_(procCond.modal).indexOf('direta') >= 0;
         var tp = _normText_(procCond.tipoCD);
         var ad = eh && tp.indexOf('adesao') >= 0;
-        var dp = eh && tp.indexOf('com disputa') >= 0;
+        var semFaseExterna = eh && tp.indexOf('dispensa') < 0;
         var sIRP = !procCond.temIRP || ad;
         return function(nomeEt) {
           var n = _normText_(nomeEt);
           if (n.indexOf('irp') >= 0 && sIRP) return true;
           if (ad && (n.indexOf('minuta') >= 0 || n.indexOf('versao final') >= 0)) return true;
-          if (n.indexOf('fase externa') >= 0 && eh && !dp) return true;
+          if (n.indexOf('fase externa') >= 0 && semFaseExterna) return true;
           return false;
         };
       })();
