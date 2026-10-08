@@ -24,9 +24,11 @@ function carregarBackend(resposta) {
     UrlFetchApp: {
       fetch(url, opcoes) {
         chamadas.push({ url, opcoes });
+        const body = typeof resposta === 'function' ? resposta(url) : resposta;
+        const emptyPNCP = typeof resposta !== 'function' && url.startsWith('https://pncp.gov.br/');
         return {
-          getResponseCode() { return 200; },
-          getContentText() { return JSON.stringify(resposta); }
+          getResponseCode() { return emptyPNCP ? 204 : body?.httpStatus || 200; },
+          getContentText() { return JSON.stringify(body); }
         };
       }
     }
@@ -51,13 +53,49 @@ test('cliente ARP usa os parâmetros obrigatórios atuais e apenas GET', () => {
   assert.equal(atas.length, 1, 'as três janelas anuais não duplicam a mesma ata');
   assert.equal(atas[0].uasg, '153167');
   assert.equal(atas[0].idAtaPNCP, registro.numeroControlePncpAta);
-  assert.equal(chamadas.length, 3);
-  chamadas.forEach(({ url, opcoes }) => {
+  const consultasARP = chamadas.filter(c => c.url.includes('/modulo-arp/'));
+  assert.equal(consultasARP.length, 3);
+  consultasARP.forEach(({ url, opcoes }) => {
     assert.match(url, /codigoUnidadeGerenciadora=153167/);
     assert.match(url, /dataVigenciaInicialMin=\d{4}-01-01/);
     assert.match(url, /dataVigenciaInicialMax=\d{4}-12-31/);
     assert.equal(opcoes.method, 'get');
   });
+});
+
+test('atas recentes vêm do PNCP mesmo com ARP vazia; 00312 é compra 312, não sequencial 168', () => {
+  const compraId = '42414284000102-1-000168/2026';
+  const rows = ['01312', '02312', '03312'].map((n, i) => ({
+    numeroAtaRegistroPreco:n, anoAta:2026, cnpjOrgao:'42414284000102', codigoUnidadeOrgao:'153167',
+    numeroControlePNCPCompra:compraId, numeroControlePNCPAta:compraId + '-00000' + (i + 1),
+    vigenciaInicio:'2026-10-08', vigenciaFim:'2027-10-08', objetoContratacao:'Vigilância armada e desarmada'
+  }));
+  const {contexto, chamadas} = carregarBackend(url => {
+    if (url.includes('/modulo-arp/')) return {resultado:[], totalPaginas:0};
+    if (url.includes('/atas?')) return {data:rows, totalPaginas:1};
+    assert.match(url, /\/compras\/2026\/168$/);
+    return {numeroControlePNCP:compraId, numeroCompra:'312', anoCompra:2026, unidadeOrgao:{codigoUnidade:'153167'}};
+  });
+  const result = contexto._atasBuscarOficiais_({uasg:'153167', numeroCompra:'00312', anoCompra:'2026'});
+  assert.deepEqual(Array.from(result, r => r.numeroAta), ['01312/2026','02312/2026','03312/2026']);
+  assert.equal(result[0].numeroCompra, '312');
+  assert.equal(result[0].fonteOficial, 'pncp');
+  assert.match(result[0].linkPncp, /\/2026\/168\/1$/);
+  assert.equal(chamadas.filter(c => /\/compras\/2026\/168$/.test(c.url)).length, 1);
+  assert.equal(result.avisosConsulta.length, 0);
+});
+
+test('indisponibilidade das fontes não é apresentada como ausência de atas', () => {
+  const {contexto} = carregarBackend(() => ({httpStatus:503}));
+  assert.throws(() => contexto._atasBuscarOficiais_({uasg:'153167',numeroCompra:'312',anoCompra:'2026'}), /completar a consulta/);
+});
+
+test('uma ata cancelada no PNCP deixa de ser selecionável mesmo se ARP estiver desatualizada', () => {
+  const id = '42414284000102-1-000168/2026-000001';
+  const {contexto} = carregarBackend(url => url.includes('/modulo-arp/') ? {
+    resultado:[{numeroAtaRegistroPreco:'01312/2026',codigoUnidadeGerenciadora:'153167',numeroCompra:'312',anoCompra:'2026',numeroControlePncpAta:id}],totalPaginas:1
+  } : {data:[{numeroAtaRegistroPreco:'01312',anoAta:2026,cnpjOrgao:'42414284000102',codigoUnidadeOrgao:'153167',numeroControlePNCPCompra:id.replace(/-\d+$/, ''),numeroControlePNCPAta:id,cancelado:true}],totalPaginas:1});
+  assert.equal(contexto._atasBuscarOficiais_({uasg:'153167',numeroCompra:'312',anoCompra:'2026'}).length, 0);
 });
 
 test('consulta oficial exige número da compra porque a API não filtra processo', () => {

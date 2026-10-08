@@ -191,3 +191,10 @@ O módulo de Gestão de Atas acompanha vigências e responsáveis internos, cons
 - O número da compra é obrigatório na consulta oficial; o número do processo permanece como vínculo interno porque a API ARP não oferece esse filtro.
 
 Antes do piloto, publique as regras de `firebase/firestore.rules.multiunidade`, implante o Apps Script e somente então habilite a unidade. Não habilite a flag antes desses passos.
+
+
+### Atas recentes e fontes oficiais
+
+A consulta combina os Dados Abertos do Compras.gov.br com a API direta de consultas do PNCP. A publicação no PNCP pode anteceder a disponibilidade na API ARP. O número da compra é obtido nos detalhes da contratação; o sequencial PNCP não é tratado como número do pregão. A deduplicação usa o número de controle da ata e cancelamentos do PNCP prevalecem.
+
+A consulta aceita o número da compra com ou sem zeros iniciais, inclusive no formato `00312/2026`. A inclusão no acompanhamento continua dependendo da seleção explícita do usuário e da confirmação oficial no servidor.

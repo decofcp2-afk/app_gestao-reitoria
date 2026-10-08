@@ -600,7 +600,7 @@
   <script src="appsel-firestore.js"></script>
   <script src="relatorio-prazos.js"></script>
   <script src="atas-domain.js"></script>
-  <script src="atas.js?v=15"></script>
+  <script src="atas.js?v=20261008"></script>
   <!-- SortableJS: drag-and-drop da fila (degrada para as setas ▲▼ se não carregar) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
@@ -844,14 +844,14 @@
 <div id="modal-ata-cad" class="sheet">
   <div class="sheet-handle"></div><div class="sheet-header"><div class="sheet-title" id="ata-cad-titulo">Adicionar ata ao controle</div><div class="sheet-sub">Consulta oficial ou cadastro manual, sem escrever no Compras.gov.br.</div></div>
   <div class="sheet-body">
-    <div class="atas-mode"><button id="ata-mode-compras" class="active" onclick="setModoCadastroAta_('compras')">Consultar Compras.gov.br</button><button id="ata-mode-manual" onclick="setModoCadastroAta_('manual')">Cadastro manual</button></div>
+    <div class="atas-mode"><button id="ata-mode-compras" class="active" onclick="setModoCadastroAta_('compras')">Consultar fontes oficiais</button><button id="ata-mode-manual" onclick="setModoCadastroAta_('manual')">Cadastro manual</button></div>
     <div class="atas-grid">
       <div class="form-group"><label class="form-label">UASG de origem</label><input class="field-input" id="ata-uasg" inputmode="numeric" maxlength="12" placeholder="Ex.: 153167"><small class="atas-muted">Informe a UASG que cadastrou a ata no Compras.gov.br. Você pode acompanhar atas de outras unidades e órgãos.</small></div>
       <div class="form-group"><label class="form-label">Tipo de responsável</label><select class="field-input" id="ata-responsavel-tipo" onchange="alternarResponsavelAta_()"><option value="equipe">Servidor da equipe</option><option value="externo">Pessoa de outro setor</option></select></div>
       <div class="form-group"><label class="form-label">Responsável pela gestão</label><input class="field-input" id="ata-responsavel" maxlength="120"></div>
       <div class="form-group ata-resp-externo" hidden><label class="form-label">Setor/unidade do responsável</label><input class="field-input" id="ata-responsavel-setor" maxlength="160"></div>
       <div class="form-group ata-resp-externo" hidden><label class="form-label">E-mail do responsável</label><input class="field-input" id="ata-responsavel-email" type="email" maxlength="254" placeholder="Pode ser institucional ou pessoal"></div>
-      <div class="form-group"><label class="form-label">Número da compra</label><input class="field-input" id="ata-compra" inputmode="numeric" maxlength="30" placeholder="Obrigatório na consulta oficial"></div>
+      <div class="form-group"><label class="form-label">Número da compra</label><input class="field-input" id="ata-compra" inputmode="numeric" maxlength="30" placeholder="Ex.: 00312/2026 ou 90011"></div>
       <div class="form-group"><label class="form-label">Ano da compra</label><input class="field-input" id="ata-ano-compra" inputmode="numeric" maxlength="4"></div>
       <div class="form-group full"><label class="form-label">Processo</label><input class="field-input" id="ata-processo" maxlength="120"></div>
       <div class="form-group full"><label class="form-label">Objeto</label><input class="field-input" id="ata-objeto" maxlength="300"></div>

@@ -204,18 +204,105 @@ function _atasExtrairListaApi_(json) {
   return [];
 }
 
+function _atasNumeroCompra_(v) {
+  return String(v || '').replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+}
+
+function _atasPncpJson_(path) {
+  var response = UrlFetchApp.fetch('https://pncp.gov.br/api/consulta/v1/' + path,
+    {method:'get', muteHttpExceptions:true, headers:{Accept:'application/json'}});
+  var code = response.getResponseCode();
+  if (code === 204) return null;
+  if (code !== 200) throw new Error('PNCP indisponível (HTTP ' + code + ').');
+  return JSON.parse(response.getContentText());
+}
+
+function _atasCnpjUasg_(uasg) {
+  if (uasg === '153167') return '42414284000102';
+  var response = UrlFetchApp.fetch('https://dadosabertos.compras.gov.br/modulo-uasg/1_consultarUasg?codigoUasg=' + encodeURIComponent(uasg) + '&statusUasg=true&pagina=1',
+    {method:'get', muteHttpExceptions:true, headers:{Accept:'application/json'}});
+  if (response.getResponseCode() !== 200) throw new Error('Não foi possível identificar o órgão da UASG no PNCP.');
+  var rows = _atasExtrairListaApi_(JSON.parse(response.getContentText()));
+  var unit = rows.filter(function(r) {return String(r.codigoUasg) === uasg;})[0];
+  if (!unit || !/^\d{14}$/.test(String(unit.cnpjCpfOrgao || ''))) throw new Error('CNPJ da UASG não identificado.');
+  return String(unit.cnpjCpfOrgao);
+}
+
+function _atasComplementarPncp_(uasg, compra, ano, anos, porId, comprasConhecidas) {
+  var cnpj = _atasCnpjUasg_(uasg);
+  var seen = {};
+  var purchases = {};
+  anos.forEach(function(year) {
+    var page = 1;
+    do {
+      var json = _atasPncpJson_('atas?cnpj=' + cnpj + '&codigoUnidadeAdministrativa=' + encodeURIComponent(uasg) +
+        '&dataInicial=' + year + '0101&dataFinal=' + year + '1231&pagina=' + page + '&tamanhoPagina=500');
+      if (json === null) break;
+      if (!Array.isArray(json.data) || !Number.isInteger(json.totalPaginas) || json.totalPaginas < 0 || json.totalPaginas > 200)
+        throw new Error('Paginação inesperada do PNCP.');
+      json.data.forEach(function(r) {
+        if (String(r.codigoUnidadeOrgao) !== uasg || r.cnpjOrgao !== cnpj) throw new Error('Ata PNCP de outra unidade.');
+        var id = r.numeroControlePNCPAta;
+        var match = /^(\d{14})-1-(\d+)\/(\d{4})$/.exec(String(r.numeroControlePNCPCompra || ''));
+        if (!match || match[1] !== cnpj || !id || id.indexOf(r.numeroControlePNCPCompra + '-') !== 0)
+          throw new Error('Identificador de ata PNCP inválido.');
+        if (seen[id]) return;
+        seen[id] = true;
+        if (ano && match[3] !== ano) return;
+        var known = comprasConhecidas[r.numeroControlePNCPCompra];
+        if (known && _atasNumeroCompra_(known.numeroCompra) !== compra) return;
+        var path = 'orgaos/' + cnpj + '/compras/' + match[3] + '/' + Number(match[2]);
+        var purchase = known || purchases[path];
+        if (!purchase) {
+          var cache = typeof CacheService !== 'undefined' ? CacheService.getScriptCache() : null;
+          var cached = cache && cache.get('atas-compra-pncp-' + r.numeroControlePNCPCompra);
+          purchase = cached ? JSON.parse(cached) : _atasPncpJson_(path);
+          if (!purchase || purchase.numeroControlePNCP !== r.numeroControlePNCPCompra ||
+              String((purchase.unidadeOrgao || {}).codigoUnidade) !== uasg || !purchase.numeroCompra)
+            throw new Error('Compra PNCP não corresponde à ata.');
+          purchase = {numeroCompra:purchase.numeroCompra, anoCompra:purchase.anoCompra,
+            processo:purchase.processo, numeroControlePNCP:purchase.numeroControlePNCP, unidadeOrgao:purchase.unidadeOrgao};
+          if (cache && !cached) cache.put('atas-compra-pncp-' + r.numeroControlePNCPCompra, JSON.stringify(purchase), 3600);
+          purchases[path] = purchase;
+        }
+        if (_atasNumeroCompra_(purchase.numeroCompra) !== compra || (ano && String(purchase.anoCompra) !== ano)) return;
+        var numero = String(r.numeroAtaRegistroPreco || '');
+        if (numero.indexOf('/') < 0) numero += '/' + r.anoAta;
+        var official = _atasNormalizarOficial_({numeroAtaRegistroPreco:numero, codigoUnidadeGerenciadora:uasg,
+          nomeUnidadeGerenciadora:r.nomeUnidadeOrgao, numeroCompra:purchase.numeroCompra, anoCompra:purchase.anoCompra,
+          objeto:r.objetoContratacao, numeroProcesso:purchase.processo, dataAssinatura:r.dataAssinatura,
+          dataVigenciaInicial:r.vigenciaInicio, dataVigenciaFinal:r.vigenciaFim, numeroControlePncpAta:id,
+          linkAtaPNCP:'https://pncp.gov.br/app/atas/' + cnpj + '/' + match[3] + '/' + Number(match[2]) + '/' + Number(id.split('-').pop())});
+        if (r.cancelado === true) delete porId[_atasDocId_(official)];
+        else {official.fonteOficial = 'pncp'; porId[_atasDocId_(official)] = official;}
+      });
+      if (page < json.totalPaginas && !json.data.length) throw new Error('Página PNCP vazia antes do fim da consulta.');
+      page++;
+    } while (page <= json.totalPaginas);
+  });
+}
+
 function _atasBuscarOficiais_(params) {
   params = params || {};
   var uasg = String(params.uasg || '').replace(/\D/g, '').slice(0, 12);
-  var compra = String(params.numeroCompra || '').replace(/\D/g, '').slice(0, 30);
+  var compra = _atasNumeroCompra_(params.numeroCompra).slice(0, 30);
   var ano = String(params.anoCompra || '').replace(/\D/g, '').slice(0, 4);
+  var compraComAno = /^\s*(\d+)\s*\/\s*(\d{4})\s*$/.exec(String(params.numeroCompra || ''));
+  if (compraComAno) {
+    compra = _atasNumeroCompra_(compraComAno[1]);
+    if (ano && ano !== compraComAno[2]) throw new Error('O ano informado difere do ano no número da compra.');
+    ano = compraComAno[2];
+  }
   if (!compra) throw new Error('Informe o número da compra. A API oficial não oferece busca pelo número do processo.');
   if (!uasg) throw new Error('Informe a UASG de origem da ata.');
   var agoraAno = Number(Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy'));
   var baseAno = Number(ano || agoraAno);
   var anosConsulta = ano ? [baseAno, baseAno + 1, baseAno + 2] : [agoraAno - 1, agoraAno, agoraAno + 1];
   var porId = {};
-  anosConsulta.forEach(function (anoVigencia) {
+  var comprasConhecidas = {};
+  var avisos = [];
+  var comprasErro = null;
+  try { anosConsulta.forEach(function (anoVigencia) {
     var pagina = 1;
     var totalPaginas = 1;
     do {
@@ -231,22 +318,38 @@ function _atasBuscarOficiais_(params) {
       var code = resp.getResponseCode();
       if (code < 200 || code >= 300) throw new Error('Compras.gov.br indisponível no momento (HTTP ' + code + '). Tente novamente ou use o cadastro manual.');
       var json = JSON.parse(resp.getContentText() || '{}');
-      totalPaginas = Math.max(1, Number(json.totalPaginas || 1));
-      _atasExtrairListaApi_(json).map(_atasNormalizarOficial_).forEach(function (ata) {
-        if (String(ata.numeroCompra).replace(/\D/g, '') !== compra) return;
+      if (!Array.isArray(json.resultado) || !Number.isInteger(json.totalPaginas) || json.totalPaginas < 0 || json.totalPaginas > 200)
+        throw new Error('Resposta inesperada do Compras.gov.br.');
+      totalPaginas = Math.max(1, json.totalPaginas);
+      json.resultado.forEach(function (raw) {
+        if (String(raw.codigoUnidadeGerenciadora) !== uasg) throw new Error('Ata de outra UASG no Compras.gov.br.');
+        var ata = _atasNormalizarOficial_(raw);
+        if (ata.idAtaPNCP && ata.numeroCompra) comprasConhecidas[ata.idAtaPNCP.replace(/-\d+$/, '')] = ata;
+        if (raw.ataExcluido === true) return;
+        if (_atasNumeroCompra_(ata.numeroCompra) !== compra) return;
         if (ano && String(ata.anoCompra) !== ano) return;
         porId[_atasDocId_(ata)] = ata;
       });
       pagina++;
     } while (pagina <= totalPaginas);
-  });
-  return Object.keys(porId).map(function (k) { return porId[k]; });
+  }); } catch (error) {comprasErro = error;}
+  try {
+    _atasComplementarPncp_(uasg, compra, ano, anosConsulta, porId, comprasConhecidas);
+    if (comprasErro) avisos.push('Compras.gov.br indisponível; consulta realizada diretamente no PNCP.');
+  } catch (error) {
+    if (comprasErro || !Object.keys(porId).length) throw new Error('Não foi possível completar a consulta de atas recentes: ' + error.message);
+    avisos.push('PNCP indisponível; resultados parciais do Compras.gov.br. Atas recentes podem não aparecer.');
+  }
+  var lista = Object.keys(porId).map(function (k) { return porId[k]; });
+  lista.avisosConsulta = avisos;
+  return lista;
 }
 
 function consultarAtasComprasApp(params, authToken) {
   _authRequire_(authToken, false);
   _atasRequireAtiva_();
-  return { ok: true, atas: _atasBuscarOficiais_(params), consultadoEm: new Date().toISOString(), somenteLeitura: true };
+  var lista = _atasBuscarOficiais_(params);
+  return { ok: true, atas: lista, avisos:lista.avisosConsulta || [], consultadoEm: new Date().toISOString(), somenteLeitura: true };
 }
 
 function _atasLocalizarOficial_(dados) {
