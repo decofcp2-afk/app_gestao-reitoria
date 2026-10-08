@@ -29,7 +29,7 @@ Substituir a planilha do setor por um controle simples que permita:
 
 ## Critérios de sucesso observáveis
 
-- Um servidor da fase externa adiciona uma compra ao controle sem redigitar os dados encontrados na API.
+- Um servidor adiciona uma compra ao próprio acompanhamento sem redigitar os dados encontrados na API, independentemente de ser responsável pela licitação.
 - Uma contratação com várias atas permite selecionar e acompanhar cada ata separadamente.
 - Uma ata manual pode ser vinculada posteriormente ao registro oficial sem duplicação.
 - A tela principal informa, sem abrir detalhes, quais atas estão ativas, vencendo, incompletas ou vencidas.
@@ -42,10 +42,10 @@ Substituir a planilha do setor por um controle simples que permita:
 
 | Papel | Pode visualizar | Pode criar/vincular | Pode editar | Pode arquivar/reabrir |
 |---|---|---|---|---|
-| Servidor da fase externa | Atas da própria unidade | Atas dos processos em que é responsável externo | Responsável, observação e avisos das atas sob sua responsabilidade | Não |
+| Servidor da equipe | Atas da própria unidade | Atas para seu próprio acompanhamento, inclusive de processos concluídos ou de outros órgãos | Observação e dados internos das atas sob sua responsabilidade; transferência de responsável exige chefia | Não |
 | Chefia da unidade | Todas as atas da unidade | Qualquer ata da unidade | Todos os campos internos e responsáveis | Sim |
 | Administrador geral | Atas da unidade selecionada | Qualquer ata da unidade selecionada | Todos os campos internos | Sim |
-| Servidor sem vínculo com a ata | Lista e detalhe oficial da unidade | Não | Não | Não |
+| Servidor sem vínculo com uma ata já cadastrada | Lista e detalhe oficial da unidade | Não pode substituir ou vincular o registro de outro responsável | Não | Não |
 
 Dados oficiais vindos do Compras.gov.br são somente leitura para todos os perfis.
 
@@ -60,7 +60,7 @@ Dados oficiais vindos do Compras.gov.br são somente leitura para todos os perfi
 
 ### F01 — Adicionar pelo processo
 
-1. O responsável abre um processo cuja fase externa está ativa.
+1. O servidor abre um processo, inclusive já concluído, para acompanhar suas atas.
 2. Seleciona `Adicionar ao controle de atas`.
 3. Processo, unidade e responsável são preenchidos automaticamente.
 4. Informa número/ano da compra e seleciona `Consultar atas`.
@@ -76,6 +76,7 @@ Dados oficiais vindos do Compras.gov.br são somente leitura para todos os perfi
 1. Usuário seleciona `Cadastrar ata` na tela principal.
 2. Escolhe `Consultar Compras.gov.br` ou `Cadastro manual`.
 3. Na consulta, informa processo, compra/ano e responsável.
+   O número SUAP é associado ao id interno do processo quando existe na unidade. Sem responsável informado, o servidor conectado assume o acompanhamento; somente chefia ou administrador podem indicar outra pessoa.
 4. No cadastro manual, informa apenas os dados necessários para vigência e identificação.
 5. O registro manual entra como `Aguardando confirmação oficial` quando possuir compra/ano.
 

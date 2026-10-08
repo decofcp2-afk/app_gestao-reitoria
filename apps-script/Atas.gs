@@ -133,20 +133,49 @@ function _atasListar_() {
   return lista;
 }
 
-function _atasRespExternoProcesso_(processoId, nome) {
-  processoId = _atasTexto_(processoId, 120);
-  if (!processoId || !nome) return false;
-  var alvo = _atasNorm_(nome);
-  return _fsQueryEq_('cargas', 'processoId', processoId).some(function (c) {
-    var o = c.obj || {};
-    return _atasNorm_(o.fase).indexOf('ext') >= 0 && o.ativo === true && _atasNorm_(o.servidor) === alvo;
+function _atasChaveProcesso_(valor) {
+  var texto = _atasNorm_(valor);
+  var digitos = texto.replace(/\D/g, '');
+  return digitos.length === 17 ? digitos : texto;
+}
+
+function _atasResolverProcesso_(dados) {
+  var referencia = _atasTexto_(dados.processo, 120);
+  var id = _atasTexto_(dados.processoId, 120);
+  var chave = _atasChaveProcesso_(referencia);
+  function corresponde(p, pid) {
+    return !referencia || chave === _atasChaveProcesso_(p.suap) || chave === _atasChaveProcesso_(pid);
+  }
+  // Confirma o vínculo recebido da tela do processo e detecta número editado.
+  if (/^[a-z0-9_-]+$/i.test(id)) {
+    var processo = _fsGet_('processos/' + id);
+    if (processo && corresponde(processo, id)) {
+      dados.processoId = id;
+      dados.processo = _atasTexto_(processo.suap, 120) || referencia || id;
+      return;
+    }
+  }
+  dados.processoId = '';
+  if (!referencia) return;
+  // A Gestão de Atas envia o número SUAP, sem o id interno SEL-AAAA-NNN.
+  // A coleção consultada já é restrita à unidade da sessão autenticada.
+  var encontrados = _fsColecaoArray_('processos').filter(function (p) {
+    return corresponde(p, _atasTexto_(p.id || p._id));
   });
+  if (encontrados.length > 1) throw new Error('Mais de um processo possui esse número na unidade. Abra o cadastro pela tela do processo correto.');
+  if (encontrados.length === 1) {
+    var p = encontrados[0];
+    dados.processoId = _atasTexto_(p.id || p._id, 120);
+    dados.processo = _atasTexto_(p.suap, 120) || referencia;
+  }
 }
 
 function _atasPodeCriar_(sess, dados) {
   if (sess.isChefe || sess.isAdmin) return true;
-  return _atasNorm_(dados.responsavel) === _atasNorm_(sess.nome)
-    && _atasRespExternoProcesso_(dados.processoId, sess.nome);
+  // O acompanhamento da ata é independente da atribuição da licitação.
+  // Um servidor cadastra para si; a chefia pode indicar outros responsáveis.
+  return !!sess.nome && dados.responsavelTipo !== 'externo'
+    && _atasNorm_(dados.responsavel) === _atasNorm_(sess.nome);
 }
 
 function _atasPodeEditar_(sess, ata) {
@@ -398,10 +427,13 @@ function salvarAtaApp(dados, authToken) {
       }
       var responsavelInformado = !!interno.responsavel;
       if (!interno.responsavel) interno.responsavel = sess.nome;
-      if (!_atasPodeCriar_(sess, interno)) throw new Error('Você só pode cadastrar atas dos processos pelos quais responde na fase externa.');
+      _atasResolverProcesso_(interno);
+      if (!_atasPodeCriar_(sess, interno)) throw new Error('Você pode cadastrar atas para seu próprio acompanhamento. Para indicar outro responsável, solicite o cadastro à chefia.');
       var oficial = null;
       if (_atasNorm_(dados.origem) === 'compras') oficial = _atasLocalizarOficial_(dados);
       var manualAnterior = oficial ? _atasLocalizarManualCorrespondente_(oficial, interno) : null;
+      if (manualAnterior && !_atasPodeEditar_(sess, manualAnterior))
+        throw new Error('Esta ata já é acompanhada por outro responsável. Solicite a vinculação à chefia.');
       var ata = oficial || {
         origem: 'manual', numeroAta: _atasTexto_(dados.numeroAta, 80), anoAta: _atasTexto_(dados.anoAta, 4),
         uasg: String(dados.uasg || '').replace(/\D/g, '').slice(0, 12),
@@ -422,6 +454,8 @@ function salvarAtaApp(dados, authToken) {
       if (ata.vigenciaInicio && ata.vigenciaFim && ata.vigenciaFim < ata.vigenciaInicio) throw new Error('A vigência final não pode ser anterior à inicial.');
       var idDoc = _atasDocId_(ata);
       var existente = _fsGet_('atas/' + idDoc);
+      if (existente && !_atasPodeEditar_(sess, existente))
+        throw new Error('Esta ata já é acompanhada por outro responsável. Solicite a alteração à chefia.');
       if (existente && !existente.arquivada && !dados.confirmarAtualizacao) throw new Error('Esta ata já está no controle da unidade.');
       var agora = new Date();
       ata.criadoEm = existente && existente.criadoEm ? existente.criadoEm : (manualAnterior && manualAnterior.criadoEm || agora);
@@ -467,6 +501,8 @@ function atualizarAtaInternaApp(dados, authToken) {
         campos.responsavelEmail = '';
       }
       if (!campos.responsavel) throw new Error('Informe o responsável pela gestão da ata.');
+      if (!(sess.isChefe || sess.isAdmin) && _atasNorm_(campos.responsavel) !== _atasNorm_(sess.nome))
+        throw new Error('Somente a chefia pode transferir o acompanhamento para outro responsável.');
       if (ata.origem === 'manual') {
         ['dataAssinatura', 'vigenciaInicio', 'vigenciaFim'].forEach(function (campo) {
           if (Object.prototype.hasOwnProperty.call(dados, campo)) {
@@ -582,7 +618,7 @@ function getGestaoAtasApp(authToken) {
   var sync = _fsGet_('syncAtas/estado') || {};
   return {
     ok: true, enabled: true, somenteLeituraCompras: true, unidade: _fsUnidade_(),
-    uasg: _atasUasgSugerida_(), podeGerirTodas: !!(sess.isChefe || sess.isAdmin),
+    uasg: _atasUasgSugerida_(), usuario: sess.nome, podeGerirTodas: !!(sess.isChefe || sess.isAdmin),
     atas: _atasListar_(), alertas: _atasAvisosVisiveis_(sess),
     consultadoEm: sync.ultimoSucessoEm || sync.ultimaTentativaEm || ''
   };
