@@ -8,7 +8,7 @@
   function data(v){return v?new Date(v).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'—';}
   function mb(v){return (Number(v||0)/1024/1024).toLocaleString('pt-BR',{maximumFractionDigits:1})+' MB';}
   function gb(v){return (Number(v||0)/1000000000).toLocaleString('pt-BR',{maximumFractionDigits:1})+' GB';}
-  function badge(n){['nt-badge-desktop','nt-badge-menu'].forEach(function(id){var e=$(id);if(e){e.hidden=!n;e.textContent=n;}});}
+  function badge(n){['nt-badge-desktop','nt-badge-menu','nt-badge-admin-desktop','nt-badge-admin-menu'].forEach(function(id){var e=$(id);if(e){e.hidden=!n;e.textContent=n;}});}
   function init(){if(state.poll)clearInterval(state.poll);if(!root.SESSAO_ADMIN)return;carregar(true);state.poll=setInterval(function(){if(root.SESSAO_ADMIN&&root.AUTH_TOKEN&&!document.hidden)carregar(true);},120000);if(new URLSearchParams(location.search).get('tab')==='solicitacoes')root.switchTab('solicitacoes');}
   function carregar(silencioso){if(!root.SESSAO_ADMIN)return;if(!silencioso&&!state.pedidos.length)$('tab-solicitacoes').innerHTML='<div class="atas-loading">Carregando solicitações…</div>';rpc('getSolicitacoesNTApp',[root.AUTH_TOKEN],function(r){state.pedidos=r.pedidos;state.config=r;badge(r.novas);if(!silencioso||!$('tab-solicitacoes').innerHTML)render();},function(){if(!silencioso)$('tab-solicitacoes').innerHTML='<div class="atas-empty">Não foi possível carregar os pedidos. <button class="atas-action" onclick="carregarSolicitacoesNT_()">Tentar novamente</button></div>';});}
   function render(){

@@ -596,7 +596,7 @@
     .proc-concluidos .proc-concluidos-recolher, .proc-concluidos[open] .proc-concluidos-mais { display:none; }
     .proc-concluidos[open] .proc-concluidos-recolher { display:inline; }
   </style>
-  <link rel="stylesheet" href="atas.css?v=15">
+  <link rel="stylesheet" href="atas.css?v=16">
   <script src="config.js"></script>
   <!-- Firebase (compat) — leitura direta do Firestore (Fase 3). A apiKey em config.js
        NAO e segredo; a protecao vem das regras do Firestore. Escrita/login seguem no Apps Script. -->
@@ -653,8 +653,13 @@
       <nav class="atas-desktop-nav" aria-label="Atalhos principais">
         <a id="desktop-painel" href="#" onclick="abrirPainel_(event);return false;">Painel de Contratações</a>
         <button id="desktop-atas" hidden onclick="switchTab('atas')">Gestão de Atas</button>
-        <button id="desktop-solicitacoes" hidden onclick="switchTab('solicitacoes')">Solicitações de notas técnicas <span id="nt-badge-desktop" hidden></span></button>
-        <button id="desktop-visaogeral" hidden onclick="switchTab('visaogeral')">Visão Geral</button>
+        <details id="desktop-admin" class="admin-nav" hidden>
+          <summary>Visão do administrador <span id="nt-badge-admin-desktop" class="admin-nav-badge" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+          <div class="admin-nav-items">
+            <button id="desktop-solicitacoes" hidden onclick="switchTab('solicitacoes')">Solicitações de notas técnicas <span id="nt-badge-desktop" class="admin-nav-badge" hidden></span></button>
+            <button id="desktop-visaogeral" hidden onclick="switchTab('visaogeral')">Visão Geral</button>
+          </div>
+        </details>
         <button id="desktop-historico" onclick="switchTab('historico')">Histórico</button>
         <button id="desktop-tour" type="button" onclick="iniciarTour()">Tour de ajuda</button>
       </nav>
@@ -670,17 +675,19 @@
           <button type="button" class="hdr-menu-item hdr-menu-main-link" onclick="abrirPainel_(event);toggleHdrMenu_();return false;"><img src="painel-icon.svg" alt="" class="hdr-menu-icon">Painel de Contratações</button>
           <div class="hdr-menu-sep hdr-menu-main-sep"></div>
           <button class="hdr-menu-item" onclick="confirmarTroca();toggleHdrMenu_()">🔄 Trocar usuário</button>
-          <div class="hdr-menu-sep hdr-menu-main-sep" id="hdr-visaogeral-sep" hidden></div>
-          <button class="hdr-menu-item hdr-menu-main-link" id="hdr-visaogeral-item" hidden onclick="switchTab('visaogeral');toggleHdrMenu_()">📊 Visão Geral</button>
+          <details id="hdr-admin" class="hdr-admin-menu hdr-menu-main-link" hidden>
+            <summary class="hdr-menu-item">Visão do administrador <span id="nt-badge-admin-menu" class="admin-nav-badge" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+            <button class="hdr-menu-item" id="hdr-solicitacoes-item" hidden onclick="switchTab('solicitacoes');toggleHdrMenu_()">Solicitações de notas técnicas <span id="nt-badge-menu" class="admin-nav-badge" hidden></span></button>
+            <button class="hdr-menu-item" id="hdr-visaogeral-item" hidden onclick="switchTab('visaogeral');toggleHdrMenu_()">Visão Geral</button>
+          </details>
           <div class="hdr-menu-sep hdr-menu-main-sep" id="hdr-atas-sep" hidden></div>
           <button class="hdr-menu-item hdr-menu-main-link" id="hdr-atas-item" hidden onclick="switchTab('atas');toggleHdrMenu_()">📑 Gestão de Atas</button>
-          <button class="hdr-menu-item hdr-menu-main-link" id="hdr-solicitacoes-item" hidden onclick="switchTab('solicitacoes');toggleHdrMenu_()">Solicitações de notas técnicas <span id="nt-badge-menu" hidden></span></button>
           <div class="hdr-menu-sep hdr-menu-main-sep" id="hdr-historico-sep"></div>
           <button class="hdr-menu-item hdr-menu-main-link" id="hdr-historico-item" onclick="switchTab('historico');toggleHdrMenu_()">🕘 Histórico</button>
           <div class="hdr-menu-sep" id="hdr-config-sep"></div>
           <button class="hdr-menu-item" id="hdr-config-item" onclick="switchTab('config');toggleHdrMenu_()">⚙️ Configurações</button>
-          <div class="hdr-menu-sep hdr-menu-main-sep"></div>
-          <button type="button" class="hdr-menu-item hdr-menu-main-link" onclick="iniciarTour();toggleHdrMenu_()">❔ Tour de ajuda</button>
+          <div id="hdr-tour-sep" class="hdr-menu-sep hdr-menu-main-sep"></div>
+          <button id="hdr-tour" type="button" class="hdr-menu-item hdr-menu-main-link" onclick="iniciarTour();toggleHdrMenu_()">❔ Tour de ajuda</button>
           <div class="hdr-menu-sep"></div>
           <button type="button" class="hdr-menu-item" onclick="logout();toggleHdrMenu_()" style="color:var(--red,#b02035)">🚪 Sair</button>
         </div>
@@ -1617,6 +1624,8 @@ function setupHeaderScroll_() {
 
 function aplicarPerfilUI_() {
   var isChefe = isChefeAtual_();
+  ['desktop-admin','hdr-admin'].forEach(function(id){var el=document.getElementById(id);if(el){el.hidden=!SESSAO_ADMIN;if(!SESSAO_ADMIN)el.open=false;}});
+  ['desktop-tour','hdr-tour','hdr-tour-sep'].forEach(function(id){var el=document.getElementById(id);if(el)el.hidden=!!SESSAO_ADMIN;});
   if (!SESSAO_ADMIN && typeof limparSolicitacoesNT_ === 'function') limparSolicitacoesNT_();
   ['desktop-solicitacoes','hdr-solicitacoes-item'].forEach(function(id){var el=document.getElementById(id);if(el)el.hidden=!SESSAO_ADMIN;});
   ['nav-fila', 'nav-equipe', 'hdr-historico-item', 'hdr-historico-sep', 'desktop-historico'].forEach(function(id) {
@@ -2643,6 +2652,9 @@ function abrirPainel_(ev) {
 // TABS
 // ══════════════════════════════════════════════════════════════════════
 function switchTab(tab) {
+  fecharMenusAdmin_();
+  var adminNav=document.getElementById('desktop-admin');
+  if(adminNav)adminNav.classList.toggle('active',tab==='solicitacoes'||tab==='visaogeral');
   if (!isChefeAtual_() && ['fila', 'historico', 'equipe', 'config'].indexOf(tab) >= 0) {
     tab = 'etapas';
   }
@@ -2682,6 +2694,12 @@ function switchTab(tab) {
   setupHeaderScroll_();
   _aplicarColapsoHeader_((document.getElementById('tab-' + tab) || {}).scrollTop || 0);
 }
+
+function fecharMenusAdmin_() {
+  ['desktop-admin','hdr-admin'].forEach(function(id){var el=document.getElementById(id);if(el)el.open=false;});
+}
+document.addEventListener('click',function(e){var menu=document.getElementById('desktop-admin');if(menu&&menu.open&&!menu.contains(e.target))menu.open=false;});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){var menu=document.getElementById('desktop-admin');if(menu&&menu.open)menu.querySelector('summary').focus();fecharMenusAdmin_();}});
 
 function toggleHdrMenu_() {
   var m = document.getElementById('hdr-menu');
@@ -6179,12 +6197,13 @@ function _tourKey_(){
   return 'sel_tour_v1_' + u + '_' + (typeof SERVIDOR!=='undefined'?SERVIDOR:'');
 }
 function maybeIniciarTour_(){
+  if(SESSAO_ADMIN)return;
   var u = (window.AppselFirestore && window.AppselFirestore.unidadeAtual) ? window.AppselFirestore.unidadeAtual() : 'reitoria-sel';
   if (u === 'reitoria-sel') return; // a Reitoria já conhece o sistema
   try { if (localStorage.getItem(_tourKey_())) return; } catch(e){}
   iniciarTour();
 }
-function iniciarTour(){ TOUR_I = 0; document.getElementById('tour-modal').style.display='flex'; tourRender(); }
+function iniciarTour(){ if(SESSAO_ADMIN)return; TOUR_I = 0; document.getElementById('tour-modal').style.display='flex'; tourRender(); }
 function tourRender(){
   var s = TOUR_STEPS[TOUR_I];
   document.getElementById('tour-emoji').textContent = s.e;

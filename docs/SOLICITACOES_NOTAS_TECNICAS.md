@@ -9,7 +9,7 @@ Escopo aprovado em 09/10/2026: formulário público, administração pelo admini
 3. Entrar no App Gestão como administrador geral, abrir **Solicitações de notas técnicas → Recebimento e avisos**, conferir `decof@cp2.g12.br`, marcar o recebimento público e salvar.
 4. A ativação cria uma pasta privada exclusiva e um gatilho de manutenção a cada dez minutos. Nenhum link público do Drive é gerado.
 
-O formulário é servido pela rota `?route=nt.form`, dentro de um iframe na página pública `solicitar.html`. Os arquivos chegam pelo `google.script.run` do próprio Apps Script. O frontend estático não contém credenciais de armazenamento. Antes da ativação, a página informa que o recebimento está em configuração.
+O formulário aparece diretamente em `solicitar.html`. A preparação usa GET `?route=nt.preparar` e o envio usa POST `?route=nt.enviar` em JSON, com tipo `text/plain`, redirecionamentos habilitados e `credentials: omit`. Isso evita o erro de seleção de conta do Google em navegadores com várias contas conectadas. A rota `?route=nt.form` é mantida para compatibilidade; não é mais incorporada ao portal. A escrita pública exige nonce e conserva as mesmas validações de anexos, idempotência e limites diários. O frontend estático não contém credenciais de armazenamento. Antes da ativação, a página informa que o recebimento está em configuração.
 
 ## Regras do atendimento
 
@@ -41,3 +41,5 @@ Propriedades do script: `NT_ATIVA`, `NT_DRIVE_FOLDER_ID`, `NT_EMAIL_AVISOS`, `NT
 Fontes técnicas: [comunicação HTML do Apps Script](https://developers.google.com/apps-script/guides/html/communication), [exclusão permanente de arquivos no Drive](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/delete), [quotas do Apps Script](https://developers.google.com/apps-script/guides/services/quotas).
 
 Conferência de produção em 09/10/2026: autorização do Drive concluída pela conta proprietária, formulário ativado com `decof@cp2.g12.br`, backend publicado na versão 114 e ambos os GitHub Pages publicados. As duas coleções privadas retornaram HTTP 403 a consultas anônimas. Formulário incorporado e biblioteca foram conferidos no navegador, incluindo largura móvel. Não foi enviado um pedido fictício nem um e-mail de teste ao destinatário.
+
+Correção de 09/10/2026: erro do iframe reproduzido com redirecionamento Google para `/macros/u/2/`; abertura direta com `authuser=0` também falhou. O formulário nativo do portal carregou no mesmo Chrome usando requisições sem cookies. Nenhum pedido fictício foi criado nem e-mail enviado nessa conferência.
