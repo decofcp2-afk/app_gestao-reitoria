@@ -590,6 +590,11 @@
     .empty .ei { font-size: 44px; margin-bottom: 12px; }
     .empty p { font-size: 14px; }
     .section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 6px 2px; }
+    .proc-concluidos summary { cursor:pointer; list-style:none; padding:12px 14px; margin-bottom:10px; border:1px solid var(--border); border-radius:12px; color:var(--blue); background:var(--card); font-size:13px; font-weight:600; text-align:center; }
+    .proc-concluidos summary::-webkit-details-marker { display:none; }
+    .proc-concluidos summary:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+    .proc-concluidos .proc-concluidos-recolher, .proc-concluidos[open] .proc-concluidos-mais { display:none; }
+    .proc-concluidos[open] .proc-concluidos-recolher { display:inline; }
   </style>
   <link rel="stylesheet" href="atas.css?v=15">
   <script src="config.js"></script>
@@ -600,7 +605,7 @@
   <script src="appsel-firestore.js"></script>
   <script src="relatorio-prazos.js"></script>
   <script src="atas-domain.js"></script>
-  <script src="atas.js?v=20261008-2"></script>
+  <script src="atas.js?v=20261009-1"></script>
   <!-- SortableJS: drag-and-drop da fila (degrada para as setas ▲▼ se não carregar) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
@@ -827,10 +832,6 @@
     <button id="btn-email-proc" onclick="editarEmailProcAtivo_()"
        style="margin-top:8px;width:100%;padding:11px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg);font-size:13px;font-weight:600;cursor:pointer;color:var(--text2);">
       ✉️ <span id="btn-email-proc-label">E-mail do requisitante</span>
-    </button>
-    <button id="btn-ata-proc" onclick="fecharProc();abrirCadastroAtaDoProcesso_(PROC_ATI)"
-       style="margin-top:8px;width:100%;padding:11px;border:1.5px solid #93c5fd;border-radius:10px;background:#eff6ff;font-size:13px;font-weight:700;cursor:pointer;color:#1e3a8a;" hidden>
-      Cadastrar ou consultar ata deste processo
     </button>
     <button id="btn-reabrir-proc" onclick="reabrirProcConcluido_()"
        style="margin-top:8px;width:100%;padding:11px;border:1.5px solid var(--amber);border-radius:10px;background:#fffbeb;font-size:13px;font-weight:700;cursor:pointer;color:#92400e;" hidden>
@@ -3265,7 +3266,16 @@ function renderEtapas(filtrado) {
   }
 
   html += renderCards(ativos, '');
-  if (conc.length) html += renderCards(conc, '✓ Concluídos');
+  if (conc.length) {
+    html += renderCards(conc.slice(0, 2), '✓ Concluídos');
+    if (conc.length > 2) {
+      var restantes = conc.length - 2;
+      html += '<details class="proc-concluidos"><summary>'
+        + '<span class="proc-concluidos-mais">+' + restantes + ' processo' + (restantes === 1 ? '' : 's') + '</span>'
+        + '<span class="proc-concluidos-recolher">Ocultar processos adicionais</span>'
+        + '</summary>' + renderCards(conc.slice(2), '') + '</details>';
+    }
+  }
 
   // Badge da aba Fila (planejamento + sem D0)
   var badgeFila = document.getElementById('badge-fila');
@@ -3381,11 +3391,6 @@ function abrirProcesso(idx) {
     btnReabrir.hidden = !(isChefeAtual_() && processoConcluido
       && window.APPSEL_CONFIG && window.APPSEL_CONFIG.firestoreAtivo);
   }
-  var btnAtaProc = document.getElementById('btn-ata-proc');
-  var temFaseExternaAta = (p.etapas || []).some(function(et) {
-    return et.status !== 'na' && String(et.fase || '').toLowerCase().indexOf('ext') >= 0;
-  });
-  if (btnAtaProc) btnAtaProc.hidden = !(GESTAO_ATAS && GESTAO_ATAS.enabled && temFaseExternaAta);
   footer.hidden = false;
 
   document.getElementById('ov-proc').classList.add('open');

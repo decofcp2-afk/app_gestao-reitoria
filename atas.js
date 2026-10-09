@@ -15,7 +15,7 @@
     return !!(root.AppselFirestore && root.AppselFirestore.unidadeAtual
       && root.AppselFirestore.unidadeAtual() === 'reitoria-sel');
   }
-  function podeEditar(ata) { return !!(state.podeGerirTodas || (root.SERVIDOR && D.normalizarTexto(root.SERVIDOR) === D.normalizarTexto(ata.responsavel))); }
+  function podeEditar() { return !!state.enabled; }
   function alternarResponsavel(){var externo=val('ata-responsavel-tipo')==='externo';document.querySelectorAll('.ata-resp-externo').forEach(function(x){x.hidden=!externo;});}
 
   function previewData() {
@@ -33,7 +33,6 @@
 
   function toggleEntradas() {
     ['hdr-atas-item','hdr-atas-sep','desktop-atas'].forEach(function (id) { var x=el(id); if(x)x.hidden=!state.enabled; });
-    var procBtn=el('btn-ata-proc'); if(procBtn)procBtn.hidden=!state.enabled;
   }
 
   function init() {
@@ -167,7 +166,7 @@
       h+='</div>';
     }else h+='<div class="atas-official">Número da ata, UASG, objeto e datas oficiais são atualizados pela fonte pública.</div>';
     h+='<h3 class="atas-detail-heading">Acompanhamento desta unidade</h3>';
-    h+='<div class="form-group"><label class="form-label" for="ata-det-resp-tipo">Tipo de responsável</label><select id="ata-det-resp-tipo" class="field-input" '+editable+'><option value="equipe" '+(!ext?'selected':'')+'>Servidor da equipe</option><option value="externo" '+(ext?'selected':'')+' '+(state.podeGerirTodas?'':'disabled')+'>Pessoa de outro setor</option></select></div>';
+    h+='<div class="form-group"><label class="form-label" for="ata-det-resp-tipo">Tipo de responsável</label><select id="ata-det-resp-tipo" class="field-input" '+editable+'><option value="equipe" '+(!ext?'selected':'')+'>Servidor da equipe</option><option value="externo" '+(ext?'selected':'')+'>Pessoa de outro setor</option></select></div>';
     h+=campo('Responsável pela gestão','ata-det-resp',a.responsavel,'maxlength="120"');
     h+=campo('Setor/unidade do responsável','ata-det-resp-setor',a.responsavelSetor,'maxlength="160"');
     h+=campo('E-mail do responsável','ata-det-resp-email',a.responsavelEmail,'type="email" maxlength="254"');
@@ -218,7 +217,7 @@
   function abrirAviso(avisoId,ataId){state.alertas=state.alertas.filter(function(a){return a._id!==avisoId;});atualizarAvisos();if(!localPreview())google.script.run.marcarAlertaAtaLidoApp(avisoId,root.AUTH_TOKEN);if(typeof root.fecharNotif_==='function')root.fecharNotif_();root.switchTab('atas');setTimeout(function(){abrirDetalhe(ataId);},50);}
 
   root.inicializarGestaoAtas_=init; root.carregarGestaoAtas_=carregar; root.renderGestaoAtas_=render; root.limparFiltrosAtas_=limparFiltros; root.mudarPaginaAtas_=mudarPagina; root.buscarAtas_=buscar;
-  root.abrirCadastroAta_=abrirCadastro; root.abrirCadastroAtaDoProcesso_=abrirCadastro; root.fecharCadastroAta_=fecharCadastro; root.setModoCadastroAta_=setMode; root.consultarAtasCompras_=consultar; root.salvarCadastroAta_=salvar;
+  root.abrirCadastroAta_=abrirCadastro; root.fecharCadastroAta_=fecharCadastro; root.setModoCadastroAta_=setMode; root.consultarAtasCompras_=consultar; root.salvarCadastroAta_=salvar;
   root.alternarResponsavelAta_=alternarResponsavel;
   root.abrirDetalheAta_=abrirDetalhe; root.fecharDetalheAta_=fecharDetalhe; root.salvarDetalheAta_=salvarDetalhe; root.arquivarAta_=arquivar; root.renderNotifAtas_=renderAvisos; root.abrirAvisoAta_=abrirAviso; root.carregarAlertasAtas_=carregarAlertas; root.renderEquipePreview_=renderEquipePreview;
   document.addEventListener('keydown',function(ev){if(ev.key!=='Escape')return;if(el('modal-ata-det')&&el('modal-ata-det').classList.contains('open'))fecharDetalhe();else if(el('modal-ata-cad')&&el('modal-ata-cad').classList.contains('open'))fecharCadastro();});

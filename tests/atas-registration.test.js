@@ -123,15 +123,16 @@ test('vínculo oficial não arquiva cadastro manual de outro responsável', () =
   assert.equal(writes.length, 0);
 });
 
-test('servidor não transfere a ata para outra pessoa ao editar', () => {
+test('servidor transfere o acompanhamento da ata para outra pessoa ao editar', () => {
   const {c, docs} = backend();
   const updates = [];
   docs.set('atas/minha-ata', {responsavel:'Samuel', origem:'compras'});
   c._fsUpdate_ = (path, value) => updates.push({path, value});
+  c._fs_ = () => ({query: () => ({Execute: () => []})});
   const result = c.atualizarAtaInternaApp({id:'minha-ata', responsavel:'Bruno'}, 'token');
-  assert.equal(result.ok, false);
-  assert.match(result.erro, /Somente a chefia pode transferir/);
-  assert.equal(updates.length, 0);
+  assert.equal(result.ok, true);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].value.responsavel, 'Bruno');
 });
 
 test('fluxo da tela salva as três atas selecionadas, sem prefill e com responsável vazio', () => {

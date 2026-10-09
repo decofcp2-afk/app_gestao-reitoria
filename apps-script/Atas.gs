@@ -178,7 +178,12 @@ function _atasPodeCriar_(sess, dados) {
     && _atasNorm_(dados.responsavel) === _atasNorm_(sess.nome);
 }
 
-function _atasPodeEditar_(sess, ata) {
+function _atasPodeEditar_(sess) {
+  // A autenticação valida a equipe; os documentos são escopados à unidade atual.
+  return !!(sess && (sess.isAdmin || !sess.unidade || sess.unidade === _fsUnidade_()));
+}
+
+function _atasPodeSubstituirCadastro_(sess, ata) {
   return !!(sess.isChefe || sess.isAdmin || _atasNorm_(ata && ata.responsavel) === _atasNorm_(sess.nome));
 }
 
@@ -432,7 +437,7 @@ function salvarAtaApp(dados, authToken) {
       var oficial = null;
       if (_atasNorm_(dados.origem) === 'compras') oficial = _atasLocalizarOficial_(dados);
       var manualAnterior = oficial ? _atasLocalizarManualCorrespondente_(oficial, interno) : null;
-      if (manualAnterior && !_atasPodeEditar_(sess, manualAnterior))
+      if (manualAnterior && !_atasPodeSubstituirCadastro_(sess, manualAnterior))
         throw new Error('Esta ata já é acompanhada por outro responsável. Solicite a vinculação à chefia.');
       var ata = oficial || {
         origem: 'manual', numeroAta: _atasTexto_(dados.numeroAta, 80), anoAta: _atasTexto_(dados.anoAta, 4),
@@ -454,7 +459,7 @@ function salvarAtaApp(dados, authToken) {
       if (ata.vigenciaInicio && ata.vigenciaFim && ata.vigenciaFim < ata.vigenciaInicio) throw new Error('A vigência final não pode ser anterior à inicial.');
       var idDoc = _atasDocId_(ata);
       var existente = _fsGet_('atas/' + idDoc);
-      if (existente && !_atasPodeEditar_(sess, existente))
+      if (existente && !_atasPodeSubstituirCadastro_(sess, existente))
         throw new Error('Esta ata já é acompanhada por outro responsável. Solicite a alteração à chefia.');
       if (existente && !existente.arquivada && !dados.confirmarAtualizacao) throw new Error('Esta ata já está no controle da unidade.');
       var agora = new Date();
@@ -493,7 +498,6 @@ function atualizarAtaInternaApp(dados, authToken) {
         observacao: _atasTexto_(dados.observacao, 1500), atualizadoEm: new Date(), atualizadoPor: sess.nome
       };
       if (campos.responsavelTipo === 'externo') {
-        if (!(sess.isChefe || sess.isAdmin)) throw new Error('Somente a chefia pode indicar um responsável de outro setor.');
         if (!campos.responsavel) throw new Error('Informe o nome do responsável de outro setor.');
         if (!_atasEmailValido_(campos.responsavelEmail)) throw new Error('Informe um e-mail válido para o responsável de outro setor.');
       } else {
@@ -501,8 +505,6 @@ function atualizarAtaInternaApp(dados, authToken) {
         campos.responsavelEmail = '';
       }
       if (!campos.responsavel) throw new Error('Informe o responsável pela gestão da ata.');
-      if (!(sess.isChefe || sess.isAdmin) && _atasNorm_(campos.responsavel) !== _atasNorm_(sess.nome))
-        throw new Error('Somente a chefia pode transferir o acompanhamento para outro responsável.');
       if (ata.origem === 'manual') {
         ['dataAssinatura', 'vigenciaInicio', 'vigenciaFim'].forEach(function (campo) {
           if (Object.prototype.hasOwnProperty.call(dados, campo)) {

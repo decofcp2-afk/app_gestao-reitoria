@@ -144,6 +144,35 @@ test('edição manual ajusta os campos e permite limpar datas sem mudar a identi
   assert.equal('numeroAta' in updates[0].value, false);
 });
 
+test('integrante da unidade edita outra responsabilidade e sincroniza avisos sem alterar dados oficiais', () => {
+  const { contexto } = carregarBackend({ resultado: [] });
+  const updates = [];
+  const sess = { nome: 'Outro integrante', unidade: 'campus-centro', isChefe: false, isAdmin: false };
+  contexto._withAppLockResult_ = (_, fn) => fn();
+  contexto._authRequire_ = () => sess;
+  contexto._fsUnidade_ = () => 'campus-centro';
+  contexto._atasRequireAtiva_ = () => {};
+  contexto._fsGet_ = () => ({ origem: 'compras', responsavel: 'Gestora', numeroAta: '10/2026' });
+  contexto._fsUpdate_ = (path, value) => updates.push({ path, value });
+  contexto._fs_ = () => ({ query: () => ({ Execute: () => [{ _id: 'av1', ataId: 'ata10' }] }) });
+  const dados = { id: 'ata10', responsavelTipo: 'externo', responsavel: 'Maria', responsavelSetor: 'Biblioteca', responsavelEmail: 'MARIA@example.com', observacao: 'Acompanhar renovação', numeroAta: '999', objeto: 'Não alterar', vigenciaFim: '2030-01-01' };
+  assert.equal(contexto.atualizarAtaInternaApp(dados, 'token').ok, true);
+  assert.equal(updates[0].value.atualizadoPor, sess.nome);
+  assert.equal(updates[0].value.responsavel, 'Maria');
+  assert.equal(updates[0].value.responsavelSetor, 'Biblioteca');
+  assert.equal(updates[0].value.responsavelEmail, 'maria@example.com');
+  assert.equal(updates[0].value.observacao, dados.observacao);
+  ['numeroAta', 'objeto', 'vigenciaFim'].forEach(campo => assert.equal(campo in updates[0].value, false));
+  assert.equal(updates[1].path, 'avisosAtas/av1');
+  assert.equal(updates[1].value.responsavelEmail, 'maria@example.com');
+  updates.length = 0;
+  sess.unidade = 'outra-unidade';
+  const negado = contexto.atualizarAtaInternaApp(dados, 'token');
+  assert.equal(negado.ok, false);
+  assert.match(negado.erro, /permissão/);
+  assert.equal(updates.length, 0);
+});
+
 test('marco atual escolhe uma única urgência entre 90, 60, 30 e vencida', () => {
   const { contexto } = carregarBackend({ resultado: [] });
   assert.equal(contexto._atasMarcoAtual_({ vigenciaFim: '2026-12-10' }, '2026-09-11'), 90);
