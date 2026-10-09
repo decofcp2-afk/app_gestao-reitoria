@@ -973,6 +973,7 @@ function doGet(e) {
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     }
     if (route === 'nt.biblioteca') return _apiResponderAppSEL_(getBibliotecaNTPublica(), params);
+    if (route === 'nt.preparar') return _apiResponderAppSEL_(ntPrepararFormulario(), {});
     var payload;
     if (route === 'appsel.challenge') {
       payload = loginChallengeApp(params.matricula || params.mat || '');
@@ -992,6 +993,23 @@ function doGet(e) {
       erro: err && err.message ? err.message : String(err),
       __apiError: true
     }, params);
+  }
+}
+
+// Formulário público do portal: requisições sem cookies evitam a seleção
+// de uma conta Google conectada. Escrita somente por POST, com nonce e
+// as mesmas validações/limites do formulário hospedado no Apps Script.
+function doPost(e) {
+  try {
+    var params = (e && e.parameter) || {};
+    if (params.route !== 'nt.enviar') throw new Error('Rota nao encontrada.');
+    var raw = e && e.postData && e.postData.contents;
+    if (!raw || raw.length > 15 * 1024 * 1024) throw new Error('Solicitação inválida ou acima do limite de anexos.');
+    var dados = JSON.parse(raw);
+    if (!dados || typeof dados !== 'object' || Array.isArray(dados)) throw new Error('Solicitação inválida.');
+    return _apiResponderAppSEL_(ntEnviarSolicitacao(dados), {});
+  } catch (err) {
+    return _apiResponderAppSEL_({ok:false, erro:err && err.message ? err.message : 'Não foi possível enviar a solicitação.'}, {});
   }
 }
 
