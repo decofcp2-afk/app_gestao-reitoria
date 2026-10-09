@@ -66,18 +66,20 @@ test('lista agrupa por objeto, preserva origem diversa e abre edição manual', 
   assert.equal(elemento('ata-det-archive').hidden, true);
 });
 
-test('cadastro com dados preenchidos preserva o usuário do acompanhamento', () => {
+test('cadastro exige escolher um servidor sem presumir o usuário ou o responsável da licitação', () => {
   const {window, elemento} = montarTela();
   window.SERVIDOR = '';
   window.GESTAO_ATAS.usuario = 'Samuel';
   window.GESTAO_ATAS.podeGerirTodas = false;
+  window.GESTAO_ATAS.enabled = true;
+  window.SERV_DATA = [{nome:'Samuel'}, {nome:'Beatriz'}];
   const processo = {id:'SEL-2026-005', num:'23040.003024/2023-44', servidorExt:'Beatriz', nome:'Vigilância'};
   window.abrirCadastroAta_(processo);
-  assert.equal(elemento('ata-responsavel').value, 'Samuel');
-  assert.equal(elemento('ata-responsavel').readOnly, true);
+  assert.match(elemento('ata-responsavel-campo').innerHTML, /<select id="ata-responsavel"/);
+  assert.match(elemento('ata-responsavel-campo').innerHTML, /value="Beatriz"/);
+  assert.doesNotMatch(elemento('ata-responsavel-campo').innerHTML, /selected|disabled/);
   assert.equal(elemento('ata-processo').value, processo.num);
   window.GESTAO_ATAS.podeGerirTodas = true;
   window.abrirCadastroAta_(processo);
-  assert.equal(elemento('ata-responsavel').value, 'Beatriz');
-  assert.equal(elemento('ata-responsavel').readOnly, false);
+  assert.doesNotMatch(elemento('ata-responsavel-campo').innerHTML, /selected|disabled/);
 });

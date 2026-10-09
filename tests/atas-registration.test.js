@@ -37,7 +37,7 @@ function backend({sess = {nome:'Samuel'}, cargas, etapas = [], processos} = {}) 
 }
 
 function dados(extra = {}) {
-  return {origem:'compras', processo:numeroProcesso, responsavelTipo:'equipe',
+  return {origem:'compras', processo:numeroProcesso, responsavelTipo:'equipe', responsavel:'Samuel',
     numeroAta:'01312/2026', idAtaPNCP:'42414284000102-1-000168/2026-000001', ...extra};
 }
 
@@ -70,8 +70,8 @@ test('acompanhamento próprio independe do responsável pela licitação e da ca
     assert.equal(writes[0].value.responsavel, 'Samuel');
   }
   const {c, writes} = backend();
-  assert.equal(c.salvarAtaApp(dados({responsavel:'Bruno'}), 'token').ok, false);
-  assert.equal(writes.length, 0);
+  assert.equal(c.salvarAtaApp(dados({responsavel:'Bruno'}), 'token').ok, true);
+  assert.equal(writes[0].value.responsavel, 'Bruno');
 });
 
 test('número editado é vinculado ao novo processo, sem manter o id anterior', () => {
@@ -92,10 +92,10 @@ test('cadastro próprio admite ata manual ou processo de outro órgão sem vínc
   assert.equal(writes[1].value.responsavel, 'Samuel');
 });
 
-test('chefia mantém cadastro sem processo interno; servidor não indica pessoa de outro setor', () => {
+test('chefia mantém cadastro sem processo interno; servidor pode indicar pessoa de outro setor', () => {
   const {c} = backend({sess:{nome:'Chefia', isChefe:true}});
   assert.equal(c.salvarAtaApp(dados({processo:'Processo de outro órgão'}), 'token').ok, true);
-  assert.match(backend().c.salvarAtaApp(dados({responsavelTipo:'externo', responsavel:'Maria', responsavelEmail:'maria@example.test'}), 'token').erro, /Somente a chefia/);
+  assert.equal(backend().c.salvarAtaApp(dados({responsavelTipo:'externo', responsavel:'Maria', responsavelEmail:'maria@example.test'}), 'token').ok, true);
 });
 
 test('número duplicado exige escolher o processo correto e não grava um vínculo arbitrário', () => {
@@ -135,7 +135,7 @@ test('servidor transfere o acompanhamento da ata para outra pessoa ao editar', (
   assert.equal(updates[0].value.responsavel, 'Bruno');
 });
 
-test('fluxo da tela salva as três atas selecionadas, sem prefill e com responsável vazio', () => {
+test('fluxo da tela exige responsável e salva as três atas para a pessoa escolhida', () => {
   const {c, writes} = backend();
   const nodes = new Map();
   const element = id => {
@@ -165,8 +165,12 @@ test('fluxo da tela salva as três atas selecionadas, sem prefill e com respons�
   element('ata-processo').value = numeroProcesso;
   element('ata-responsavel-tipo').value = 'equipe';
   window.salvarCadastroAta_();
+  assert.equal(writes.length, 0);
+  assert.match(toasts.pop().msg, /Selecione o responsável/);
+  element('ata-responsavel').value = 'Bruno';
+  window.salvarCadastroAta_();
   assert.equal(writes.length, 3, JSON.stringify(toasts));
-  assert.ok(writes.every(write => write.value.processoId === processoId && write.value.responsavel === 'Samuel'));
+  assert.ok(writes.every(write => write.value.processoId === processoId && write.value.responsavel === 'Bruno'));
   assert.equal(element('ata-modal-save').disabled, false);
   assert.equal(toasts.filter(t => t.type === 'err').length, 0);
   assert.match(toasts.at(-1).msg, /Ata adicionada ao controle/);

@@ -171,11 +171,7 @@ function _atasResolverProcesso_(dados) {
 }
 
 function _atasPodeCriar_(sess, dados) {
-  if (sess.isChefe || sess.isAdmin) return true;
-  // O acompanhamento da ata é independente da atribuição da licitação.
-  // Um servidor cadastra para si; a chefia pode indicar outros responsáveis.
-  return !!sess.nome && dados.responsavelTipo !== 'externo'
-    && _atasNorm_(dados.responsavel) === _atasNorm_(sess.nome);
+  return _atasPodeEditar_(sess);
 }
 
 function _atasPodeEditar_(sess) {
@@ -423,7 +419,6 @@ function salvarAtaApp(dados, authToken) {
       dados = dados || {};
       var interno = _atasSanitizarInterno_(dados);
       if (interno.responsavelTipo === 'externo') {
-        if (!(sess.isChefe || sess.isAdmin)) throw new Error('Somente a chefia pode indicar um responsável de outro setor.');
         if (!interno.responsavel) throw new Error('Informe o nome do responsável de outro setor.');
         if (!_atasEmailValido_(interno.responsavelEmail)) throw new Error('Informe um e-mail válido para o responsável de outro setor.');
       } else {
@@ -431,9 +426,9 @@ function salvarAtaApp(dados, authToken) {
         interno.responsavelEmail = '';
       }
       var responsavelInformado = !!interno.responsavel;
-      if (!interno.responsavel) interno.responsavel = sess.nome;
+      if (!interno.responsavel) throw new Error('Informe o responsável pela gestão da ata.');
       _atasResolverProcesso_(interno);
-      if (!_atasPodeCriar_(sess, interno)) throw new Error('Você pode cadastrar atas para seu próprio acompanhamento. Para indicar outro responsável, solicite o cadastro à chefia.');
+      if (!_atasPodeCriar_(sess, interno)) throw new Error('Você não tem permissão para cadastrar atas nesta unidade.');
       var oficial = null;
       if (_atasNorm_(dados.origem) === 'compras') oficial = _atasLocalizarOficial_(dados);
       var manualAnterior = oficial ? _atasLocalizarManualCorrespondente_(oficial, interno) : null;

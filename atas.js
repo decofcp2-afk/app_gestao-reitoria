@@ -16,8 +16,8 @@
       && root.AppselFirestore.unidadeAtual() === 'reitoria-sel');
   }
   function podeEditar() { return !!state.enabled; }
-  function campoResponsavelDetalhe(tipo, nome) {
-    var attrs='id="ata-det-resp" class="field-input" '+(podeEditar()?'':'disabled');
+  function campoResponsavelDetalhe(tipo, nome, id) {
+    var attrs='id="'+(id||'ata-det-resp')+'" class="field-input" '+(podeEditar()?'':'disabled');
     if(tipo==='externo')return '<input '+attrs+' maxlength="120" value="'+e(nome||'')+'">';
     var nomes=(root.SERV_DATA||[]).map(function(s){return s.nome;}).filter(Boolean);
     var atual=nomes.find(function(n){return D.normalizarTexto(n)===D.normalizarTexto(nome||'');});
@@ -32,7 +32,15 @@
     state.tipoResponsavelDetalhe=tipo;
     el('ata-det-resp-campo').innerHTML=campoResponsavelDetalhe(tipo,state.responsaveisDetalhe[tipo]||'');
   }
-  function alternarResponsavel(){var externo=val('ata-responsavel-tipo')==='externo';document.querySelectorAll('.ata-resp-externo').forEach(function(x){x.hidden=!externo;});}
+  function alternarResponsavel(){
+    var tipo=val('ata-responsavel-tipo'),externo=tipo==='externo';
+    if(state.responsaveisCadastro){
+      if(state.tipoResponsavelCadastro)state.responsaveisCadastro[state.tipoResponsavelCadastro]=val('ata-responsavel');
+      state.tipoResponsavelCadastro=tipo;
+      el('ata-responsavel-campo').innerHTML=campoResponsavelDetalhe(tipo,state.responsaveisCadastro[tipo]||'','ata-responsavel');
+    }
+    document.querySelectorAll('.ata-resp-externo').forEach(function(x){x.hidden=!externo;});
+  }
 
   function previewData() {
     return [
@@ -151,13 +159,22 @@
   }
   function mudarPagina(pagina){state.page=pagina;render();var c=el('tab-atas');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});}
   function setMode(mode){state.mode=mode;el('ata-mode-compras').classList.toggle('active',mode==='compras');el('ata-mode-manual').classList.toggle('active',mode==='manual');el('ata-form-compras').hidden=mode!=='compras';el('ata-form-manual').hidden=mode!=='manual';el('ata-modal-save').textContent=mode==='compras'?'Adicionar selecionadas':'Salvar ata';}
-  function abrirCadastro(prefill){var usuario=root.SERVIDOR||state.usuario||'';el('ata-responsavel').readOnly=!state.podeGerirTodas;state.prefill=prefill||null;state.resultados=[];el('ata-resultados').innerHTML='';el('ata-cad-titulo').textContent=prefill?'Adicionar ata deste processo':'Adicionar ata ao controle';['ata-compra','ata-ano-compra','ata-processo','ata-manual-numero','ata-manual-ano','ata-manual-inicio','ata-manual-fim','ata-observacao','ata-responsavel-setor','ata-responsavel-email'].forEach(function(id){if(el(id))el(id).value='';});el('ata-uasg').value=state.uasg||'';el('ata-responsavel-tipo').value='equipe';el('ata-responsavel-tipo').querySelector('option[value="externo"]').disabled=!state.podeGerirTodas;if(prefill){el('ata-processo').value=prefill.num||prefill.id||'';el('ata-responsavel').value=state.podeGerirTodas?(prefill.servidorExt||usuario):usuario;el('ata-objeto').value=prefill.nome||'';}else{el('ata-responsavel').value=usuario;el('ata-objeto').value='';}alternarResponsavel();setMode('compras');el('ov-ata-cad').classList.add('open');el('modal-ata-cad').classList.add('open');}
+  function abrirCadastro(prefill){
+    state.prefill=prefill||null;state.resultados=[];
+    state.responsaveisCadastro={equipe:'',externo:''};state.tipoResponsavelCadastro=null;
+    el('ata-resultados').innerHTML='';el('ata-cad-titulo').textContent='Adicionar ata ao controle';
+    ['ata-compra','ata-ano-compra','ata-processo','ata-manual-numero','ata-manual-ano','ata-manual-inicio','ata-manual-fim','ata-observacao','ata-responsavel-setor','ata-responsavel-email'].forEach(function(id){if(el(id))el(id).value='';});
+    el('ata-uasg').value=state.uasg||'';el('ata-responsavel-tipo').value='equipe';
+    el('ata-responsavel-tipo').querySelector('option[value="externo"]').disabled=false;
+    el('ata-processo').value=prefill&&(prefill.num||prefill.id)||'';el('ata-objeto').value=prefill&&prefill.nome||'';
+    alternarResponsavel();setMode('compras');el('ov-ata-cad').classList.add('open');el('modal-ata-cad').classList.add('open');
+  }
   function fecharCadastro(){el('ov-ata-cad').classList.remove('open');el('modal-ata-cad').classList.remove('open');}
   function consultar(){var uasg=val('ata-uasg').replace(/\D/g,'');if(!uasg){root.toast('Informe a UASG de origem.','err');el('ata-uasg').focus();return;}var btn=el('ata-consultar');btn.disabled=true;btn.textContent='Consultando…';el('ata-resultados').innerHTML='<div class="atas-loading">Consultando Compras.gov.br e PNCP na UASG '+e(uasg)+'…</div>';google.script.run.withSuccessHandler(function(r){btn.disabled=false;btn.textContent='Consultar';state.resultados=(r&&r.atas)||[];state.avisosConsulta=(r&&r.avisos)||[];state.uasgConsultada=uasg;renderResultados();}).withFailureHandler(function(x){btn.disabled=false;btn.textContent='Consultar';el('ata-resultados').innerHTML='<div class="atas-error">'+e(x.message||x)+'</div>';}).consultarAtasComprasApp({uasg:uasg,numeroCompra:val('ata-compra'),anoCompra:val('ata-ano-compra'),processo:val('ata-processo')},root.AUTH_TOKEN);}
   function renderResultados(){var c=el('ata-resultados'),origem=rotuloUasg(state.uasgConsultada);var aviso=(state.avisosConsulta||[]).map(function(x){return '<div class="atas-official">'+e(x)+'</div>';}).join('');if(!state.resultados.length){c.innerHTML=aviso+'<div class="atas-official">Consulta realizada na UASG '+e(origem)+'. Nenhuma ata foi adicionada automaticamente.</div><div class="atas-empty" style="padding:24px"><strong>Nenhuma ata encontrada</strong>Confira a UASG e os demais dados ou use o cadastro manual.</div>';return;}c.innerHTML=aviso+'<div class="atas-official">Consulta realizada na UASG '+e(origem)+'. '+state.resultados.length+' ata(s) encontrada(s). Selecione apenas as que ficarão sob controle desta unidade.</div><div class="atas-modal-card">'+state.resultados.map(function(a,i){return '<label class="atas-result"><input type="checkbox" name="ata-oficial" value="'+i+'"><span class="atas-result-main"><span class="atas-result-title">Ata '+e(a.numeroAta)+'</span><span class="atas-muted">UASG '+e(rotuloUasg(a.uasg||state.uasgConsultada))+' · Compra '+e(a.numeroCompra+'/'+a.anoCompra)+' · '+e(D.formatarDataBR(a.vigenciaInicio))+' a '+e(D.formatarDataBR(a.vigenciaFim))+'</span><span class="atas-muted">'+e(a.objeto||'Objeto não informado')+'</span></span></label>';}).join('')+'</div>';}
   function payloadInterno(){return{processoId:state.prefill&&state.prefill.id||'',processo:val('ata-processo'),objeto:val('ata-objeto'),responsavelTipo:val('ata-responsavel-tipo')||'equipe',responsavel:val('ata-responsavel'),responsavelSetor:val('ata-responsavel-setor'),responsavelEmail:val('ata-responsavel-email'),observacao:val('ata-observacao')};}
   function responsavelValido(d){if(d.responsavelTipo!=='externo')return true;if(!d.responsavel){root.toast('Informe o nome do responsável de outro setor.','err');return false;}if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.responsavelEmail)){root.toast('Informe um e-mail válido para o responsável de outro setor.','err');return false;}return true;}
-  function salvar(){var base=payloadInterno();if(!responsavelValido(base))return;if(localPreview()){fecharCadastro();if(root.toast)root.toast('Prévia: cadastro não gravado.','ok');return;}var lista=[];if(state.mode==='compras'){document.querySelectorAll('input[name="ata-oficial"]:checked').forEach(function(x){lista.push(Object.assign({},state.resultados[Number(x.value)],base,{origem:'compras'}));});if(!lista.length){root.toast('Selecione ao menos uma ata.','err');return;}}else{lista.push(Object.assign(base,{origem:'manual',numeroAta:val('ata-manual-numero'),anoAta:val('ata-manual-ano'),uasg:val('ata-uasg').replace(/\D/g,''),numeroCompra:val('ata-compra'),anoCompra:val('ata-ano-compra'),dataAssinatura:val('ata-manual-assinatura'),vigenciaInicio:val('ata-manual-inicio'),vigenciaFim:val('ata-manual-fim')}));}var btn=el('ata-modal-save');btn.disabled=true;btn.textContent='Salvando…';var i=0;function next(){if(i>=lista.length){btn.disabled=false;fecharCadastro();state.loaded=false;carregar(true);root.toast('Ata adicionada ao controle desta unidade.','ok');return;}google.script.run.withSuccessHandler(function(r){if(!r||!r.ok){btn.disabled=false;btn.textContent='Salvar ata';root.toast('Erro: '+(r&&r.erro||'Falha ao salvar.'),'err');return;}i++;next();}).withFailureHandler(function(x){btn.disabled=false;btn.textContent='Salvar ata';root.toast('Erro: '+(x.message||x),'err');}).salvarAtaApp(lista[i],root.AUTH_TOKEN);}next();}
+  function salvar(){var base=payloadInterno();if(!base.responsavel){root.toast('Selecione o responsável pela gestão.','err');return;}if(!responsavelValido(base))return;if(localPreview()){fecharCadastro();if(root.toast)root.toast('Prévia: cadastro não gravado.','ok');return;}var lista=[];if(state.mode==='compras'){document.querySelectorAll('input[name="ata-oficial"]:checked').forEach(function(x){lista.push(Object.assign({},state.resultados[Number(x.value)],base,{origem:'compras'}));});if(!lista.length){root.toast('Selecione ao menos uma ata.','err');return;}}else{lista.push(Object.assign(base,{origem:'manual',numeroAta:val('ata-manual-numero'),anoAta:val('ata-manual-ano'),uasg:val('ata-uasg').replace(/\D/g,''),numeroCompra:val('ata-compra'),anoCompra:val('ata-ano-compra'),dataAssinatura:val('ata-manual-assinatura'),vigenciaInicio:val('ata-manual-inicio'),vigenciaFim:val('ata-manual-fim')}));}var btn=el('ata-modal-save');btn.disabled=true;btn.textContent='Salvando…';var i=0;function next(){if(i>=lista.length){btn.disabled=false;fecharCadastro();state.loaded=false;carregar(true);root.toast('Ata adicionada ao controle desta unidade.','ok');return;}google.script.run.withSuccessHandler(function(r){if(!r||!r.ok){btn.disabled=false;btn.textContent='Salvar ata';root.toast('Erro: '+(r&&r.erro||'Falha ao salvar.'),'err');return;}i++;next();}).withFailureHandler(function(x){btn.disabled=false;btn.textContent='Salvar ata';root.toast('Erro: '+(x.message||x),'err');}).salvarAtaApp(lista[i],root.AUTH_TOKEN);}next();}
   function abrirDetalhe(id){
     var a=state.atas.find(function(x){return x._id===id&&!x.arquivada;});
     if(!a)return;
