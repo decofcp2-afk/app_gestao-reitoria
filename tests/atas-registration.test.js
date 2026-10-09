@@ -104,6 +104,25 @@ test('número duplicado exige escolher o processo correto e não grava um víncu
   assert.equal(writes.length, 0);
 });
 
+test('cadastro e edição preservam contatos específicos do servidor apenas na ata', () => {
+  const {c, writes, docs} = backend();
+  const result=c.salvarAtaApp(dados({responsavelEmail:'ATA@example.com',responsavelSetor:'Decof-LIC'}), 'token');
+  assert.equal(result.ok,true,result.erro);
+  assert.equal(writes[0].value.responsavelEmail,'ata@example.com');
+  assert.equal(writes[0].value.responsavelSetor,'Decof-LIC');
+  docs.set('atas/ata1',writes[0].value);
+  const updates=[];
+  c._fsUpdate_=(path,value)=>updates.push({path,value});
+  c._fs_=()=>({query:()=>({Execute:()=>[]})});
+  assert.equal(c.atualizarAtaInternaApp({id:'ata1',responsavelEmail:'especifico@example.com',responsavelSetor:'Biblioteca'},'token').ok,true);
+  assert.equal(updates[0].value.responsavelEmail,'especifico@example.com');
+  assert.equal(updates[0].value.responsavelSetor,'Biblioteca');
+  assert.ok(updates.every(u=>u.path.startsWith('atas/')));
+  assert.equal(c.atualizarAtaInternaApp({id:'ata1',responsavelEmail:'invalido'},'token').ok,false);
+  assert.equal(c.atualizarAtaInternaApp({id:'ata1',responsavelEmail:'',responsavelSetor:''},'token').ok,true);
+  assert.equal(updates.at(-1).value.responsavelEmail,'');
+});
+
 test('cadastro não substitui uma ata de outro responsável, mesmo com confirmação', () => {
   for (const arquivada of [false, true]) {
     const {c, docs, writes} = backend();

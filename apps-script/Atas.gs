@@ -421,10 +421,7 @@ function salvarAtaApp(dados, authToken) {
       if (interno.responsavelTipo === 'externo') {
         if (!interno.responsavel) throw new Error('Informe o nome do responsável de outro setor.');
         if (!_atasEmailValido_(interno.responsavelEmail)) throw new Error('Informe um e-mail válido para o responsável de outro setor.');
-      } else {
-        interno.responsavelSetor = '';
-        interno.responsavelEmail = '';
-      }
+      } else if (interno.responsavelEmail && !_atasEmailValido_(interno.responsavelEmail)) throw new Error('Informe um e-mail válido para o responsável.');
       var responsavelInformado = !!interno.responsavel;
       if (!interno.responsavel) throw new Error('Informe o responsável pela gestão da ata.');
       _atasResolverProcesso_(interno);
@@ -488,17 +485,14 @@ function atualizarAtaInternaApp(dados, authToken) {
       var campos = {
         responsavelTipo: _atasNorm_(dados.responsavelTipo || ata.responsavelTipo) === 'externo' ? 'externo' : 'equipe',
         responsavel: _atasTexto_(Object.prototype.hasOwnProperty.call(dados, 'responsavel') ? dados.responsavel : ata.responsavel, 120),
-        responsavelSetor: _atasTexto_(dados.responsavelSetor, 160),
-        responsavelEmail: _atasTexto_(dados.responsavelEmail, 254).toLowerCase(),
+        responsavelSetor: _atasTexto_(Object.prototype.hasOwnProperty.call(dados, 'responsavelSetor') ? dados.responsavelSetor : ata.responsavelSetor, 160),
+        responsavelEmail: _atasTexto_(Object.prototype.hasOwnProperty.call(dados, 'responsavelEmail') ? dados.responsavelEmail : ata.responsavelEmail, 254).toLowerCase(),
         observacao: _atasTexto_(dados.observacao, 1500), atualizadoEm: new Date(), atualizadoPor: sess.nome
       };
       if (campos.responsavelTipo === 'externo') {
         if (!campos.responsavel) throw new Error('Informe o nome do responsável de outro setor.');
         if (!_atasEmailValido_(campos.responsavelEmail)) throw new Error('Informe um e-mail válido para o responsável de outro setor.');
-      } else {
-        campos.responsavelSetor = '';
-        campos.responsavelEmail = '';
-      }
+      } else if (campos.responsavelEmail && !_atasEmailValido_(campos.responsavelEmail)) throw new Error('Informe um e-mail válido para o responsável.');
       if (!campos.responsavel) throw new Error('Informe o responsável pela gestão da ata.');
       if (ata.origem === 'manual') {
         ['dataAssinatura', 'vigenciaInicio', 'vigenciaFim'].forEach(function (campo) {
@@ -681,13 +675,14 @@ function _atasEnviarResumoUnidade_(somenteChefia) {
     var email = _emailServidorPorNome_(s.nome);
     if (!email) return;
     var elegiveis = avisos.filter(function (a) { return (a.emailEnviadoPara || []).indexOf(email) < 0; });
-    var proprios = elegiveis.filter(function (a) { return _atasNorm_(a.responsavel) === _atasNorm_(s.nome); });
+    var proprios = elegiveis.filter(function (a) { return _atasNorm_(a.responsavel) === _atasNorm_(s.nome)
+      && (!_atasEmailValido_(a.responsavelEmail) || String(a.responsavelEmail).toLowerCase() === email.toLowerCase()); });
     var itens = s.isChefe ? elegiveis : proprios;
     if (itens.length) destinatarios[email] = { nome: s.nome, chefe: !!s.isChefe, avisos: itens };
   });
   if (!somenteChefia) {
     avisos.forEach(function (a) {
-      if (a.responsavelTipo !== 'externo' || !_atasEmailValido_(a.responsavelEmail)) return;
+      if (!_atasEmailValido_(a.responsavelEmail)) return;
       var email = String(a.responsavelEmail).trim().toLowerCase();
       if ((a.emailEnviadoPara || []).indexOf(email) >= 0) return;
       if (!destinatarios[email]) destinatarios[email] = { nome: a.responsavel || 'Responsável', chefe: false, avisos: [] };

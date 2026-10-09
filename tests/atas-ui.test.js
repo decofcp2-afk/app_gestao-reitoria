@@ -83,3 +83,26 @@ test('cadastro exige escolher um servidor sem presumir o usuário ou o responsá
   window.abrirCadastroAta_(processo);
   assert.doesNotMatch(elemento('ata-responsavel-campo').innerHTML, /selected|disabled/);
 });
+
+test('seleção do servidor preenche contatos e reabertura preserva ajustes específicos da ata', () => {
+  const {window, elemento} = montarTela();
+  Object.assign(window.GESTAO_ATAS, {enabled:true, unidade:'reitoria-sel', atas:[
+    {_id:'a1', numeroAta:'10/2026', origem:'compras', responsavel:'Amanda', responsavelEmail:'ata@example.com', responsavelSetor:'Biblioteca'}
+  ]});
+  window.SERV_DATA = [{nome:'Amanda', email:'amanda@cp2.g12.br'}];
+  ['ata-det-resp-tipo','ata-responsavel-tipo'].forEach(id => elemento(id).value='equipe');
+  ['ata-det-resp','ata-responsavel'].forEach(id => elemento(id).value='Amanda');
+  [false,true].forEach(cadastro => {
+    window.preencherResponsavelAta_(cadastro);
+    assert.equal(elemento(cadastro?'ata-responsavel-email':'ata-det-resp-email').value, 'amanda@cp2.g12.br');
+    assert.equal(elemento(cadastro?'ata-responsavel-setor':'ata-det-resp-setor').value, 'Decof-LIC');
+  });
+  window.abrirDetalheAta_('a1');
+  assert.match(elemento('ata-det-body').innerHTML, /value="ata@example.com"/);
+  assert.match(elemento('ata-det-body').innerHTML, /value="Biblioteca"/);
+  elemento('ata-det-resp-tipo').value='externo';
+  elemento('ata-det-resp-email').value='outro@example.com';
+  window.preencherResponsavelAta_(false);
+  assert.equal(elemento('ata-det-resp-email').value, 'outro@example.com');
+  assert.equal(window.SERV_DATA[0].email, 'amanda@cp2.g12.br');
+});
