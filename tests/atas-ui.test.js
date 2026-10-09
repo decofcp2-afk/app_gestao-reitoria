@@ -48,9 +48,21 @@ test('lista agrupa por objeto, preserva origem diversa e abre edição manual', 
   assert.equal(elemento('ata-det-archive').hidden, false);
   window.GESTAO_ATAS.podeGerirTodas = false;
   window.SERVIDOR = 'Outro integrante';
+  window.SERV_DATA = [{nome:'Gestora'}, {nome:'Outro integrante'}];
   window.abrirDetalheAta_('a2');
   assert.equal(elemento('ata-det-save').hidden, false);
   assert.doesNotMatch(elemento('ata-det-body').innerHTML, /disabled/);
+  assert.match(elemento('ata-det-body').innerHTML, /<select id="ata-det-resp"/);
+  assert.match(elemento('ata-det-body').innerHTML, /value="Gestora" selected/);
+  assert.match(elemento('ata-det-body').innerHTML, /value="Outro integrante"/);
+  elemento('ata-det-resp-tipo').value = 'externo';
+  elemento('ata-det-resp').value = 'Outro integrante';
+  window.alternarResponsavelDetalheAta_();
+  assert.match(elemento('ata-det-resp-campo').innerHTML, /<input id="ata-det-resp"/);
+  elemento('ata-det-resp-tipo').value = 'equipe';
+  elemento('ata-det-resp').value = 'Responsável externo';
+  window.alternarResponsavelDetalheAta_();
+  assert.match(elemento('ata-det-resp-campo').innerHTML, /value="Outro integrante" selected/);
   assert.equal(elemento('ata-det-archive').hidden, true);
 });
 

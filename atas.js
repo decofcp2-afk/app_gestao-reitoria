@@ -16,6 +16,22 @@
       && root.AppselFirestore.unidadeAtual() === 'reitoria-sel');
   }
   function podeEditar() { return !!state.enabled; }
+  function campoResponsavelDetalhe(tipo, nome) {
+    var attrs='id="ata-det-resp" class="field-input" '+(podeEditar()?'':'disabled');
+    if(tipo==='externo')return '<input '+attrs+' maxlength="120" value="'+e(nome||'')+'">';
+    var nomes=(root.SERV_DATA||[]).map(function(s){return s.nome;}).filter(Boolean);
+    var atual=nomes.find(function(n){return D.normalizarTexto(n)===D.normalizarTexto(nome||'');});
+    var h='<select '+attrs+'><option value="">Selecione um servidor da unidade</option>';
+    if(nome&&!atual)h+='<option value="'+e(nome)+'" selected>'+e(nome)+' (responsável atual)</option>';
+    nomes.forEach(function(n){h+='<option value="'+e(n)+'" '+(n===atual?'selected':'')+'>'+e(n)+'</option>';});
+    return h+'</select>';
+  }
+  function alternarResponsavelDetalhe() {
+    var tipo=val('ata-det-resp-tipo');
+    state.responsaveisDetalhe[state.tipoResponsavelDetalhe]=val('ata-det-resp');
+    state.tipoResponsavelDetalhe=tipo;
+    el('ata-det-resp-campo').innerHTML=campoResponsavelDetalhe(tipo,state.responsaveisDetalhe[tipo]||'');
+  }
   function alternarResponsavel(){var externo=val('ata-responsavel-tipo')==='externo';document.querySelectorAll('.ata-resp-externo').forEach(function(x){x.hidden=!externo;});}
 
   function previewData() {
@@ -146,6 +162,9 @@
     var a=state.atas.find(function(x){return x._id===id&&!x.arquivada;});
     if(!a)return;
     state.selected=a;
+    state.tipoResponsavelDetalhe=a.responsavelTipo==='externo'?'externo':'equipe';
+    state.responsaveisDetalhe={equipe:'',externo:''};
+    state.responsaveisDetalhe[state.tipoResponsavelDetalhe]=a.responsavel||'';
     var manual=a.origem==='manual',pode=podeEditar(a),ext=a.responsavelTipo==='externo';
     var editable=pode?'':'disabled';
     function campo(label,id,value,extra){
@@ -166,14 +185,13 @@
       h+='</div>';
     }else h+='<div class="atas-official">Número da ata, UASG, objeto e datas oficiais são atualizados pela fonte pública.</div>';
     h+='<h3 class="atas-detail-heading">Acompanhamento desta unidade</h3>';
-    h+='<div class="form-group"><label class="form-label" for="ata-det-resp-tipo">Tipo de responsável</label><select id="ata-det-resp-tipo" class="field-input" '+editable+'><option value="equipe" '+(!ext?'selected':'')+'>Servidor da equipe</option><option value="externo" '+(ext?'selected':'')+'>Pessoa de outro setor</option></select></div>';
-    h+=campo('Responsável pela gestão','ata-det-resp',a.responsavel,'maxlength="120"');
+    h+='<div class="form-group"><label class="form-label" for="ata-det-resp-tipo">Tipo de responsável</label><select id="ata-det-resp-tipo" class="field-input" onchange="alternarResponsavelDetalheAta_()" '+editable+'><option value="equipe" '+(!ext?'selected':'')+'>Servidor da equipe</option><option value="externo" '+(ext?'selected':'')+'>Pessoa de outro setor</option></select></div>';
+    h+='<div class="form-group"><label class="form-label" for="ata-det-resp">Responsável pela gestão</label><div id="ata-det-resp-campo">'+campoResponsavelDetalhe(state.tipoResponsavelDetalhe,a.responsavel)+'</div></div>';
     h+=campo('Setor/unidade do responsável','ata-det-resp-setor',a.responsavelSetor,'maxlength="160"');
     h+=campo('E-mail do responsável','ata-det-resp-email',a.responsavelEmail,'type="email" maxlength="254"');
     h+='<div class="form-group"><label class="form-label" for="ata-det-obs">Observação interna</label><textarea id="ata-det-obs" class="field-input" rows="4" maxlength="1500" '+editable+'>'+e(a.observacao||'')+'</textarea></div>';
     if(a.linkPncp)h+='<a href="'+e(a.linkPncp)+'" target="_blank" rel="noopener" class="atas-action atas-official-link">Consultar registro oficial ↗</a>';
     el('ata-det-body').innerHTML=h;
-    el('ata-det-resp').readOnly=!state.podeGerirTodas;
     el('ata-det-save').hidden=!pode;
     el('ata-det-archive').hidden=!state.podeGerirTodas;
     el('ov-ata-det').classList.add('open');
@@ -219,6 +237,7 @@
   root.inicializarGestaoAtas_=init; root.carregarGestaoAtas_=carregar; root.renderGestaoAtas_=render; root.limparFiltrosAtas_=limparFiltros; root.mudarPaginaAtas_=mudarPagina; root.buscarAtas_=buscar;
   root.abrirCadastroAta_=abrirCadastro; root.fecharCadastroAta_=fecharCadastro; root.setModoCadastroAta_=setMode; root.consultarAtasCompras_=consultar; root.salvarCadastroAta_=salvar;
   root.alternarResponsavelAta_=alternarResponsavel;
+  root.alternarResponsavelDetalheAta_=alternarResponsavelDetalhe;
   root.abrirDetalheAta_=abrirDetalhe; root.fecharDetalheAta_=fecharDetalhe; root.salvarDetalheAta_=salvarDetalhe; root.arquivarAta_=arquivar; root.renderNotifAtas_=renderAvisos; root.abrirAvisoAta_=abrirAviso; root.carregarAlertasAtas_=carregarAlertas; root.renderEquipePreview_=renderEquipePreview;
   document.addEventListener('keydown',function(ev){if(ev.key!=='Escape')return;if(el('modal-ata-det')&&el('modal-ata-det').classList.contains('open'))fecharDetalhe();else if(el('modal-ata-cad')&&el('modal-ata-cad').classList.contains('open'))fecharCadastro();});
   document.addEventListener('DOMContentLoaded',function(){if(localPreview())setTimeout(init,80);});
