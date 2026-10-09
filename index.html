@@ -220,7 +220,7 @@
 
     /* Tabs */
     .tab-content { flex: 1; overflow-y: auto; padding: 12px 12px 76px; -webkit-overflow-scrolling: touch; }
-    /* Visão Geral: a aba não rola de lado; só o gráfico (boxplot) tem rolagem horizontal própria. */
+    /* Prazos por etapa: a aba não rola de lado; só o gráfico (boxplot) tem rolagem horizontal própria. */
     #tab-visaogeral { overflow-x: hidden; }
 
     /* Bottom nav */
@@ -657,7 +657,7 @@
           <summary>Visão do administrador <span id="nt-badge-admin-desktop" class="admin-nav-badge" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
           <div class="admin-nav-items">
             <button id="desktop-solicitacoes" hidden onclick="switchTab('solicitacoes')">Solicitações de notas técnicas <span id="nt-badge-desktop" class="admin-nav-badge" hidden></span></button>
-            <button id="desktop-visaogeral" hidden onclick="switchTab('visaogeral')">Visão Geral</button>
+            <button id="desktop-visaogeral" hidden onclick="switchTab('visaogeral')">Prazos por etapa</button>
           </div>
         </details>
         <button id="desktop-historico" onclick="switchTab('historico')">Histórico</button>
@@ -678,7 +678,7 @@
           <details id="hdr-admin" class="hdr-admin-menu hdr-menu-main-link" hidden>
             <summary class="hdr-menu-item">Visão do administrador <span id="nt-badge-admin-menu" class="admin-nav-badge" hidden></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
             <button class="hdr-menu-item" id="hdr-solicitacoes-item" hidden onclick="switchTab('solicitacoes');toggleHdrMenu_()">Solicitações de notas técnicas <span id="nt-badge-menu" class="admin-nav-badge" hidden></span></button>
-            <button class="hdr-menu-item" id="hdr-visaogeral-item" hidden onclick="switchTab('visaogeral');toggleHdrMenu_()">Visão Geral</button>
+            <button class="hdr-menu-item" id="hdr-visaogeral-item" hidden onclick="switchTab('visaogeral');toggleHdrMenu_()">Prazos por etapa</button>
           </details>
           <div class="hdr-menu-sep hdr-menu-main-sep" id="hdr-atas-sep" hidden></div>
           <button class="hdr-menu-item hdr-menu-main-link" id="hdr-atas-item" hidden onclick="switchTab('atas');toggleHdrMenu_()">📑 Gestão de Atas</button>
@@ -1644,7 +1644,7 @@ function aplicarPerfilUI_() {
     if (SESSAO_ADMIN) popularExcluirUnidade();
   }
 
-  // "Visão Geral" (relatório de prazos multiunidade): só o administrador geral.
+  // "Prazos por etapa" (relatório de prazos multiunidade): só o administrador geral.
   ['hdr-visaogeral-item', 'hdr-visaogeral-sep', 'desktop-visaogeral'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.hidden = !SESSAO_ADMIN;
@@ -1739,7 +1739,7 @@ function renderVisaoGeral_() {
 
   var html = '';
   html += '<div style="margin-bottom:12px;background:#fff;border:1px solid var(--border);border-left:4px solid var(--navy);border-radius:10px;padding:12px 13px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">'
-    + '<div><div style="font-size:15px;font-weight:800;color:var(--navy);">📊 Visão Geral — prazos por etapa</div>'
+    + '<div><div style="font-size:15px;font-weight:800;color:var(--navy);">📊 Prazos por etapa</div>'
     + '<div style="font-size:12px;color:var(--text2);line-height:1.45;margin-top:4px;">Prazo real de cada etapa, do início (conclusão da etapa anterior, ou D0) até a conclusão real. Consulte os quartis, limites de outlier e boxplots.</div></div>'
     + '<button onclick="VG_CACHE=null;renderVisaoGeral_()" title="Recarregar" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap;">🔄</button>'
     + '</div>';
@@ -1834,7 +1834,7 @@ function vgKpi_(label, valor, sub) {
     + '<div style="font-size:18px;font-weight:800;color:var(--navy);margin:2px 0;">'+valor+'</div>'
     + '<div style="font-size:10px;color:var(--muted);">'+esc(sub||'')+'</div></div>';
 }
-// Título de seção da Visão Geral (maior e mais forte, com um filete de destaque).
+// Título de seção da Prazos por etapa (maior e mais forte, com um filete de destaque).
 function vgTituloSecao_(txt) {
   return '<div style="display:flex;align-items:center;gap:8px;margin:8px 0 11px;">'
     + '<span style="width:4px;height:17px;background:var(--navy);border-radius:2px;flex-shrink:0;"></span>'
@@ -2073,7 +2073,7 @@ function vgDocumentoImpressao_(rel, meta) {
   return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
     + '<meta name="color-scheme" content="light only">'
     + (baseHref ? '<base href="'+esc(baseHref)+'">' : '')
-    + '<title>Relatorio de prazos - Visao Geral</title><style>'
+    + '<title>Prazos por etapa</title><style>'
     // Documento SEMPRE claro: nao acompanha o modo escuro do sistema/navegador,
     // e as cores/bordas saem na impressao (print-color-adjust: exact).
     + ':root{color-scheme:light;} html,body{background:#fff;}'
@@ -2088,7 +2088,7 @@ function vgDocumentoImpressao_(rel, meta) {
     + 'ul.rank{margin:4px 0;padding-left:18px;} ul.rank li{margin:2px 0;} .obs{font-size:10px;color:#64748b;margin-top:10px;} .ft{margin-top:16px;border-top:1px solid #e2e8f0;padding-top:8px;font-size:10px;color:#94a3b8;}'
     + '</style></head><body>'
     + '<div class="hd"><img src="'+esc(VG_LOGO_SRC)+'" alt="Colegio Pedro II" onerror="this.style.display=\'none\'">'
-    + '<div><div class="t1">Colégio Pedro II</div><div class="t2">Reitoria · SEL/SEPMA</div><div class="t3">Relatório de prazos por etapa — Visão Geral</div></div></div>'
+    + '<div><div class="t1">Colégio Pedro II</div><div class="t2">Reitoria · SEL/SEPMA</div><div class="t3">Relatório de prazos por etapa</div></div></div>'
     + '<div class="meta">Ano: <b>'+esc(meta.anoLabel||'—')+'</b> · Escopo: <b>'+esc(meta.unidadeLabel||'—')+'</b> · Gerado em '+esc(quando)+'</div>'
     + '<div class="kpis">'
     +   '<div class="kpi"><div class="kl">Etapas concluídas</div><div class="kv">'+vgFmt_(k.nAmostra)+'</div></div>'
@@ -2658,7 +2658,7 @@ function switchTab(tab) {
   if (!isChefeAtual_() && ['fila', 'historico', 'equipe', 'config'].indexOf(tab) >= 0) {
     tab = 'etapas';
   }
-  // "Visão Geral" é exclusiva do Admin geral (relatório multiunidade).
+  // "Prazos por etapa" é exclusiva do Admin geral (relatório multiunidade).
   if (tab === 'visaogeral' && !SESSAO_ADMIN) tab = 'etapas';
   if (tab === 'solicitacoes' && !SESSAO_ADMIN) tab = 'etapas';
   if (tab === 'atas' && !(GESTAO_ATAS && GESTAO_ATAS.enabled)) tab = 'etapas';

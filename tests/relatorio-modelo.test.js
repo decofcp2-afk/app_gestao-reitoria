@@ -1,6 +1,6 @@
 'use strict';
 // ════════════════════════════════════════════════════════════════════════
-// Testes de montarRelatorio() — o modelo que a aba "Visão Geral" desenha:
+// Testes de montarRelatorio() — o modelo que a aba "Prazos por etapa" desenha:
 // estatística por etapa, comparação por unidade, ranking e KPIs.
 //
 // Alvo: montarRelatorio() de relatorio-prazos.js.

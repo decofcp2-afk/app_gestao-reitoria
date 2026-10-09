@@ -1,6 +1,6 @@
 'use strict';
 // ════════════════════════════════════════════════════════════════════════
-// Testes do quartil/percentil (núcleo estatístico da aba "Visão Geral").
+// Testes do quartil/percentil (núcleo estatístico da aba "Prazos por etapa").
 //
 // Alvo: quartil() de relatorio-prazos.js — MESMA função que o navegador usa
 // para desenhar os boxplots. O método é interpolação linear tipo 7, que bate

@@ -42,7 +42,7 @@ test('automação de avisos aparece somente como modal obrigatório quando ausen
 test('menu principal evita destinos duplicados no desktop', () => {
   const css = fs.readFileSync(path.join(root, 'atas.css'), 'utf8');
   assert.doesNotMatch(html, /id="desktop-equipe"/);
-  assert.match(html, /id="desktop-visaogeral"[^>]*>Visão Geral<\/button>/);
+  assert.match(html, /id="desktop-visaogeral"[^>]*>Prazos por etapa<\/button>/);
   assert.match(html, /id="desktop-tour"[^>]*>Tour de ajuda<\/button>/);
   assert.match(html, /hdr-menu-item hdr-menu-main-link/);
   assert.match(css, /@media\(min-width:1120px\)\{\.atas-desktop-nav\{display:flex\}\.hdr-menu-main-link,\.hdr-menu-main-sep\{display:none\}\}/);

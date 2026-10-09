@@ -74,7 +74,7 @@ Espelho das regras puras de `fs_criarUnidade` (`apps-script/FirestoreSync.gs`):
 - **Login do 1º chefe:** parte local do e-mail → sigla → `gestor-<id>`.
 - **Senha temporária:** 7 caracteres, sem caracteres ambíguos (0/O, 1/I/L).
 
-### `relatorio-quartil.test.js` / `relatorio-estatistica.test.js` / `relatorio-boxplot.test.js` — núcleo da aba "Visão Geral"
+### `relatorio-quartil.test.js` / `relatorio-estatistica.test.js` / `relatorio-boxplot.test.js` — núcleo da aba "Prazos por etapa"
 Funções puras de `relatorio-prazos.js` (Fase 1 do `PLANO_RELATORIO_PRAZOS_ADMIN.md`),
 o mesmo código que o navegador roda para desenhar o relatório de prazos do Admin:
 - **`quartil` (tipo 7):** Q1/Q2/Q3 por interpolação linear, batendo com
@@ -100,7 +100,7 @@ agrupados por etapa × unidade × ano, prontos para o boxplot:
   (`descartados.inconsistentes`, mas o cursor ainda avança para a conclusão real).
   Cada descartado também vira item detalhado (`semDataItens`/`inconsistentesItens`,
   com processo, etapa, unidade e — nas inconsistentes — as datas conflitantes),
-  base do drill-down "Ver quais" da aba Visão Geral.
+  base do drill-down "Ver quais" da aba Prazos por etapa.
 - **D1:** agrupa e filtra pelo **ano da conclusão**; `anosDisponiveis` não depende
   do filtro de ano. **D2:** dias corridos. **D3:** sem desconto de fila.
 - **Normalização** de nome de etapa (acento/caixa) cai no mesmo grupo.
@@ -108,7 +108,7 @@ agrupados por etapa × unidade × ano, prontos para o boxplot:
   em cada item (base do ranking de melhores/piores). Aceita `Timestamp` do Firestore
   (`{seconds}`) além de ISO.
 
-### `relatorio-modelo.test.js` — modelo da aba "Visão Geral" (`montarRelatorio`)
+### `relatorio-modelo.test.js` — modelo da aba "Prazos por etapa" (`montarRelatorio`)
 Fase 3 do plano: monta o modelo que a UI desenha a partir dos resultados por
 unidade — estatística por etapa, comparação por unidade, ranking e KPIs:
 - **Modo geral** agrega as etapas de todas as unidades; **filtro por unidade**

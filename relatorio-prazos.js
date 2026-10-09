@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════
- * relatorio-prazos.js — Núcleo estatístico da aba "Visão Geral" (perfil Admin)
+ * relatorio-prazos.js — Núcleo estatístico da aba "Prazos por etapa" (perfil Admin)
  *
  * Funções PURAS (sem DOM, sem Firestore) que sustentam o relatório de prazos
  * por etapa pedido pelo Felipe. Ficam isoladas aqui para serem testadas no Node
@@ -16,7 +16,7 @@
  *     conclusão real (DataRealizacao). D1: ano da conclusão. D2: dias corridos.
  *     D3: sem descontar fila/paralisação.
  *
- * A aba/UI "Visão Geral" (só Admin), que consome estas funções, entra na Fase 3.
+ * A aba/UI "Prazos por etapa" (só Admin), que consome estas funções, entra na Fase 3.
  * ════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -441,7 +441,7 @@
     };
   }
 
-  // ── Modelo do relatório (o que a aba "Visão Geral" desenha) ────────────
+  // ── Modelo do relatório (o que a aba "Prazos por etapa" desenha) ────────────
   // porUnidade: [ resultado de agregarPrazos, ... ] (um por unidade).
   // opts: { unidadeSel, etapaChave, nomesUnidade }
   //   unidadeSel '' ou '(geral)' = todas as unidades.
