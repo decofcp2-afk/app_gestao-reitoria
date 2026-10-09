@@ -1,4 +1,4 @@
-var CACHE_NAME = 'app-gestao-reitoria-v20';
+var CACHE_NAME = 'app-gestao-reitoria-v21';
 
 var CORE_ASSETS = [
   './',
@@ -11,6 +11,8 @@ var CORE_ASSETS = [
   './atas-domain.js',
   './atas.js',
   './atas.css',
+  './notas-tecnicas.js',
+  './notas-tecnicas.css',
   './icon.svg',
   './painel-icon.svg',
   './cpii-logo.png',

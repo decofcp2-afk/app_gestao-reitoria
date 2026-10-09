@@ -68,7 +68,7 @@ function _chefiaEmailFallback_() {
 // URL pública do Painel de Contratações (GitHub Pages), usada nos e-mails ao
 // setor requisitante. Pode ser sobrescrita via propriedade SEL_PAINEL_URL.
 function _painelUrl_() {
-  return _configProp_('SEL_PAINEL_URL', 'https://decofcp2-afk.github.io/painel-contratacoes-reitoria/');
+  return _configProp_('SEL_PAINEL_URL', 'https://decofcp2-afk.github.io/painel-contratacoes-reitoria/painel.html');
 }
 
 function _withAppLock_(acao, fn) {
@@ -968,6 +968,11 @@ function doGet(e) {
   _AUTH_TOKEN_REQ = String(params.token || '').trim();
 
   try {
+    if (route === 'nt.form') {
+      return HtmlService.createHtmlOutputFromFile('SolicitarNT').setTitle('Solicitar nota técnica — Colégio Pedro II')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+    if (route === 'nt.biblioteca') return _apiResponderAppSEL_(getBibliotecaNTPublica(), params);
     var payload;
     if (route === 'appsel.challenge') {
       payload = loginChallengeApp(params.matricula || params.mat || '');
@@ -1072,6 +1077,13 @@ function _apiCallAppSEL_(method, args) {
     marcarAlertaAtaLidoApp: marcarAlertaAtaLidoApp,
     sincronizarAtasApp: sincronizarAtasApp
   };
+  if (typeof getSolicitacoesNTApp === 'function') {
+    fns.getSolicitacoesNTApp = getSolicitacoesNTApp;
+    fns.configurarSolicitacoesNTApp = configurarSolicitacoesNTApp;
+    fns.atualizarSolicitacaoNTApp = atualizarSolicitacaoNTApp;
+    fns.getAnexoNTApp = getAnexoNTApp;
+    fns.publicarDocumentoNTApp = publicarDocumentoNTApp;
+  }
   // Fase 3 (corte): versões Firestore (FirestoreSync.gs). Aditivo — só são
   // chamadas quando o frontend está com firestoreAtivo=true.
   if (typeof fs_atualizarStatusEtapa === 'function') {

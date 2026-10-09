@@ -5,7 +5,7 @@ window.APPSEL_CONFIG = {
   municipioCalendario: "Rio de Janeiro",
   apiTimeoutMs: 90000,
 
-  painelUrl: "https://decofcp2-afk.github.io/painel-contratacoes-reitoria/",
+  painelUrl: "https://decofcp2-afk.github.io/painel-contratacoes-reitoria/painel.html",
 
   // Liga/desliga o uso do Firestore (leitura + escrita) no corte da Fase 3.
   // Mantenha false ate o corte: lib/chave no Apps Script + regras publicadas.
