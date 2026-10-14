@@ -1,5 +1,5 @@
 // Solicitações públicas: metadados no Firestore, anexos privados e temporários no Drive.
-// Toda consulta/alteração de pedidos exige o administrador geral. Não usa Firebase Storage.
+// Administração exige login; o solicitante usa uma chave privada. Não usa Firebase Storage.
 var NT_MAX_ARQUIVOS = 5;
 var NT_MAX_ARQUIVO = 5 * 1024 * 1024;
 var NT_MAX_PEDIDO = 10 * 1024 * 1024;
@@ -40,6 +40,7 @@ function _ntData_(v) {
 }
 function _ntPedidoPublicavel_(p) {
   var d = Object.assign({}, p);
+  delete d.chaveHash;
   ['criadoEm','atualizadoEm','atendidoEm','anexosExcluidosEm'].forEach(function(k){ d[k] = _ntData_(d[k]); });
   d.historico = (d.historico || []).map(function(h){ return Object.assign({},h,{em:_ntData_(h.em)}); });
   return d;
@@ -92,9 +93,11 @@ function _ntValidar_(dados) {
 }
 function ntPrepararFormulario() {
   if (!_ntAtiva_()) return {ok:false, erro:'O recebimento de solicitações está em configuração. Tente novamente mais tarde.'};
-  var nonce = Utilities.getUuid(), agora = Date.now();
-  CacheService.getScriptCache().put('nt_form_'+nonce, String(agora), 1800);
-  return {ok:true, nonce:nonce};
+  return _ntLock_(function(){
+    var nonce = Utilities.getUuid(), agora = Date.now();
+    CacheService.getScriptCache().put('nt_form_'+nonce, String(agora), 1800);
+    return {ok:true, nonce:nonce, chave:_ntChave_(nonce)};
+  });
 }
 function _ntLimitar_(email) {
   var pr = _ntProps_(), dia = Utilities.formatDate(new Date(),'America/Sao_Paulo','yyyy-MM-dd');
@@ -129,10 +132,12 @@ function ntEnviarSolicitacao(dados) {
     if(!/^[a-f0-9-]{36}$/i.test(nonce)) throw new Error('Reabra o formulário para enviar sua solicitação.');
     var id = 'nt-'+nonce;
     var existente = _fsGet_('solicitacoesNT/'+id);
-    if(existente && ['recebendo','falha'].indexOf(existente.status)<0) return {ok:true, protocolo:existente.protocolo};
+    if(existente && ['recebendo','falha'].indexOf(existente.status)<0) return {ok:true, protocolo:existente.protocolo,
+      chave:existente.chaveHash && existente.chaveHash===_sha256Base64_(String(dados.chave||'')) ? dados.chave : undefined};
     if(existente) throw new Error('O envio anterior não foi concluído. Reabra o formulário para tentar novamente.');
     var cache = CacheService.getScriptCache(), inicio = Number(cache.get('nt_form_'+nonce));
     if(!inicio || Date.now()-inicio < 3000) throw new Error('Formulário expirado ou envio muito rápido. Reabra o formulário.');
+    if(dados.chave && dados.chave!==_ntChave_(nonce))throw new Error('Chave de acesso inválida. Reabra o formulário.');
     var p = _ntValidar_(dados), ocupacao = _ntOcupacao_();
     if(ocupacao.usados + p.tamanhoTotal > NT_ORCAMENTO_DRIVE || (ocupacao.disponivel !== null && p.tamanhoTotal > ocupacao.disponivel))
       throw new Error('O espaço para anexos está temporariamente indisponível. Tente novamente mais tarde.');
@@ -150,7 +155,7 @@ function ntEnviarSolicitacao(dados) {
         _fsUpdate_('solicitacoesNT/'+id,{anexos:anexos});
       });
       delete p.arquivos;
-      Object.assign(p,{protocolo:protocolo,status:'nova',criadoEm:agora,atualizadoEm:agora,anexos:anexos,
+      Object.assign(p,{chaveHash:dados.chave?_sha256Base64_(dados.chave):'',protocolo:protocolo,status:'nova',criadoEm:agora,atualizadoEm:agora,anexos:anexos,
         resposta:'',respostaUrl:'',emailPendente:true,exclusaoPendente:false,historico:[{status:'nova',em:agora,por:'Solicitante'}]});
       _fsSet_('solicitacoesNT/'+id,p);
     } catch(e) {
@@ -161,7 +166,47 @@ function ntEnviarSolicitacao(dados) {
     }
     var enviado = _ntAvisar_(p);
     if(enviado) { try { _fsUpdate_('solicitacoesNT/'+id,{emailPendente:false}); } catch(e) {} }
-    return {ok:true,protocolo:protocolo};
+    return {ok:true,protocolo:protocolo,chave:dados.chave||undefined};
+  });
+}
+function _ntChave_(nonce) {
+  var pr=_ntProps_(), segredo=pr.getProperty('NT_SEGREDO_GESTAO');
+  if(!segredo){segredo=Utilities.getUuid()+Utilities.getUuid();pr.setProperty('NT_SEGREDO_GESTAO',segredo);}
+  return nonce+'.'+_sha256Base64_(segredo+':'+nonce);
+}
+function _ntAutorizarSolicitante_(dados) {
+  dados=dados||{};
+  var chave=String(dados.chave||''), nonce=chave.split('.')[0];
+  if(!/^[a-f0-9-]{36}$/i.test(nonce)||chave.length>100)throw new Error('Protocolo ou chave de acesso inválidos.');
+  var p=_fsGet_('solicitacoesNT/nt-'+nonce);
+  if(!p||!p.chaveHash||p.chaveHash!==_sha256Base64_(chave)||p.protocolo!==String(dados.protocolo||'').trim().toUpperCase())
+    throw new Error('Protocolo ou chave de acesso inválidos.');
+  p._id='nt-'+nonce;
+  return p;
+}
+function ntConsultarSolicitacao(dados) {
+  return _ntLock_(function(){
+    var p=_ntAutorizarSolicitante_(dados), pedido={};
+    ['protocolo','nome','email','unidade','assunto','descricao','status'].forEach(function(k){pedido[k]=p[k]||'';});
+    pedido.editavel=['nova','analise'].indexOf(p.status)>=0;
+    pedido.versao=_ntData_(p.atualizadoEm);
+    pedido.anexos=(p.anexos||[]).filter(function(a){return !a.excluido;}).map(function(a){return {nome:a.nome,tamanho:a.tamanho};});
+    return {ok:true,pedido:pedido};
+  });
+}
+function ntAlterarSolicitacao(dados,excluir) {
+  return _ntLock_(function(){
+    var p=_ntAutorizarSolicitante_(dados);
+    if(excluir&&p.status==='excluida')return {ok:true};
+    if(['nova','analise'].indexOf(p.status)<0)throw new Error('Este pedido já foi concluído ou excluído e não pode ser alterado.');
+    if(String(dados.versao||'')!==_ntData_(p.atualizadoEm))throw new Error('O pedido foi atualizado. Consulte novamente antes de alterar.');
+    var campos=excluir?{status:'excluida',emailPendente:false,exclusaoPendente:true}:_ntValidar_(Object.assign({},dados,{arquivos:[]}));
+    delete campos.arquivos;delete campos.tamanhoTotal;
+    campos.atualizadoEm=new Date();campos.atualizadoPor='Solicitante';
+    campos.historico=(p.historico||[]).concat([{status:excluir?'excluida':'editada',em:campos.atualizadoEm,por:'Solicitante'}]);
+    _fsUpdate_('solicitacoesNT/'+p._id,campos);
+    Object.assign(p,campos);
+    return {ok:true,exclusaoPendente:excluir?!_ntLimparAnexos_(p):false};
   });
 }
 function _ntLimparAnexos_(p) {
@@ -220,7 +265,7 @@ function atualizarSolicitacaoNTApp(dados,token) {
     var id=_ntTexto_(dados.id,100);
     if(!/^nt-[a-f0-9-]{36}$/i.test(id))throw new Error('Pedido inválido.');
     var p=_fsGet_('solicitacoesNT/'+id);
-    if(!p||p.status==='falha')throw new Error('Pedido não encontrado.');
+    if(!p||['falha','recebendo','excluida'].indexOf(p.status)>=0)throw new Error('Pedido não encontrado ou excluído.');
     var status=String(dados.status||'');
     if(['nova','analise','atendida','encerrada'].indexOf(status)<0)throw new Error('Situação inválida.');
     if(['atendida','encerrada'].indexOf(p.status)>=0 && ['nova','analise'].indexOf(status)>=0)
@@ -246,7 +291,7 @@ function getAnexoNTApp(id,arquivoId,token) {
     return _ntCentral_(function(){
       if(!/^nt-[a-f0-9-]{36}$/i.test(String(id)))throw new Error('Pedido inválido.');
       var p=_fsGet_('solicitacoesNT/'+id);
-      if(!p||['atendida','encerrada','falha'].indexOf(p.status)>=0)throw new Error('Anexos indisponíveis após o atendimento.');
+      if(!p||['atendida','encerrada','falha','excluida'].indexOf(p.status)>=0)throw new Error('Anexos indisponíveis após o atendimento ou exclusão.');
       var a=(p.anexos||[]).find(function(x){return x.id===arquivoId&&!x.excluido;});
       if(!a)throw new Error('Anexo não encontrado.');
       var f=DriveApp.getFileById(a.id),pais=f.getParents(),correto=false,pasta=_ntPasta_().getId();

@@ -974,6 +974,8 @@ function doGet(e) {
     }
     if (route === 'nt.biblioteca') return _apiResponderAppSEL_(getBibliotecaNTPublica(), params);
     if (route === 'nt.preparar') return _apiResponderAppSEL_(ntPrepararFormulario(), {});
+    if (['nt.consultar','nt.editar','nt.excluir'].indexOf(route)>=0)
+      return _apiResponderAppSEL_({ok:false,erro:'Use POST para gerenciar a solicitação.'}, {});
     var payload;
     if (route === 'appsel.challenge') {
       payload = loginChallengeApp(params.matricula || params.mat || '');
@@ -1002,12 +1004,15 @@ function doGet(e) {
 function doPost(e) {
   try {
     var params = (e && e.parameter) || {};
-    if (params.route !== 'nt.enviar') throw new Error('Rota nao encontrada.');
+    if (['nt.enviar','nt.consultar','nt.editar','nt.excluir'].indexOf(params.route)<0) throw new Error('Rota nao encontrada.');
     var raw = e && e.postData && e.postData.contents;
     if (!raw || raw.length > 15 * 1024 * 1024) throw new Error('Solicitação inválida ou acima do limite de anexos.');
     var dados = JSON.parse(raw);
     if (!dados || typeof dados !== 'object' || Array.isArray(dados)) throw new Error('Solicitação inválida.');
-    return _apiResponderAppSEL_(ntEnviarSolicitacao(dados), {});
+    var resultado=params.route==='nt.enviar'?ntEnviarSolicitacao(dados)
+      :params.route==='nt.consultar'?ntConsultarSolicitacao(dados)
+      :ntAlterarSolicitacao(dados,params.route==='nt.excluir');
+    return _apiResponderAppSEL_(resultado, {});
   } catch (err) {
     return _apiResponderAppSEL_({ok:false, erro:err && err.message ? err.message : 'Não foi possível enviar a solicitação.'}, {});
   }

@@ -103,3 +103,41 @@ test('formulário inativo, tempo mínimo e limite diário por e-mail são aplica
   const h=backend();h.props.set('NT_ATIVA','false');assert.equal(h.ctx.ntPrepararFormulario().ok,false);assert.equal(h.ctx.ntEnviarSolicitacao(dados()).ok,false);h.props.set('NT_ATIVA','true');h.cache.set('nt_form_'+nonce,String(Date.now()));assert.equal(h.ctx.ntEnviarSolicitacao(dados()).ok,false);
   for(let i=0;i<5;i++)h.ctx._ntLimitar_('pessoa@example.org');assert.throws(()=>h.ctx._ntLimitar_('pessoa@example.org'),/Limite/);
 });
+
+test('chave privada protege consulta, edição e exclusão; nonce sozinho não recupera chave',()=>{
+  const h=backend(),chave=h.ctx.ntPrepararFormulario().chave;
+  h.cache.set('nt_form_'+nonce,String(Date.now()-5000));
+  const d={...dados([pdf()]),chave},r=h.ctx.ntEnviarSolicitacao(d);
+  const acesso={protocolo:r.protocolo,chave};
+  assert.equal(r.chave,chave);
+  assert.equal(h.ctx.ntEnviarSolicitacao(dados()).chave,undefined);
+  assert.equal(h.ctx.ntEnviarSolicitacao(d).chave,chave);
+  assert.equal(h.ctx.ntConsultarSolicitacao({...acesso,chave:chave+'x'}).ok,false);
+  assert.equal(h.ctx.ntConsultarSolicitacao({...acesso,protocolo:'NT-OUTRO'}).ok,false);
+  const consulta=h.ctx.ntConsultarSolicitacao(acesso);assert.equal(consulta.ok,true);
+  assert.equal(consulta.pedido.chaveHash,undefined);assert.equal(consulta.pedido.anexos[0].id,undefined);
+  const edit={...dados(),...acesso,versao:consulta.pedido.versao,assunto:'Assunto corrigido'};
+  assert.equal(h.ctx.ntAlterarSolicitacao(edit,false).ok,true);
+  const p=h.docs.get('solicitacoesNT/'+id);assert.equal(p.assunto,'Assunto corrigido');assert.equal(p.anexos.length,1);
+  assert.equal(p.status,'nova');assert.equal(p.protocolo,r.protocolo);assert.equal(p.historico.at(-1).status,'editada');
+  assert.equal(h.ctx.ntAlterarSolicitacao({...edit,versao:'versao antiga'},false).ok,false);
+  const atual=h.ctx.ntConsultarSolicitacao(acesso);
+  assert.equal(h.ctx.ntAlterarSolicitacao({...acesso,versao:atual.pedido.versao},true).ok,true);
+  assert.equal(h.files.size,0);assert.equal(h.ctx.ntConsultarSolicitacao(acesso).pedido.editavel,false);
+  assert.equal(h.ctx.ntAlterarSolicitacao(edit,false).ok,false);
+  assert.equal(h.ctx.ntAlterarSolicitacao(acesso,true).ok,true);
+  assert.equal(h.ctx.atualizarSolicitacaoNTApp({id,status:'nova'},'admin').ok,false);
+});
+test('pedido concluído e legado não podem ser alterados; limpeza de exclusão falha e recupera',()=>{
+  const h=backend(),chave=h.ctx.ntPrepararFormulario().chave;
+  h.cache.set('nt_form_'+nonce,String(Date.now()-5000));
+  const r=h.ctx.ntEnviarSolicitacao({...dados([pdf()]),chave}),acesso={protocolo:r.protocolo,chave};
+  h.ctx.atualizarSolicitacaoNTApp({id,status:'atendida',resposta:'Concluído'},'admin');
+  assert.equal(h.ctx.ntAlterarSolicitacao(acesso,true).ok,false);
+  assert.equal(h.ctx.ntConsultarSolicitacao(acesso).pedido.editavel,false);
+  pedido(h);assert.equal(h.ctx.ntConsultarSolicitacao(acesso).ok,false);
+  h.docs.get('solicitacoesNT/'+id).chaveHash=h.ctx._sha256Base64_(chave);
+  h.failures.add('arquivo-1');
+  assert.equal(h.ctx.ntAlterarSolicitacao({...acesso,versao:''},true).exclusaoPendente,true);
+  h.failures.clear();h.ctx.ntManutencao();assert.equal(h.docs.get('solicitacoesNT/'+id).exclusaoPendente,false);
+});

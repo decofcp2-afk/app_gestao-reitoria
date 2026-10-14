@@ -39,3 +39,14 @@ test('falhas de validação são devolvidas ao formulário e GET não recebe sol
   assert.equal(JSON.parse(ctx.doGet({parameter:{route:'nt.enviar'}}).text).ok,false);
   assert.equal(submissions(),0);
 });
+
+test('gestão pública usa POST JSON sem callback e não aceita GET com chave',()=>{
+ const {ctx}=api();
+ ctx.ntConsultarSolicitacao=d=>({ok:true,pedido:{protocolo:d.protocolo}});
+ ctx.ntAlterarSolicitacao=(d,excluir)=>({ok:true,excluir});
+ for(const route of ['nt.consultar','nt.editar','nt.excluir']){
+  const response=ctx.doPost(event(JSON.stringify({protocolo:'NT-1',chave:'privada'}),route));
+  assert.equal(response.type,'json');assert.equal(JSON.parse(response.text).ok,true);
+  assert.equal(JSON.parse(ctx.doGet({parameter:{route,chave:'privada',callback:'steal'}}).text).ok,false);
+ }
+});
