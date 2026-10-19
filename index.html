@@ -3183,7 +3183,10 @@ function aplicarFiltros() {
     //   • S é o servidor da fase interna (sempre relevante enquanto fase interna ativa)
     //   • S é o servidor da fase externa E a fase externa já começou (ou não há servidor interno — pós-transição)
     var respAtualFiltro_ = extAtiva_ ? (p.servidorExt || p.servidor || '') : (p.servidor || p.servidorExt || '');
-    var mS = !F_SERV || respAtualFiltro_.toLowerCase() === fsl;
+    // Concluídos preservam a participação nas duas fases no filtro histórico.
+    var mS = !F_SERV || (p.status === 'ok'
+      ? [p.servidor, p.servidorExt].some(function(s) { return (s || '').toLowerCase() === fsl; })
+      : respAtualFiltro_.toLowerCase() === fsl);
     return mQ && mM && mS;
   });
   renderEtapas(filt);

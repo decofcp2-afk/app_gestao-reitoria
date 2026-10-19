@@ -1999,6 +1999,7 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
   if (iPid < 0 || iFas < 0 || iStat < 0) return { feita: false, servidorExt: '' };
 
   var hasInterna = false, allIntOk = true, hasExterna = false;
+  var aplicaveis = 0, allOk = true, concluiuInterna = false;
 
   for (var j = lEt.hIdx + 1; j < lEt.values.length; j++) {
     var er    = lEt.values[j];
@@ -2009,6 +2010,11 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
     if (_isEtapaContratual_(efase, enome)) continue;
     var estat = _normStatus_(String(er[iStat] || '').trim());
     var elinha = j + 1; // 1-based
+    if (estat !== 'na') {
+      aplicaveis++;
+      if (elinha !== linhaConcluidaBase1 && estat !== 'ok') allOk = false;
+      if (elinha === linhaConcluidaBase1 && efase.indexOf('ext') < 0) concluiuInterna = true;
+    }
 
     if (efase.indexOf('ext') >= 0) {
       // Só conta como "tem fase externa" se ela realmente se aplica. Em
@@ -2025,24 +2031,24 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
     }
   }
 
-  // CD sem fase externa aplicável: a fase interna concluída encerra o processo.
+  // Todas as etapas aplicáveis concluídas encerram o processo, com ou sem externa.
   // Não há transição (nem mensagem/pontos ao próximo servidor), mas as cargas
   // devem ser inativadas na origem — sem isso o dado fica "Sim" para sempre e
   // só a leitura da Capacidade (que exclui concluídos) compensa.
-  var concluiuSemExterna = hasInterna && allIntOk && !hasExterna;
+  var processoConcluido = aplicaveis > 0 && allOk;
 
   // Só há transição se havia fase interna, ela está toda concluída E há fase externa
-  if (!concluiuSemExterna && (!hasInterna || !allIntOk || !hasExterna)) {
+  if (!processoConcluido && (!concluiuInterna || !hasInterna || !allIntOk || !hasExterna)) {
     return { feita: false, servidorExt: '' };
   }
 
   // Atualiza as linhas do processo na Capacidade:
   //  - transição: interna → 'Não', externa → 'Sim' (assume a fase externa)
-  //  - concluiuSemExterna: todas → 'Não' (processo encerrado)
+  //  - processoConcluido: todas → 'Não' (processo encerrado)
   var servidorExt = '';
   try {
     var shCap = _ss_().getSheetByName('📊 Capacidade');
-    if (!shCap) return { feita: !concluiuSemExterna, servidorExt: '' };
+    if (!shCap) return { feita: !processoConcluido, servidorExt: '' };
 
     var capData = shCap.getRange(1, 1, shCap.getLastRow(), shCap.getLastColumn()).getValues();
     var regHdr = -1;
@@ -2050,18 +2056,18 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
       var cr = capData[ci].map(function(c){ return String(c).trim(); });
       if (cr[0].indexOf('Servidor') >= 0 && cr[2] === 'ProcessoID') { regHdr = ci; break; }
     }
-    if (regHdr < 0) return { feita: !concluiuSemExterna, servidorExt: '' };
+    if (regHdr < 0) return { feita: !processoConcluido, servidorExt: '' };
 
     var hCap  = capData[regHdr].map(function(c){ return String(c).trim(); });
     var iAtivo = hCap.indexOf('Ativo');
-    if (iAtivo < 0) return { feita: !concluiuSemExterna, servidorExt: '' };
+    if (iAtivo < 0) return { feita: !processoConcluido, servidorExt: '' };
 
     for (var r = regHdr + 1; r < capData.length; r++) {
       var cpid  = String(capData[r][2] || '').trim();
       if (cpid !== pid) continue;
       var cfase = String(capData[r][5] || '').trim().toLowerCase();
       var cserv = String(capData[r][0] || '').trim();
-      if (!concluiuSemExterna && cfase.indexOf('ext') >= 0) {
+      if (!processoConcluido && cfase.indexOf('ext') >= 0) {
         servidorExt = _fsNomeServ_(cserv);
         shCap.getRange(r + 1, iAtivo + 1).setValue('Sim');
       } else {
@@ -2071,7 +2077,7 @@ function _verificarTransicaoFase_(pid, linhaConcluidaBase1, shEtapas, lEt, hdr) 
     }
   } catch(e2) { /* silencioso — a conclusão em si já foi salva */ }
 
-  return { feita: !concluiuSemExterna, servidorExt: servidorExt };
+  return { feita: !processoConcluido, servidorExt: servidorExt };
 }
 
 // ── getHistorico ──────────────────────────────────────────────────────────
