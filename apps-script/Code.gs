@@ -1618,7 +1618,11 @@ function _getEtapasParaApp_(sess) {
             if (!servMap[cpid]) servMap[cpid] = { int: '', ext: '', hasInt: false, hasExt: false };
             if (cfase.indexOf('ext') >= 0) {
               servMap[cpid].hasExt = true;
-              if (!servMap[cpid].ext || _isSim_(cativo)) servMap[cpid].ext = nomeNorm;
+              var extAtiva = _isSim_(cativo);
+              if (!servMap[cpid].ext || extAtiva) servMap[cpid].ext = nomeNorm;
+              if (extAtiva || (cativo !== '' && servMap[cpid].cargaExternaAtiva === undefined)) {
+                servMap[cpid].cargaExternaAtiva = extAtiva;
+              }
             } else {
               // fase interna ou sem fase especificada
               servMap[cpid].hasInt = true;
@@ -1719,6 +1723,7 @@ function _getEtapasParaApp_(sess) {
     }
 
     var etapaRetornada = etCalc.find(function(e){ return e.retornoFila; }) || null;
+    var atribuicao = servMap[p.id] || {};
 
     return {
       id: p.id, num: p.num || p.id, nome: p.nome, modal: p.modal, modalAbrev: mAbrev,
@@ -1729,6 +1734,7 @@ function _getEtapasParaApp_(sess) {
       motivoFila: etapaRetornada ? etapaRetornada.motivo : '',
       servidor:    srvInt,
       servidorExt: srvExt,
+      cargaExternaAtiva: atribuicao.cargaExternaAtiva,
       etapaAtualIdx: etapaAtualIdx,
       etapas: etCalc
     };
@@ -2238,8 +2244,7 @@ function _avisoUsaFirestore_() {
   return typeof _fsServerAtivo_ === 'function' && _fsServerAtivo_();
 }
 
-// Chave estável da etapa: unidade | processo | índice da etapa | tipo.
-// Usa o índice (e não o nome) para tolerar etapas com nomes repetidos.
+// Chave da etapa: unidade | processo | índice original ou ID da etapa | tipo.
 function _chaveAvisoEtapa_(p, etIdx, tipo) {
   return _reqUni_() + '|' + String(p.id) + '|' + etIdx + '|' + tipo;
 }
@@ -2286,6 +2291,15 @@ function _avisoMarcar_(chave, fimIso) {
       sh.appendRow([String(chave), String(fimIso || ''), new Date()]);
     }
   } catch (e) {}
+}
+
+function _etapaPrazoAvisavel_(p, et) {
+  if (et.status === 'ok' || et.status === 'na' || et.retornoFila || !et.fim_iso) return false;
+  if (_normText_(et.fase).indexOf('ext') < 0) return true;
+  if (p.cargaExternaAtiva === false) return false;
+  // A fase externa só recebe cobrança depois de chegar sua vez no fluxo.
+  var etapaAtual = (p.etapas || [])[p.etapaAtualIdx];
+  return !etapaAtual || _normText_(etapaAtual.fase).indexOf('ext') >= 0;
 }
 
 function enviarAvisosPrazo(modo) {
@@ -2400,7 +2414,8 @@ function enviarAvisosPrazo(modo) {
     if (p.status === 'ok' || p.status === 'planejamento' || p.retornoFila) return;
 
     p.etapas.forEach(function(et, etIdx) {
-      if (et.status === 'ok' || et.status === 'na' || et.retornoFila || !et.fim_iso) return;
+      if (!_etapaPrazoAvisavel_(p, et)) return;
+      if (et.avisoIdx !== undefined) etIdx = et.avisoIdx;
       var fim  = new Date(et.fim_iso + 'T00:00:00');
       var diff = _contDU_(hoje, fim); // positivo = dias até vencer; negativo = já venceu
       var aguardaReq = p.status === 'aguardando' || et.status === 'aguardando';
@@ -2450,6 +2465,9 @@ function enviarAvisosPrazo(modo) {
   // senão interno; fallback ao Agente da etapa.
   function respDaEtapa_(p, et) {
     var faseEt = String(et.fase || '').toLowerCase();
+    if (faseEt.indexOf('ext') >= 0 && p.cargaExternaAtiva && p.servidorExt) {
+      return { display: p.servidorExt, emailNome: p.servidorExt };
+    }
     var respEtapa = String(et.agente || '').trim();
     var servidorFase = faseEt.indexOf('ext') >= 0
       ? (p.servidorExt || p.servidor || '')
@@ -3452,7 +3470,7 @@ function _coletarAvisosPrazo_(dados, hoje, filtroServidor, incluirAguardandoReq)
   (dados || []).forEach(function(p) {
     if (p.status === 'ok' || p.status === 'planejamento' || p.retornoFila) return;
     (p.etapas || []).forEach(function(et) {
-      if (et.status === 'ok' || et.status === 'na' || et.retornoFila || !et.fim_iso) return;
+      if (!_etapaPrazoAvisavel_(p, et)) return;
       var aguardaReq = p.status === 'aguardando' || et.status === 'aguardando';
       if (aguardaReq && !incluirAguardandoReq) return;
       // Filtro por responsável (perfil comum)

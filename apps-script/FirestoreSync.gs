@@ -1425,7 +1425,7 @@ function _fsGetEtapasParaApp_(opts) {
   var etpsRaw = _toArr_('etapas');
   var cgsRaw = _toArr_('cargas');
 
-  // servMap pid -> {int, ext, hasInt, hasExt}
+  // Mantém a atribuição futura para exibição e a ativa para os avisos.
   var servMap = {};
   cgsRaw.forEach(function (c) {
     var pid = String(c.processoId || '').trim();
@@ -1436,6 +1436,9 @@ function _fsGetEtapasParaApp_(opts) {
     if (!servMap[pid]) servMap[pid] = { int: '', ext: '', hasInt: false, hasExt: false };
     if (String(c.fase || '').toLowerCase().indexOf('ext') >= 0) {
       servMap[pid].hasExt = true; if (!servMap[pid].ext || ativo) servMap[pid].ext = nomeNorm;
+      if (ativo || (c.ativo === false && servMap[pid].cargaExternaAtiva === undefined)) {
+        servMap[pid].cargaExternaAtiva = ativo;
+      }
     } else {
       servMap[pid].hasInt = true; if (!servMap[pid].int || ativo) servMap[pid].int = nomeNorm;
     }
@@ -1483,7 +1486,15 @@ function _fsGetEtapasParaApp_(opts) {
   });
 
   var resultado = procs.map(function (p) {
-    var etapas = (etpPorProc[p.id] || []).filter(function (et) { return et.status !== 'na'; });
+    var etapasDoProcesso = etpPorProc[p.id] || [];
+    var avisoIdx = 0;
+    // Conserva as chaves dos avisos já enviados antes de derivar as condicionais.
+    etapasDoProcesso.forEach(function (et) {
+      et.avisoIdx = et.status === 'na' ? et.docId : avisoIdx++;
+    });
+    _derivarCondicionaisLeitura_(p, etapasDoProcesso);
+    var etapas = etapasDoProcesso.filter(function (et) { return et.status !== 'na'; });
+    var atribuicao = servMap[p.id] || {};
     var cursor = new Date(p.d0.getTime());
     var etapaAtualIdx = -1;
     var etCalc = etapas.map(function (et, idx) {
@@ -1495,7 +1506,7 @@ function _fsGetEtapasParaApp_(opts) {
       if (etapaAtualIdx < 0 && et.status !== 'ok' && et.status !== 'na') etapaAtualIdx = idx;
       var retornoFilaEt = et.status === 'retornado' || _isRetornoFilaMotivo_(et.motivo);
       return {
-        docId: et.docId, ordem: et.ordem, prazo: et.prazo, nome: et.nome, agente: et.agente,
+        docId: et.docId, avisoIdx: et.avisoIdx, ordem: et.ordem, prazo: et.prazo, nome: et.nome, agente: et.agente,
         fase: et.fase, status: et.status, retornoFila: retornoFilaEt, motivo: et.motivo,
         dias: atraso, ini_iso: _toIso_(ini), fim_iso: _toIso_(fimPrev),
         realizacao_iso: et.realiz ? _toIso_(et.realiz) : null, historico: null
@@ -1531,6 +1542,7 @@ function _fsGetEtapasParaApp_(opts) {
       req: p.req, emailR: p.emailR, suap: p.suap, d0_iso: _toIso_(p.d0),
       execucao: execucao, status: st, retornoFila: retornoFila,
       motivoFila: etRet ? etRet.motivo : '', servidor: srvInt, servidorExt: srvExt,
+      cargaExternaAtiva: atribuicao.cargaExternaAtiva,
       etapaAtualIdx: etapaAtualIdx, etapas: etCalc,
       ordemFila: ordemFilaMap.hasOwnProperty(p.id) ? ordemFilaMap[p.id] : null
     };
